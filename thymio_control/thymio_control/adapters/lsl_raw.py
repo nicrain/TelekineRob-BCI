@@ -24,8 +24,9 @@ Design notes
 """
 from __future__ import annotations
 
+import logging
 import time
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import numpy as np
 
@@ -93,10 +94,21 @@ class RawLslAdapter(BaseAdapter):
 
         # DSP config — honour stream-level source_unit if embedded
         self._cfg = config or DSPConfig()
+        self._unit_from_stream = False
         desc = info.desc()
         stream_unit = desc.child_value("source_unit")
         if stream_unit:
             self._cfg.source_unit = stream_unit
+            self._unit_from_stream = True
+        elif config is None or config.source_unit == DSPConfig.source_unit:
+            # source_unit came from hard-coded default — warn the user
+            logging.getLogger(__name__).warning(
+                "RawLslAdapter: source_unit not found in LSL stream description "
+                "and no explicit config provided. Defaulting to '%s'. "
+                "If your device outputs nV (e.g. Enobio), set DSPConfig(source_unit='nV') "
+                "to avoid a 10\u2076× scaling error.",
+                self._cfg.source_unit,
+            )
 
         self._extractor = StreamingBandPowerExtractor(
             sample_rate=self._sample_rate,
@@ -142,7 +154,7 @@ class RawLslAdapter(BaseAdapter):
         # Use the latest result to minimise control latency
         latest = results[-1]
 
-        # Average band powers across all channels
+        # Global average band powers
         n = len(latest)
         avg_bp = BandPowers(
             delta=sum(bp.delta for bp in latest.values()) / n,
@@ -152,6 +164,15 @@ class RawLslAdapter(BaseAdapter):
             gamma=sum(bp.gamma for bp in latest.values()) / n,
         )
         metrics = band_power_to_metrics(avg_bp, source_unit=self._cfg.source_unit)
+
+        # Per-channel lateralisation metrics
+        # Expose per-channel alpha/theta/beta so FocusPolicy can use
+        # left_alpha / right_alpha for lateralisation without discarding
+        # frontal/parietal spatial information.
+        metrics.update(
+            self._per_channel_metrics(latest, self._cfg.source_unit)
+        )
+
         return EegFrame(ts=time.time(), source="lsl_raw", metrics=metrics)
 
     # ------------------------------------------------------------------
@@ -178,3 +199,59 @@ class RawLslAdapter(BaseAdapter):
         if labels_str:
             return labels_str.split(",")
         return [f"ch{i}" for i in range(info.channel_count())]
+
+    def _per_channel_metrics(
+        self,
+        frame_bps: Dict[int, BandPowers],
+        source_unit: str,
+    ) -> Dict[str, float]:
+        """Build per-channel alpha/theta/beta keys using channel labels.
+
+        For example, with labels ``["Fz", "C3", "Cz", "C4", "Pz"]`` this
+        emits ``alpha_Fz``, ``theta_C3``, ``alpha_C3``, ``alpha_C4``, …
+        allowing the policy layer to compute left/right asymmetry without
+        losing spatial information.
+
+        It also synthesises ``left_alpha`` and ``right_alpha`` as the mean
+        of channels whose labels contain ``"3"`` (left) and ``"4"`` (right)
+        respectively, which is compatible with ``enrich_features``.
+        """
+        from thymio_control.processors.band_power import convert_power_to_uv2
+
+        out: Dict[str, float] = {}
+        left_alphas:  List[float] = []
+        right_alphas: List[float] = []
+        left_thetas:  List[float] = []
+        right_thetas: List[float] = []
+
+        for ch_idx, bp in frame_bps.items():
+            label = (
+                self._channel_labels[ch_idx]
+                if ch_idx < len(self._channel_labels)
+                else f"ch{ch_idx}"
+            )
+            a = convert_power_to_uv2(bp.alpha, source_unit)
+            t = convert_power_to_uv2(bp.theta, source_unit)
+            b = convert_power_to_uv2(bp.beta,  source_unit)
+            out[f"alpha_{label}"] = a
+            out[f"theta_{label}"] = t
+            out[f"beta_{label}"]  = b
+
+            # Heuristic: labels ending with digit ≤ 3-ish → left hemisphere
+            if any(s in label for s in ("1", "3", "7")):
+                left_alphas.append(a)
+                left_thetas.append(t)
+            elif any(s in label for s in ("2", "4", "8")):
+                right_alphas.append(a)
+                right_thetas.append(t)
+
+        if left_alphas:
+            out["left_alpha"] = sum(left_alphas) / len(left_alphas)
+        if right_alphas:
+            out["right_alpha"] = sum(right_alphas) / len(right_alphas)
+        if left_thetas:
+            out["left_theta"] = sum(left_thetas) / len(left_thetas)
+        if right_thetas:
+            out["right_theta"] = sum(right_thetas) / len(right_thetas)
+
+        return out

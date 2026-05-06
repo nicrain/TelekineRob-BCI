@@ -18,9 +18,7 @@ from thymio_control.adapters.base import BaseAdapter
 from thymio_control.contracts import EegFrame
 
 
-def _parse_sod_packet(packet: str):
-    from thymio_control.eeg_control_pipeline import parse_sod_packet  # noqa: PLC0415
-    return parse_sod_packet(packet)
+from thymio_control.processors.tcp_protocol import parse_sod_packet as _parse_sod_packet
 
 
 class TcpFileAdapter(BaseAdapter):

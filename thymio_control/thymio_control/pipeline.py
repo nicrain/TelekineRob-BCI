@@ -202,8 +202,13 @@ def build_pipeline(
         return adapter, processor, policy
 
     _log.info("pipeline: using NEW modular path")
-    adapter   = build_adapter(args)
-    processor = build_processor()
-    policy_cls = POLICIES.get(getattr(args, "policy", "focus"), FocusPolicy)
-    policy     = policy_cls()
+    adapter    = build_adapter(args)
+    processor  = build_processor()
+    policy_name = getattr(args, "policy", "focus")
+    if policy_name not in POLICIES:
+        raise ValueError(
+            f"Unknown policy: {policy_name!r}. "
+            f"Valid options: {sorted(POLICIES.keys())}"
+        )
+    policy = POLICIES[policy_name]()
     return adapter, processor, policy

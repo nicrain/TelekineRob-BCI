@@ -253,9 +253,10 @@ def band_power_to_metrics(
 ) -> Dict[str, float]:
     """Convert BandPowers to an ``EegFrame``-compatible metrics dict.
 
-    Absolute power values are converted to µV² using *source_unit*.
-    Ratio metrics (theta_beta, alpha_beta) are dimensionless and therefore
-    not scaled.
+    Only absolute power values (in µV²) are returned here.  Ratio metrics
+    such as ``theta_beta`` and ``alpha_beta`` are **not** included — they
+    are computed by :func:`processors.enrich.enrich_features` to avoid
+    duplicating the computation for every call site.
 
     Parameters
     ----------
@@ -266,14 +267,13 @@ def band_power_to_metrics(
         ``"µV"`` for most other devices).
     """
     return {
-        "alpha":      convert_power_to_uv2(bp.alpha, source_unit),
-        "beta":       convert_power_to_uv2(bp.beta,  source_unit),
-        "theta":      convert_power_to_uv2(bp.theta, source_unit),
-        "delta":      convert_power_to_uv2(bp.delta, source_unit),
-        "gamma":      convert_power_to_uv2(bp.gamma, source_unit),
-        "theta_beta": bp.theta / (bp.beta  + 1e-9),
-        "alpha_beta": bp.alpha / (bp.beta  + 1e-9),
+        "alpha": convert_power_to_uv2(bp.alpha, source_unit),
+        "beta":  convert_power_to_uv2(bp.beta,  source_unit),
+        "theta": convert_power_to_uv2(bp.theta, source_unit),
+        "delta": convert_power_to_uv2(bp.delta, source_unit),
+        "gamma": convert_power_to_uv2(bp.gamma, source_unit),
     }
+
 
 
 # ---------------------------------------------------------------------------

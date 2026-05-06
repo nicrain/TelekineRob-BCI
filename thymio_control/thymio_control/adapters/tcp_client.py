@@ -14,15 +14,9 @@ from typing import Optional
 
 from thymio_control.adapters.base import BaseAdapter
 from thymio_control.contracts import EegFrame
+from thymio_control.processors.tcp_protocol import parse_sod_packet as _parse_sod_packet
 
 _log = logging.getLogger(__name__)
-
-
-def _parse_sod_packet(packet: str):
-    """Parse an SOD…EOD packet and return a metrics dict (or empty dict)."""
-    # Import from the monolith for now; will move to processors/ in Phase 3.
-    from thymio_control.eeg_control_pipeline import parse_sod_packet  # noqa: PLC0415
-    return parse_sod_packet(packet)
 
 
 class TcpClientAdapter(BaseAdapter):
