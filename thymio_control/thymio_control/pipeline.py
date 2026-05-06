@@ -123,7 +123,7 @@ def build_adapter(args: Any):
         if not file_path:
             raise RuntimeError("file mode requires --file-path")
         from thymio_control.adapters.edf_file import EdfFileAdapter
-        return EdfFileAdapter(file_path)
+        return EdfFileAdapter(file_path, realtime=True)
 
     if mode == "lsl":
         # Pre-computed feature stream (legacy LSL path)

@@ -760,7 +760,7 @@ def build_adapter(args: Any) -> BaseAdapter:
         if not file_path:
             raise RuntimeError("file mode requires --file-path")
         from thymio_control.adapters.edf_file import EdfFileAdapter
-        return EdfFileAdapter(file_path)
+        return EdfFileAdapter(file_path, realtime=True)
     if args.input == "lsl":
         channel_map = parse_channel_map(args.lsl_channel_map)
         if not channel_map:

@@ -10,6 +10,7 @@ ROS node keeps producing frames indefinitely.
 from __future__ import annotations
 
 import logging
+import time
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -31,19 +32,50 @@ _log = logging.getLogger(__name__)
 _NON_EEG_LABELS = frozenset(("X", "Y", "Z"))
 
 
+def _resolve_path(file_path: str | Path) -> Path:
+    """Resolve EDF file path with fallback to repo root and records/."""
+    path = Path(file_path).expanduser()
+    if path.is_absolute() and path.exists():
+        return path
+
+    # Relative path — try repo root, then records/
+    repo_root = Path(__file__).resolve().parents[3]
+    candidate_repo = (repo_root / path).resolve()
+    candidate_record = (repo_root / "records" / path).resolve()
+
+    if path.exists():
+        return path.resolve()
+    if candidate_repo.exists():
+        return candidate_repo
+    if candidate_record.exists():
+        return candidate_record
+
+    raise FileNotFoundError(
+        f"EDF file not found: {file_path!r} "
+        f"(tried {path}, {candidate_repo}, and {candidate_record})"
+    )
+
+
 class EdfFileAdapter(BaseAdapter):
     """Read an EDF file, compute band powers, return ``EegFrame``.
 
     Parameters
     ----------
     file_path : str | Path
-        Path to the ``.edf`` recording file.
+        Path to the ``.edf`` recording file.  Relative paths are resolved
+        against the repository root, then against ``<repo_root>/records/``.
     config : DSPConfig, optional
         DSP parameters. ``source_unit`` is auto-detected from the EDF
         metadata when not explicitly provided.
     chunk_size : int
         Number of samples to feed per ``read_frame()`` call.
         Default 50 ≈ 0.1 s at 500 Hz.
+    realtime : bool
+        If ``True``, throttle playback to match the original recording
+        speed.  Default ``False`` (no delay — fastest offline analysis).
+    playback_speed : float
+        Multiplier for real-time playback (only used when
+        ``realtime=True``).  ``2.0`` = double speed.
     """
 
     def __init__(
@@ -51,6 +83,9 @@ class EdfFileAdapter(BaseAdapter):
         file_path: str | Path,
         config: Optional[DSPConfig] = None,
         chunk_size: int = 50,
+        *,
+        realtime: bool = False,
+        playback_speed: float = 1.0,
     ) -> None:
         try:
             import pyedflib  # noqa: PLC0415
@@ -60,9 +95,7 @@ class EdfFileAdapter(BaseAdapter):
                 "Install with: pip install pyedflib"
             ) from exc
 
-        self._path = Path(file_path)
-        if not self._path.exists():
-            raise FileNotFoundError(f"EDF file not found: {self._path}")
+        self._path = _resolve_path(file_path)
 
         reader = pyedflib.EdfReader(str(self._path))
 
@@ -115,6 +148,12 @@ class EdfFileAdapter(BaseAdapter):
         self._chunk_size = int(chunk_size)
         self._pos = 0
 
+        # Real-time throttling
+        self._realtime = bool(realtime)
+        self._playback_speed = max(0.1, float(playback_speed))
+        self._chunk_interval = self._chunk_size / self._sample_rate / self._playback_speed
+        self._last_yield = 0.0
+
         self._extractor = StreamingBandPowerExtractor(
             sample_rate=self._sample_rate,
             n_channels=self._n_channels,
@@ -147,14 +186,19 @@ class EdfFileAdapter(BaseAdapter):
         Returns ``None`` if no complete window is available yet.
         Loops back to the start when the file is exhausted.
         """
-        import time
-
         n_total = self._data.shape[1]
 
         # Loop when file is exhausted
         if self._pos >= n_total:
             self._pos = 0
             self._extractor.reset()
+
+        # Real-time throttle: sleep to match original recording pace
+        if self._realtime and self._last_yield > 0:
+            elapsed = time.time() - self._last_yield
+            remaining = self._chunk_interval - elapsed
+            if remaining > 0:
+                time.sleep(remaining)
 
         end = min(self._pos + self._chunk_size, n_total)
         chunk = self._data[:, self._pos:end]
@@ -181,7 +225,8 @@ class EdfFileAdapter(BaseAdapter):
         # Per-channel metrics
         metrics.update(self._per_channel_metrics(latest, self._cfg.source_unit))
 
-        return EegFrame(ts=time.time(), source="edf_file", metrics=metrics)
+        self._last_yield = time.time()
+        return EegFrame(ts=self._last_yield, source="edf_file", metrics=metrics)
 
     # ------------------------------------------------------------------
     # Lifecycle helpers
@@ -190,6 +235,7 @@ class EdfFileAdapter(BaseAdapter):
     def reset(self) -> None:
         """Reset position and DSP buffer."""
         self._pos = 0
+        self._last_yield = 0.0
         self._extractor.reset()
 
     # ------------------------------------------------------------------
