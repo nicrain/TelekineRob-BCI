@@ -171,7 +171,7 @@ def stop_system(dry_run: bool = True) -> CommandResult:
     ]
     for c in kill_cmds:
         try:
-            subprocess.run(c.split(), timeout=3, capture_output=True)
+            subprocess.run(shlex.split(c), timeout=3, capture_output=True)
         except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
             pass
     set_runtime_state(False, None)
