@@ -46,6 +46,7 @@ def generate_launch_description():
     eeg_config_file = LaunchConfiguration("eeg_config_file")
     gaze_config_file = LaunchConfiguration("gaze_config_file")
     file_path = LaunchConfiguration("file_path")
+    eeg_input = LaunchConfiguration("eeg_input")
     use_tobii_bridge = LaunchConfiguration("use_tobii_bridge")
     use_enobio_bridge = LaunchConfiguration("use_enobio_bridge")
     tobii_udp_port = LaunchConfiguration("tobii_udp_port")
@@ -79,6 +80,7 @@ def generate_launch_description():
             ),
         ),
         DeclareLaunchArgument("file_path", default_value=""),
+        DeclareLaunchArgument("eeg_input", default_value=""),
     ]
 
     cmd_topic = PythonExpression(["'/model/thymio/cmd_vel' if '", use_sim, "' == 'true' else '/cmd_vel'"])
@@ -144,7 +146,7 @@ def generate_launch_description():
     eeg_node = Node(
         package="thymio_control",
         executable="eeg_control_node.py",
-        parameters=[eeg_config_file, {"cmd_topic": cmd_topic, "file_path": file_path}],
+        parameters=[eeg_config_file, {"cmd_topic": cmd_topic, "file_path": file_path, "eeg_input": eeg_input}],
         output="log",
         condition=IfCondition(PythonExpression(["'", run_eeg, "' == 'true' and '", use_teleop, "' == 'false'"])),
     )
