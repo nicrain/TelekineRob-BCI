@@ -13,7 +13,7 @@
 
 ## 1. 先建立全局地图（你要先知道系统分几层）
 
-当前架构分成 4 层：
+当前架构分成 5 层：
 
 1. 编排层（launch）
 - 统一入口：`launch/experiment_core.launch.py`
@@ -24,17 +24,26 @@
 - Gaze 网关节点：`scripts/gaze_control_node.py`
 
 3. 算法与适配层（纯 Python 逻辑）
-- EEG pipeline：`thymio_control/eeg_control_pipeline.py`
+- 单文件入口：`thymio_control/eeg_control_pipeline.py`（保留向后兼容）
+- 模块化入口：`thymio_control/pipeline.py`（新代码推荐使用）
 
-4. 外部桥接与系统脚本（非 ROS 核心）
+4. 模块化子包（从 pipeline 拆分出来的独立模块）
+- `thymio_control/adapters/` — 数据适配器（mock、TCP、LSL、EDF 等）
+- `thymio_control/processors/` — 信号处理（频段功率、特征工程、TCP 协议解析）
+- `thymio_control/policies/` — 控制策略（focus、theta_beta）
+- `thymio_control/contracts.py` — 数据帧类型定义（`EegFrame`）
+- `thymio_control/device_profiles.py` — EEG 设备配置注册表
+
+5. 外部桥接与系统脚本（非 ROS 核心）
 - WSL/Windows 桥接：`tools/bridges/wsl_tobii_bridge.py`、`tools/bridges/wsl_enobio_bridge.py`
 - 系统辅助：`tools/system/prepare_usb.sh`
 
 一句话总结：
-- Launch 负责“拉起谁”；
-- Node 负责“实时控制”；
-- Pipeline 负责“算意图”；
-- Bridge 负责“跨系统拿数据”。
+- Launch 负责”拉起谁”；
+- Node 负责”实时控制”；
+- Pipeline 负责”算意图”；
+- Adapters/processors/policies 负责”模块化拆分”；
+- Bridge 负责”跨系统拿数据”。
 
 ---
 
@@ -68,10 +77,19 @@ ros2 launch thymio_control gaze_thymio.launch.py
 
 ### 3.1 EEG 原生链路
 
-输入源（mock/tcp_client/lsl）
--> `thymio_control/eeg_control_pipeline.py` 产出意图
+输入源（mock/tcp_client/tcp_file/lsl/lsl_raw/file/keyboard）
+-> `thymio_control/eeg_control_pipeline.py` 或 `pipeline.py` 产出意图
 -> `scripts/eeg_control_node.py` 转 Twist
 -> 发布到 `cmd_topic`（仿真一般是 `/model/thymio/cmd_vel`，实机一般是 `/cmd_vel`）
+
+支持的输入源：
+- `mock` — 模拟数据，用于调试
+- `tcp_client` — 实时 TCP 连接外部 EEG 服务（SOD...EOD 协议）
+- `tcp_file` — TCP 数据文件回放（按时间戳控制节奏）
+- `lsl` — LSL 流（已预处理的频段特征）
+- `lsl_raw` — LSL 流（原始 EEG 信号，内部做 streaming DSP 提取频段功率）
+- `file` — EDF 文件回放（通过 `EdfFileAdapter`）
+- `keyboard` — 键盘模拟（W/S/A/D 控制）
 
 ### 3.2 Gaze/桥接链路
 
@@ -103,9 +121,11 @@ Windows 设备 SDK
 
 1. 声明参数
 - `use_sim`、`use_gui`、`use_teleop`
-- `run_eeg`、`run_gaze`
+- `run_eeg`、`run_gaze`、`run_rviz`
 - `use_tobii_bridge`、`use_enobio_bridge`
 - `eeg_config_file`、`gaze_config_file`
+- `eeg_input`（覆盖 EEG 节点的 `input` 参数）
+- `file_path`（EDF/TCP 文件回放路径）
 - 桥接端口参数
 
 2. 读取默认配置
@@ -118,11 +138,12 @@ Windows 设备 SDK
 4. 启动控制节点
 - `eeg_control_node.py` 和 `gaze_control_node.py` 都是条件启动。
 - 当 `use_teleop=true` 时，EEG/Gaze 节点会被条件抑制（避免抢控制）。
+- `eeg_node` 会接收 `file_path` 和 `eeg_input` 参数。
 
 5. 启动桥接与工具
 - 可选起 `wsl_tobii_bridge.py` 与 `wsl_enobio_bridge.py`。
 - 可选起 `teleop_twist_keyboard`。
-- 默认起 RViz。
+- RViz 由 `run_rviz` 条件控制（默认不启动）。
 
 你读这个文件的重点不是语法，而是“条件组合”。
 这决定了某个节点为什么没启动。
@@ -141,9 +162,9 @@ Windows 设备 SDK
 
 | 运行方式 | 入口 | 读取配置 | 关键参数 |
 | --- | --- | --- | --- |
-| `ros2 launch thymio_control eeg_thymio.launch.py` | EEG 快捷 launch | `config/eeg_control_node.params.yaml` | `input`、`policy`、`tcp_control_mode`、`tcp_host`、`tcp_port`、`cmd_topic` |
-| `ros2 launch thymio_control experiment_core.launch.py` | 总编排 launch | `config/launch_args.yaml` + `config/eeg_control_node.params.yaml` | `use_sim`、`use_gui`、`run_eeg`、`run_gaze`、`use_teleop`、`use_tobii_bridge`、`use_enobio_bridge` |
-| `python3 -m thymio_control.eeg_control_pipeline` | 统一 pipeline CLI | `config/experiment_config.yaml` | `pipeline_config.source_type`、`selected_channels`、`algorithm` |
+| `ros2 launch thymio_control eeg_thymio.launch.py` | EEG 快捷 launch | `config/eeg_control_node.params.yaml` | `input`、`policy`、`eeg_device`、`tcp_control_mode`、`tcp_host`、`tcp_port`、`file_path`、`cmd_topic` |
+| `ros2 launch thymio_control experiment_core.launch.py` | 总编排 launch | `config/launch_args.yaml` + `config/eeg_control_node.params.yaml` | `use_sim`、`use_gui`、`run_eeg`、`run_gaze`、`run_rviz`、`use_teleop`、`use_tobii_bridge`、`use_enobio_bridge`、`eeg_input`、`file_path` |
+| `python3 -m thymio_control.eeg_control_pipeline` | 统一 pipeline CLI | `config/experiment_config.yaml` | `pipeline_config.source_type`、`selected_channels`、`algorithm`、`eeg_device` |
 
 ### 4.3 `scripts/gaze_control_node.py`（UDP JSON -> Twist）
 
@@ -208,29 +229,42 @@ Windows 设备 SDK
 - 可选 CSV 记录
 
 7. 看门狗
-- 超时时如果上一帧是 `movement` 或 `feature` 模式，会保持上次 Twist 输出；
-- 否则按当前意图重发结果或停机。
+- 超时时首次触发会发布零速 Twist 并标记 `_adapter_connected = False`；
+- 后续 tick 直接 return，不再重复发布。
+
+参数说明：
+- `eeg_input` 参数可以覆盖 `input` 参数——如果 launch 传了 `eeg_input`，它会优先生效。
+- `tcp_control_mode` 为空时的默认行为：`tcp_file` 输入默认为 `feature`，其他输入默认为 `movement`。
 
 ### 4.5 `thymio_control/eeg_control_pipeline.py`（算法与输入适配）
 
-这个文件是可复用"算法层"，与 ROS 解耦。
+这个文件是可复用"算法层"，与 ROS 解耦。**保留向后兼容**，新代码建议使用模块化入口 `pipeline.py`。
 
-内容分 6 块：
+内容分 8 块：
 
 1. Adapter
-- `MockAdapter`
-- `TcpClientJsonAdapter`（连接外部 TCP client 服务，支持 SOD...EOD 包解析）
-- `LslAdapter`
-- `KeyboardAdapter`（类存在，但 CLI choices 当前未暴露 keyboard 选项）
+- `MockAdapter` — 模拟频段数据
+- `TcpClientJsonAdapter` — 连接外部 TCP client 服务，支持 SOD...EOD 包解析
+- `TcpFileAdapter` — TCP 数据文件回放，按时间戳控制节奏
+- `LslAdapter` — LSL 流读取（频段特征），支持从设备配置自动填充 channel_map
+- `KeyboardAdapter` — 键盘模拟控制意图（类存在，但 CLI choices 当前未暴露 keyboard 选项）
+- `EdfFileAdapter` — EDF 文件读取（通过 `thymio_control.adapters.edf_file` 懒导入）
 
-2. 特征工程
+2. EEG 设备配置注册表（`EEG_DEVICE_CONFIGS`）
+- `enobio-20` — Enobio 20 通道，500Hz
+- `unicorn-8` — Unicorn Hybrid Black，8 通道，250Hz
+- `unicorn-4` — Unicorn BCI Core-4 Headband，4 通道，250Hz
+- `get_device_config(device_key)` — 按设备名获取配置
+
+3. 特征工程
 - `enrich_features` 计算：
   - `theta_beta`
   - `beta_alpha`
   - `beta_alpha_theta`
   - `alpha_asym`
+- `compute_pipeline_feature(raw_data, selected_channels, algorithm_name)` — 按配置切片通道并执行特征算法
 
-3. Policy
+4. Policy
 - `FocusPolicy`
   - `focus_norm = clip01((beta_alpha_theta - 0.15) / 0.85)`
   - `speed_intent = focus_norm`
@@ -239,14 +273,73 @@ Windows 设备 SDK
   - 速度与 `theta_beta` 反向映射
   - 转向同样基于 `alpha_asym`
 
-4. `feature_to_twist`（标量特征 → Twist）
+5. `feature_to_twist`（标量特征 → Twist）
 - 把单个 feature 值按离散阈值映射为 Twist，与 movement 模式约定一致。
 - 由 EEG 节点在 `tcp_control_mode=feature` 时调用，也供离线管线使用。
 
-5. 独立 CLI 主程序
+6. 配置工具函数
+- `parse_channel_map(text)` — 解析通道映射（支持 dict 和字符串格式）
+- `load_yaml_config(path)` — 加载 YAML 配置
+- `extract_pipeline_config(cfg)` — 提取 pipeline 配置（返回 `source_type`、`selected_channels`、`algorithm`、`realtime`、`eeg_device`）
+- `flatten_config(cfg)` — 把分层配置展开成 argparse 同名键
+- `apply_config_to_args(args, parser, cfg)` — 将配置写入参数（命令行优先）
+
+7. 独立 CLI 主程序
 - 可直接运行 pipeline 发 UDP（不依赖 ROS 节点）。
 - 支持 `--config`，并实现"命令行参数优先于 YAML"。
-- `--input` 支持 `mock`、`tcp_client`、`lsl`。
+- `--input` 支持 `mock`、`tcp_client`、`tcp_file`、`lsl`、`file`。
+- `--eeg-device` 支持 `enobio-20`、`unicorn-8`、`unicorn-4`。
+- `--file-path` 指定回放文件路径。
+
+### 4.6 模块化子包（新代码推荐使用）
+
+以下是后来从 `eeg_control_pipeline.py` 拆分出来的独立模块，结构更清晰：
+
+#### `thymio_control/contracts.py`
+- 定义 `EegFrame` 数据类（与单文件版本字段一致）
+- 预留 `RawSampleFrame`、`FeatureFrame`、`ControlFrame` 类型（Phase 3）
+
+#### `thymio_control/device_profiles.py`
+- 提取 `EEG_DEVICE_CONFIGS` 和 `get_device_config()`
+- 支持 3 种设备：`enobio-20`、`unicorn-8`、`unicorn-4`
+
+#### `thymio_control/pipeline.py`（模块化入口）
+- `build_pipeline(args)` → 返回 `(adapter, processor, policy)` 三元组
+- `build_adapter(args)` — 支持所有输入模式，新增 `lsl_raw` 模式
+- `build_processor()` — 返回 `enrich_features` 可调用对象
+- Legacy 回退由 `EEG_PIPELINE_LEGACY` 环境变量或 `use_legacy` 参数控制
+
+#### `thymio_control/adapters/`（数据适配器包）
+
+| 文件 | 类 | 说明 |
+|---|---|---|
+| `base.py` | `BaseAdapter` | 抽象基类 |
+| `mock.py` | `MockAdapter`、`KeyboardAdapter` | 模拟和键盘输入 |
+| `tcp_client.py` | `TcpClientAdapter` | TCP 实时连接（重命名自 `TcpClientJsonAdapter`） |
+| `tcp_file.py` | `TcpFileAdapter` | TCP 文件回放 |
+| `lsl_feature.py` | `LslFeatureAdapter` | LSL 频段特征流（重命名自 `LslAdapter`） |
+| `lsl_raw.py` | `RawLslAdapter` | **新** — LSL 原始 EEG 信号，内部做 streaming DSP |
+| `edf_file.py` | `EdfFileAdapter` | **新** — EDF 文件读取，通过 pyedflib + streaming DSP |
+
+#### `thymio_control/processors/`（信号处理包）
+
+| 文件 | 关键导出 | 说明 |
+|---|---|---|
+| `band_power.py` | `BandPowers`、`DSPConfig`、`StreamingBandPowerExtractor` | 频段功率提取（Welch PSD），支持 delta/theta/alpha/beta/gamma 五个频段 |
+| `enrich.py` | `enrich_features()`、`clip01()`、`safe_div()`、`PIPELINE_ALGORITHMS` | 特征工程（从单文件提取） |
+| `tcp_protocol.py` | `parse_sod_packet()`、`extract_tcp_feature()` | TCP 协议解析（从单文件提取） |
+
+`BandPowers` 数据结构包含 5 个频段：delta、theta、alpha、beta、gamma。
+`DSPConfig` 支持配置：`window_sec`、`hop_sec`、`nperseg`、`noverlap`、`bands`、`source_unit`。
+`convert_power_to_uv2()` 支持 nV/uV/mV/V 单位转换。
+
+#### `thymio_control/policies/`（控制策略包）
+
+| 文件 | 类 | 说明 |
+|---|---|---|
+| `base.py` | `Policy` | 抽象基类 |
+| `focus.py` | `FocusPolicy` | 可配置参数：`focus_offset`、`focus_scale`、`steer_gain` |
+| `theta_beta.py` | `ThetaBetaPolicy` | theta/beta 比值控制 |
 
 ---
 
@@ -257,25 +350,36 @@ Windows 设备 SDK
 这是 launch 默认参数来源。
 当前关键默认值：
 - `use_sim: true`
+- `use_gui: false`
 - `run_eeg: false`
 - `run_gaze: false`
+- `run_rviz: false`
 - `use_teleop: true`
+- `use_tobii_bridge: false`
+- `use_enobio_bridge: false`
 
-含义：默认更偏“手动演示模式”。
+含义：默认更偏”手动演示模式”。
 要自动控制，需要显式开启 `run_eeg` 或 `run_gaze`，并关闭 teleop。
+RViz 默认不启动，需设置 `run_rviz:=true`。
 
 ### 5.2 `config/eeg_control_node.params.yaml`
 
 EEG 节点参数。
 当前示例里输入模式是：
 - `input: tcp_client`
-- `tcp_host: 172.27.96.1`
+- `tcp_host: 127.0.0.1`
 - `tcp_port: 1234`
 - `tcp_control_mode: feature`（默认；可选 `movement`）
+- `eeg_device: enobio-20`（支持 `enobio-20`、`unicorn-8`、`unicorn-4`）
+- `file_path: tcp_data.txt`（`tcp_file` 或 `file` 模式使用的文件路径）
+- `lsl_stream_type: EEG`
+- `lsl_timeout: 8.0`
+- `lsl_channel_map: alpha=0,theta=1,beta=2,left_alpha=3,right_alpha=4`
 
 `tcp_control_mode` 决定 EEG 节点如何处理 TCP 数据包中的控制字段：
 - `feature`：读取 `feature` 字段，用 `feature_to_twist` 直接映射为 Twist（默认生产模式）。
 - `movement`：读取 `movement` 字段，按离散区间映射为前进/后退/转向。
+- 当 `tcp_control_mode` 为空时：`tcp_file` 输入默认为 `feature` 模式，其他输入默认为 `movement` 模式。
 
 如果你在本机调试，可先改成：
 - `input: mock`
@@ -387,6 +491,10 @@ ros2 topic echo /cmd_vel --once
 3. 以为算法不对，实际是仍在用 `mock` 输入。
 4. 看到 `thymio_ros.py` 还在就继续用它。这个文件现在是 deprecated 兼容壳，不是主入口。
 5. 以为 EEG 节点走的是 band-features 意图模式，其实默认 `tcp_control_mode: feature`，优先走 `feature_to_twist` 直控，只有当 `feature` 字段不存在时才会回退到 movement / 意图链路。
+6. `tcp_file` 模式下 `tcp_control_mode` 默认为 `feature`（而非 `movement`），注意和其他输入模式的区别。
+7. `eeg_input` 参数可以覆盖 `input` 参数——如果 launch 传了 `eeg_input`，它会优先生效。
+8. RViz 默认不启动（`run_rviz: false`），需要显式开启。
+9. 模块化子包（`adapters/`、`processors/`、`policies/`）和单文件 `eeg_control_pipeline.py` 功能等价，新代码建议使用模块化入口 `pipeline.py`。
 
 ---
 
@@ -410,7 +518,8 @@ git commit -m "Explain and adjust control mapping"
 1. 谁负责启动所有组件：`experiment_core.launch.py`
 2. 谁负责 EEG 实时控制：`eeg_control_node.py`
 3. 谁负责 UDP 视线数据接入：`gaze_control_node.py`
-4. 谁负责 EEG 特征与策略：`eeg_control_pipeline.py`
-5. 为什么还有 `thymio_ros.py`：仅兼容提示，不再是主流程
+4. 谁负责 EEG 特征与策略：`eeg_control_pipeline.py`（单文件）或 `pipeline.py`（模块化）
+5. 模块化子包有哪些：`adapters/`（数据源）、`processors/`（信号处理）、`policies/`（控制策略）
+6. 为什么还有 `thymio_ros.py`：仅兼容提示，不再是主流程
 
-如果这 5 个问题你都能解释清楚，说明你已经真正理解这个包的当前架构。
+如果这 6 个问题你都能解释清楚，说明你已经真正理解这个包的当前架构。
