@@ -650,7 +650,8 @@ class ThetaBetaPolicy(Policy):
         # 比值越高通常代表注意力越弱，对应更慢（speed_intent 更低）。
         tbr_norm = clip01((self._tbr_smooth - 0.207) / 2.215)
         speed_intent = clip01(1.0 - tbr_norm)
-        steer_intent = clip01(0.5 + 1.1 * features.get("alpha_asym", 0.0))
+        # steer_intent = clip01(0.5 + 1.1 * features.get("alpha_asym", 0.0))
+        steer_intent = 0.5  # steering disabled — forward/backward only
         return {"speed_intent": speed_intent, "steer_intent": steer_intent}
 
 

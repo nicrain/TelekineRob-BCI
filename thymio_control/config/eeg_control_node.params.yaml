@@ -1,7 +1,7 @@
 /**:
   ros__parameters:
-    input: file
-    policy: theta_beta
+    input: tcp_client
+    policy: focus
     eeg_device: enobio-20
     tcp_control_mode: feature
     tcp_host: 127.0.0.1
