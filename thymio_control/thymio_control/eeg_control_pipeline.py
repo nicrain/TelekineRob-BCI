@@ -655,9 +655,39 @@ class ThetaBetaPolicy(Policy):
         return {"speed_intent": speed_intent, "steer_intent": steer_intent}
 
 
+class AlphaOnlyPolicy(Policy):
+    """仅使用 alpha 频段功率控制速度。
+
+    alpha 抑制（alpha 降低）表示皮层激活和更高注意力，
+    因此 alpha 越低 → 速度越快。EMA 平滑（α=0.35）。
+    转向控制已禁用。
+    """
+
+    def __init__(self) -> None:
+        self._alpha_smooth: float = 0.0
+        self._primed: bool = False
+
+    def compute_intents(self, features: Dict[str, float]) -> Dict[str, float]:
+        alpha = features.get("alpha", 0.0)
+
+        # EMA smoothing on raw alpha (before normalisation)
+        if not self._primed:
+            self._alpha_smooth = alpha
+            self._primed = True
+        else:
+            self._alpha_smooth = 0.35 * alpha + 0.65 * self._alpha_smooth
+
+        # Lower alpha = more focused = faster
+        alpha_norm = clip01((self._alpha_smooth - 0.5) / 7.0)
+        speed_intent = clip01(1.0 - alpha_norm)
+        steer_intent = 0.5  # steering disabled — forward/backward only
+        return {"speed_intent": speed_intent, "steer_intent": steer_intent}
+
+
 POLICIES = {
     "focus": FocusPolicy,
     "theta_beta": ThetaBetaPolicy,
+    "alpha_only": AlphaOnlyPolicy,
 }
 
 

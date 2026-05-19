@@ -1,6 +1,6 @@
 import pytest
 
-from thymio_control.eeg_control_pipeline import FocusPolicy, ThetaBetaPolicy
+from thymio_control.eeg_control_pipeline import FocusPolicy, ThetaBetaPolicy, AlphaOnlyPolicy
 
 
 def test_focus_policy_clips_speed_and_steer_bounds():
@@ -44,3 +44,33 @@ def test_theta_beta_policy_steer_is_clipped():
 
     assert left["steer_intent"] == pytest.approx(0.0)
     assert right["steer_intent"] == pytest.approx(1.0)
+
+
+def test_alpha_only_policy_clips_bounds():
+    policy = AlphaOnlyPolicy()
+
+    low = policy.compute_intents({"alpha": -10.0})
+    high = policy.compute_intents({"alpha": 100.0})
+
+    assert low["speed_intent"] == pytest.approx(1.0)
+    assert low["steer_intent"] == pytest.approx(0.5)
+    assert high["speed_intent"] == pytest.approx(0.0)
+    assert high["steer_intent"] == pytest.approx(0.5)
+
+
+def test_alpha_only_policy_speed_inversely_proportional():
+    policy = AlphaOnlyPolicy()
+
+    low_alpha = policy.compute_intents({"alpha": 0.5})
+    high_alpha = policy.compute_intents({"alpha": 7.0})
+
+    assert low_alpha["speed_intent"] > high_alpha["speed_intent"]
+    assert 0.0 <= low_alpha["speed_intent"] <= 1.0
+    assert 0.0 <= high_alpha["speed_intent"] <= 1.0
+
+
+def test_alpha_only_policy_steer_is_disabled():
+    policy = AlphaOnlyPolicy()
+
+    result = policy.compute_intents({"alpha": 3.0})
+    assert result["steer_intent"] == pytest.approx(0.5)

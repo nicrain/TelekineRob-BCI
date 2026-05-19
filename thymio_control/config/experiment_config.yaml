@@ -19,6 +19,7 @@ adapter:
     left_alpha: 3
     right_alpha: 4
 policy_cfg:
+  # Available: focus (β/(α+θ)), theta_beta (θ/β), alpha_only (α)
   policy: theta_beta
 output:
   udp_host: 127.0.0.1

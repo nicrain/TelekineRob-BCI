@@ -44,10 +44,12 @@ _log = logging.getLogger(__name__)
 
 from thymio_control.policies.focus      import FocusPolicy
 from thymio_control.policies.theta_beta import ThetaBetaPolicy
+from thymio_control.policies.alpha_only import AlphaOnlyPolicy
 
 POLICIES: Dict[str, type] = {
     "focus":      FocusPolicy,
     "theta_beta": ThetaBetaPolicy,
+    "alpha_only": AlphaOnlyPolicy,
 }
 
 # ---------------------------------------------------------------------------
