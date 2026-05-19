@@ -3,9 +3,9 @@
 ## 1. 文档信息
 - 文档名称: ROS Thymio 项目整体架构与工程化改进需求说明书
 - 项目: ROS2 Thymio EEG/Gaze/Web 控制平台
-- 版本: v2.3
+- 版本: v2.4
 - 日期: 2026-05-19
-- 状态: FocusPolicy 已校准 + EMA 平滑已实现
+- 状态: ThetaBetaPolicy 已校准 + 转向已禁用（只控制前后移动）
 - 适用对象:
   - 架构负责人、算法工程师、ROS 工程师、前后端工程师、测试工程师
   - AI Agent（代码改造、测试补齐、回归验证、文档维护）
@@ -242,9 +242,9 @@ class FileReader(Protocol):
 | 是否有非 EDF 格式（如 XDF、CSV） | FileReader 接口可扩展，不影响已有代码 |
 | 不同设备的通道标签命名规范 | 通过 DeviceProfile 的 `channel_labels` 注入，处理层按索引访问 |
 
-## 7.4 算法参数与可配置性（v2.1 新增 / v2.3 更新）
+## 7.4 算法参数与可配置性（v2.1 新增 / v2.4 更新）
 
-当前算法参数状态: DSP 参数使用学术标准默认值；**FocusPolicy 归一化参数已基于 20260408111446_Patient01.edf 校准**。所有参数必须可通过 YAML 配置覆盖。
+当前算法参数状态: DSP 参数使用学术标准默认值；**FocusPolicy 和 ThetaBetaPolicy 归一化参数均已基于 20260408111446_Patient01.edf 校准**。当前激活策略为 `theta_beta`（TBR）。所有参数必须可通过 YAML 配置覆盖。
 
 ### 7.4.1 DSP 参数
 
@@ -305,6 +305,45 @@ speed_intent  = clip01((bat_smooth - focus_offset) / focus_scale)
 | jitter 减少 | ~65% | 从 0.196 降至 ~0.07 |
 
 α 调节指南: 增大 → 响应更快，抖动更大；减小 → 更平滑，滞后更明显。当前 0.35 经 3 分钟数据验证为推荐默认值。
+
+### 7.4.4 ThetaBetaPolicy 参数（v2.4 新增 — 已校准 — 当前激活策略）
+
+ThetaBetaPolicy 将 `theta_beta`（θ/β，即 TBR Theta/Beta Ratio）映射为 `speed_intent` [0, 1]。
+TBR 越高表示专注度越低，因此速度意图与 TBR 成反比。
+
+归一化公式: `clip01(1.0 - (theta_beta_smooth - tbr_offset) / tbr_scale)`
+
+校准基准数据: `records/20260408111446_Patient01.edf`（Enobio-20, 20ch, 500Hz, 3 分钟窗口）
+
+| 参数 | 校准前（默认） | 校准后 | 说明 |
+|------|--------------|--------|------|
+| `tbr_offset` | 0.5 | **0.207** | θ/β 的 p5 百分位 |
+| `tbr_scale` | 1.0 | **2.215** | θ/β 的 p95 - p5 |
+| `steer_gain` | 1.1 | 1.1（未改） | alpha_asym → steer 增益（目前未使用） |
+| `ema_alpha` | —（无） | **0.35** | EMA 平滑系数（同 FocusPolicy） |
+
+数据集统计（3 分钟，360 帧，hop=0.5s）:
+- θ/β: p5=0.207, p25=0.463, p50=0.697, p75=1.123, p95=2.422
+- speed_intent 实测范围: 0.51~0.91，无饱和
+
+校准策略: p5~p95 映射到 [0, 1]，约 10% 的帧会发生饱和，中间 90% 有区分度。
+**注意**: 参数基于此特定 EDF 文件。换设备/换文件/换真人数据后必须重新校准。
+
+受影响文件:
+- `thymio_control/policies/theta_beta.py` — 新架构 ThetaBetaPolicy 类属性
+- `thymio_control/eeg_control_pipeline.py` — Legacy 路径硬编码（ROS 节点实际导入）
+
+### 7.4.5 转向控制状态（v2.4 新增）
+
+当前随验语境: **转向已禁用**，`steer_intent` 固定为 0.5（中性，表示不转弯）。
+
+禁用原因: 本阶段目标是验证 EEG 表征指标对**前后移动**的控制效果，暂时排除转向对实车测试的干扰。
+
+启用转向: 将 `ThetaBetaPolicy.compute_intents` 中的注释还原:
+```python
+# steer_intent = 0.5  # 移除此行并取消注释下面一行:
+steer_intent = clip01(0.5 + self.steer_gain * asym)
+```
 
 ## 7.5 数据清洗与滤波（v2.2 新增）
 
