@@ -627,12 +627,29 @@ class FocusPolicy(Policy):
 
 
 class ThetaBetaPolicy(Policy):
-    """使用 theta/beta 比值控制速度，使用 alpha 非对称控制转向。"""
+    """使用 theta/beta 比值控制速度，使用 alpha 非对称控制转向。
+
+    EMA 平滑 theta_beta（α=0.35）减少帧间抖动。
+    参数基于 20260408111446_Patient01.edf 校准（p5=0.207, p95=2.422）。
+    """
+
+    def __init__(self) -> None:
+        self._tbr_smooth: float = 0.0
+        self._primed: bool = False
 
     def compute_intents(self, features: Dict[str, float]) -> Dict[str, float]:
         ratio = features.get("theta_beta", 1.0)
+
+        # EMA smoothing on raw theta_beta (before normalisation)
+        if not self._primed:
+            self._tbr_smooth = ratio
+            self._primed = True
+        else:
+            self._tbr_smooth = 0.35 * ratio + 0.65 * self._tbr_smooth
+
         # 比值越高通常代表注意力越弱，对应更慢（speed_intent 更低）。
-        speed_intent = clip01(1.0 - (ratio - 0.5) / 2.0)
+        tbr_norm = clip01((self._tbr_smooth - 0.207) / 2.215)
+        speed_intent = clip01(1.0 - tbr_norm)
         steer_intent = clip01(0.5 + 1.1 * features.get("alpha_asym", 0.0))
         return {"speed_intent": speed_intent, "steer_intent": steer_intent}
 

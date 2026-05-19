@@ -19,7 +19,7 @@ adapter:
     left_alpha: 3
     right_alpha: 4
 policy_cfg:
-  policy: focus
+  policy: theta_beta
 output:
   udp_host: 127.0.0.1
   udp_port: 5005
