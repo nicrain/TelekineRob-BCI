@@ -621,27 +621,47 @@ export default function App() {
           <div>
             <span className="section-label">02 — Output Target</span>
 
-            <div className="output-radios">
-              {[
-                { value: 'thymio',        title: 'Thymio',       desc: 'Real robot' },
-                { value: 'thymio_simu',   title: 'Thymio Simu',  desc: 'Gazebo simulation' },
-                { value: 'none',          title: 'Monitor Only', desc: 'View waveforms only' },
-              ].map((opt) => (
-                <label
-                  key={opt.value}
-                  className={`output-radio${outputMode === opt.value ? ' selected' : ''}`}
-                >
-                  <input
-                    type="radio"
-                    name="output_mode"
-                    value={opt.value}
-                    checked={outputMode === opt.value}
-                    onChange={() => setOutputMode(opt.value)}
-                  />
-                  <span className="output-radio-title">{opt.title}</span>
-                  <span className="output-radio-desc">{opt.desc}</span>
-                </label>
-              ))}
+            <div className="output-row">
+              <div className="output-radios">
+                {[
+                  { value: 'thymio',        title: 'Thymio',       desc: 'Real robot' },
+                  { value: 'thymio_simu',   title: 'Thymio Simu',  desc: 'Gazebo simulation' },
+                  { value: 'none',          title: 'Monitor Only', desc: 'View waveforms only' },
+                ].map((opt) => (
+                  <label
+                    key={opt.value}
+                    className={`output-radio${outputMode === opt.value ? ' selected' : ''}`}
+                  >
+                    <input
+                      type="radio"
+                      name="output_mode"
+                      value={opt.value}
+                      checked={outputMode === opt.value}
+                      onChange={() => setOutputMode(opt.value)}
+                    />
+                    <span className="output-radio-title">{opt.title}</span>
+                    <span className="output-radio-desc">{opt.desc}</span>
+                  </label>
+                ))}
+              </div>
+
+              <div className="status-strip">
+                <div className="status-row">
+                  <div className={`status-dot ${wsConnected ? 'ok' : 'warn'}`} />
+                  <span className="status-label">WebSocket</span>
+                  <span className="status-value">{wsConnected ? 'connected' : 'disconnected'}</span>
+                </div>
+                <div className="status-row">
+                  <div className="status-dot off" />
+                  <span className="status-label">ROS2</span>
+                  <span className="status-value">—</span>
+                </div>
+                <div className="status-row">
+                  <div className="status-dot off" />
+                  <span className="status-label">Thymio</span>
+                  <span className="status-value">—</span>
+                </div>
+              </div>
             </div>
 
             <label className={`waveform-toggle${isControlMode ? ' disabled' : ''}`}>
@@ -656,24 +676,6 @@ export default function App() {
                 {isControlMode ? '— unavailable for this mode' : 'alpha · theta · beta · features · control'}
               </span>
             </label>
-
-            <div className="status-strip">
-              <div className="status-row">
-                <div className={`status-dot ${wsConnected ? 'ok' : 'warn'}`} />
-                <span className="status-label">WebSocket</span>
-                <span className="status-value">{wsConnected ? 'connected' : 'disconnected'}</span>
-              </div>
-              <div className="status-row">
-                <div className="status-dot off" />
-                <span className="status-label">ROS2</span>
-                <span className="status-value">—</span>
-              </div>
-              <div className="status-row">
-                <div className="status-dot off" />
-                <span className="status-label">Thymio</span>
-                <span className="status-value">—</span>
-              </div>
-            </div>
           </div>
 
         </div>

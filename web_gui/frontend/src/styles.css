@@ -366,9 +366,16 @@ body {
   gap: var(--sp16);
 }
 
+.output-row {
+  display: flex;
+  gap: var(--sp24);
+  align-items: flex-start;
+}
+
 .output-radios {
   display: flex;
   gap: var(--sp8);
+  flex: 1;
 }
 
 .output-radio {
@@ -473,9 +480,9 @@ body {
    Status strip
    ───────────────────────────────────────────────────────── */
 .status-strip {
-  margin-top: var(--sp24);
-  border-top: 1px solid #1a1a1a;
-  padding-top: var(--sp20);
+  border-left: 1px solid #2a2a2a;
+  padding-left: var(--sp20);
+  flex-shrink: 0;
 }
 
 .status-row {
