@@ -587,6 +587,13 @@ body {
   padding: var(--sp40) var(--sp32);
 }
 
+.section-header-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-bottom: var(--sp24);
+}
+
 .section-light .section-label {
   font-family: var(--font-mono);
   font-size: 11px;
@@ -603,9 +610,71 @@ body {
   font-size: 18px;
   font-weight: 700;
   color: var(--f-near-black);
-  margin-bottom: var(--sp24);
+  margin-bottom: 0;
 }
 
+/* ── Data toggle (Real / Mock) ──────────────────────────── */
+.data-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--sp8);
+  cursor: pointer;
+  user-select: none;
+}
+
+.data-toggle-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  color: var(--f-dark-gray);
+  transition: color 0.2s;
+}
+
+.data-toggle.mock .data-toggle-label:last-of-type {
+  color: var(--f-red);
+  font-weight: 600;
+}
+
+.data-toggle:not(.mock) .data-toggle-label:first-of-type {
+  color: var(--f-ok);
+  font-weight: 600;
+}
+
+.data-toggle input[type='checkbox'] {
+  display: none;
+}
+
+.data-toggle-track {
+  width: 36px;
+  height: 20px;
+  border-radius: 10px;
+  background: var(--f-ok);
+  position: relative;
+  transition: background 0.2s;
+}
+
+.data-toggle.mock .data-toggle-track {
+  background: var(--f-red);
+}
+
+.data-toggle-track::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--f-white);
+  transition: transform 0.2s;
+}
+
+.data-toggle.mock .data-toggle-track::after {
+  transform: translateX(16px);
+}
+
+/* ── Charts grid ────────────────────────────────────────── */
 .charts-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -623,6 +692,12 @@ body {
   border: 1px solid #e8e8e8;
   border-radius: var(--radius);
   padding: var(--sp16);
+  transition: opacity 0.25s;
+}
+
+.chart-card.dimmed-card {
+  opacity: 0.3;
+  pointer-events: none;
 }
 
 .chart-card h3 {
@@ -633,6 +708,40 @@ body {
   letter-spacing: 0.5px;
   text-transform: uppercase;
   margin-bottom: var(--sp12);
+}
+
+/* ── Control Vector card ────────────────────────────────── */
+.vector-card-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp12);
+}
+
+.control-vector-svg {
+  display: block;
+}
+
+.vector-legend {
+  display: flex;
+  gap: var(--sp16);
+}
+
+.vl-item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp6);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--f-dark-gray);
+  letter-spacing: 0.3px;
+}
+
+.vl-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
 }
 
 /* ─────────────────────────────────────────────────────────

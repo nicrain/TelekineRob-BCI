@@ -260,6 +260,84 @@ function ChannelPicker({ channels, selected, onChange, disabled }) {
   );
 }
 
+/* ── Control Vector (SVG arrow visualization) ─────────── */
+const ARROW_LEN = 80;
+const SVG_SIZE = 200;
+const CX = SVG_SIZE / 2;
+const CY = SVG_SIZE / 2;
+
+function ControlVector({ speed, steer }) {
+  // speed: -1..1 (forward positive), steer: 0..1 (0.5=center)
+  const steerOffset = steer - 0.5; // -0.5..0.5
+
+  // Up arrow (speed): maps to +Y in SVG (down), but we want up = forward
+  const upLen = Math.abs(speed) * ARROW_LEN;
+  const upDir = speed >= 0 ? -1 : 1; // -1 = up in SVG, +1 = down
+  const upActive = Math.abs(speed) > 0.05;
+
+  // Left arrow: active when steerOffset < 0
+  const leftActive = steerOffset < -0.05;
+  const leftLen = Math.abs(Math.min(steerOffset, 0)) * ARROW_LEN * 2;
+
+  // Right arrow: active when steerOffset > 0
+  const rightActive = steerOffset > 0.05;
+  const rightLen = Math.abs(Math.max(steerOffset, 0)) * ARROW_LEN * 2;
+
+  // Resultant: combine speed (Y) and steer (X)
+  const resX = steerOffset * ARROW_LEN * 2;
+  const resY = -speed * ARROW_LEN;
+
+  const arrowHead = (x, y, color, dashed) => {
+    const angle = Math.atan2(y, x);
+    const len = Math.sqrt(x * x + y * y);
+    if (len < 2) return null;
+    const headLen = Math.min(10, len * 0.3);
+    const a1 = angle + Math.PI * 0.82;
+    const a2 = angle - Math.PI * 0.82;
+    return (
+      <g>
+        <line
+          x1={CX} y1={CY} x2={CX + x} y2={CY + y}
+          stroke={color} strokeWidth={2.5}
+          strokeDasharray={dashed ? '6 4' : 'none'}
+          strokeLinecap="round"
+        />
+        <polygon
+          points={`${CX + x},${CY + y} ${CX + x + headLen * Math.cos(a1)},${CY + y + headLen * Math.sin(a1)} ${CX + x + headLen * Math.cos(a2)},${CY + y + headLen * Math.sin(a2)}`}
+          fill={color}
+        />
+      </g>
+    );
+  };
+
+  return (
+    <svg width={SVG_SIZE} height={SVG_SIZE} viewBox={`0 0 ${SVG_SIZE} ${SVG_SIZE}`} className="control-vector-svg">
+      {/* Grid lines */}
+      <line x1={CX} y1={10} x2={CX} y2={SVG_SIZE - 10} stroke="#333" strokeWidth={1} />
+      <line x1={10} y1={CY} x2={SVG_SIZE - 10} y2={CY} stroke="#333" strokeWidth={1} />
+
+      {/* Axis labels */}
+      <text x={CX} y={14} textAnchor="middle" fill="#666" fontSize={9} fontFamily="'IBM Plex Mono', monospace">avant</text>
+      <text x={CX} y={SVG_SIZE - 4} textAnchor="middle" fill="#666" fontSize={9} fontFamily="'IBM Plex Mono', monospace">arrière</text>
+      <text x={6} y={CY + 3} textAnchor="start" fill="#666" fontSize={9} fontFamily="'IBM Plex Mono', monospace">G</text>
+      <text x={SVG_SIZE - 6} y={CY + 3} textAnchor="end" fill="#666" fontSize={9} fontFamily="'IBM Plex Mono', monospace">D</text>
+
+      {/* Base arrows */}
+      {/* Up/Down arrow (speed) — along Y axis */}
+      {arrowHead(0, upDir * upLen, upActive ? (speed >= 0 ? '#DA291C' : '#4C98B9') : '#444', !upActive)}
+
+      {/* Left arrow — along -X axis */}
+      {arrowHead(-leftLen, 0, leftActive ? '#F6E500' : '#444', !leftActive)}
+
+      {/* Right arrow — along +X axis */}
+      {arrowHead(rightLen, 0, rightActive ? '#F6E500' : '#444', !rightActive)}
+
+      {/* Resultant vector */}
+      {arrowHead(resX, resY, 'rgba(218, 41, 28, 0.6)', false)}
+    </svg>
+  );
+}
+
 /* ── App ───────────────────────────────────────────────── */
 export default function App() {
   /* ── State ─────────────────────────────────────────── */
@@ -282,6 +360,7 @@ export default function App() {
 
   const [outputMode, setOutputMode]         = useState('thymio_simu');
   const [showWaveform, setShowWaveform]     = useState(true);
+  const [useMockData, setUseMockData]       = useState(false);
 
   const wsRef = useRef(null);
   const teleopWsRef = useRef(null);
@@ -333,8 +412,44 @@ export default function App() {
       .catch((err) => setFeedback(`Init failed: ${err.message}`));
   }, []);
 
+  /* ── Mock data generator ────────────────────────────── */
+  function generateMockPoint() {
+    const now = new Date().toLocaleTimeString();
+    const rand = (base, amp) => base + (Math.random() - 0.5) * amp;
+    return {
+      t: now,
+      alpha: rand(10, 6),
+      theta: rand(6, 4),
+      beta:  rand(8, 5),
+      ratio: rand(0.8, 0.4),
+      focus: rand(1.2, 0.6),
+      speed: rand(0.3, 0.6),
+      steer: rand(0.5, 0.4),
+    };
+  }
+
+  /* ── Mock data interval ─────────────────────────────── */
+  useEffect(() => {
+    if (!useMockData) return;
+    const id = setInterval(() => {
+      const d = generateMockPoint();
+      setSeries((prev) => ({
+        t:     pushPoint(prev.t,     d.t),
+        alpha: pushPoint(prev.alpha, d.alpha),
+        theta: pushPoint(prev.theta, d.theta),
+        beta:  pushPoint(prev.beta,  d.beta),
+        ratio: pushPoint(prev.ratio, d.ratio),
+        focus: pushPoint(prev.focus, d.focus),
+        speed: pushPoint(prev.speed, d.speed),
+        steer: pushPoint(prev.steer, d.steer),
+      }));
+    }, 200);
+    return () => clearInterval(id);
+  }, [useMockData]);
+
   /* ── WebSocket ──────────────────────────────────────── */
   useEffect(() => {
+    if (useMockData) return;
     if (wsRef.current) wsRef.current.close();
     const ws = new WebSocket(getWsUrl());
     wsRef.current = ws;
@@ -357,7 +472,7 @@ export default function App() {
       }
     };
     return () => ws.close();
-  }, [isControlMode]);
+  }, [isControlMode, useMockData]);
 
   /* ── Teleop WebSocket ─────────────────────────────── */
   useEffect(() => {
@@ -412,6 +527,8 @@ export default function App() {
     animation: false,
   }), [series]);
 
+  const metricLabels = { alpha: 'Alpha (α)', tbr: 'TBR (θ/β)', ei: 'EI (β/(α+θ))' };
+  const metricDataKey = { alpha: 'alpha', tbr: 'ratio', ei: 'focus' };
   const featureOption = useMemo(() => ({
     backgroundColor: 'transparent',
     tooltip: { trigger: 'axis', backgroundColor: '#fff', borderColor: '#ddd', textStyle: { color: '#333' } },
@@ -420,27 +537,11 @@ export default function App() {
     xAxis: { type: 'category', data: series.t, axisLabel: { color: '#999', fontSize: 10 } },
     yAxis: { type: 'value', axisLabel: { color: '#999', fontSize: 10 } },
     series: [
-      { name: 'theta_beta_ratio', type: 'line', smooth: true, showSymbol: false, data: series.ratio },
-      { name: 'focus_index',       type: 'line', smooth: true, showSymbol: false, data: series.focus },
+      { name: metricLabels[metric], type: 'line', smooth: true, showSymbol: false, data: series[metricDataKey[metric]] },
     ],
-    color: ['#F6E500', '#000000'],
+    color: ['#DA291C'],
     animation: false,
-  }), [series]);
-
-  const controlOption = useMemo(() => ({
-    backgroundColor: 'transparent',
-    tooltip: { trigger: 'axis', backgroundColor: '#fff', borderColor: '#ddd', textStyle: { color: '#333' } },
-    legend: { textStyle: { color: '#555' }, top: 2 },
-    grid: { left: 28, right: 16, top: 36, bottom: 24 },
-    xAxis: { type: 'category', data: series.t, axisLabel: { color: '#999', fontSize: 10 } },
-    yAxis: { type: 'value', min: -1, max: 1, axisLabel: { color: '#999', fontSize: 10 } },
-    series: [
-      { name: 'speed_intent', type: 'line', smooth: true, showSymbol: false, data: series.speed },
-      { name: 'steer_intent', type: 'line', smooth: true, showSymbol: false, data: series.steer },
-    ],
-    color: ['#DA291C', '#000000'],
-    animation: false,
-  }), [series]);
+  }), [series, metric]);
 
   /* ── Build patch ─────────────────────────────────────── */
   function buildPatch() {
@@ -708,21 +809,45 @@ export default function App() {
         />
       ) : (
         <div className="section-light">
-          <span className="section-label">03 — Real-time Signals</span>
-          <h2 className="section-heading">Signal Monitoring</h2>
+          <div className="section-header-row">
+            <div>
+              <span className="section-label">03 — Real-time Signals</span>
+              <h2 className="section-heading">Signal Monitoring</h2>
+            </div>
+            <label className={`data-toggle${useMockData ? ' mock' : ''}`}>
+              <span className="data-toggle-label">Real</span>
+              <input
+                type="checkbox"
+                checked={useMockData}
+                onChange={(e) => setUseMockData(e.target.checked)}
+              />
+              <span className="data-toggle-track" />
+              <span className="data-toggle-label">Mock</span>
+            </label>
+          </div>
 
           <div className={`charts-grid${!showWaveform || isControlMode ? ' dimmed' : ''}`}>
             <div className="chart-card">
               <h3>Raw Wave &mdash; alpha / theta / beta</h3>
               <ReactECharts option={waveOption} style={{ height: 220 }} />
             </div>
-            <div className="chart-card">
-              <h3>Feature Trends</h3>
+            <div className={`chart-card${inputMode !== 'eeg' ? ' dimmed-card' : ''}`}>
+              <h3>{metricLabels[metric]}</h3>
               <ReactECharts option={featureOption} style={{ height: 220 }} />
             </div>
             <div className="chart-card">
-              <h3>Control Intents</h3>
-              <ReactECharts option={controlOption} style={{ height: 220 }} />
+              <h3>Control Vector</h3>
+              <div className="vector-card-body">
+                <ControlVector
+                  speed={series.speed.length ? series.speed[series.speed.length - 1] : 0}
+                  steer={series.steer.length ? series.steer[series.steer.length - 1] : 0.5}
+                />
+                <div className="vector-legend">
+                  <span className="vl-item"><span className="vl-dot" style={{ background: '#DA291C' }} /> vitesse</span>
+                  <span className="vl-item"><span className="vl-dot" style={{ background: '#F6E500' }} /> direction</span>
+                  <span className="vl-item"><span className="vl-dot" style={{ background: 'rgba(218,41,28,0.6)' }} /> résultante</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
