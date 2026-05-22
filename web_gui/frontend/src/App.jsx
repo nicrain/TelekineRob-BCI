@@ -278,6 +278,7 @@ export default function App() {
   const [filePath, setFilePath]           = useState('');
   const [selectedChannels, setSelectedChannels] = useState([0, 1, 2]);
   const [metric, setMetric]               = useState('tbr');
+  const [recordFiles, setRecordFiles]     = useState([]);
 
   const [outputMode, setOutputMode]         = useState('thymio_simu');
   const [showWaveform, setShowWaveform]     = useState(true);
@@ -384,6 +385,15 @@ export default function App() {
       ws.close();
     };
   }, [inputMode]);
+
+  /* ── Fetch record files when source is file-based ──── */
+  const isFileSource = eegProtocol === 'tcp_file' || eegProtocol === 'lsl_file';
+  useEffect(() => {
+    if (!isFileSource) { setRecordFiles([]); return; }
+    api.get('/api/files/records')
+      .then((r) => setRecordFiles(r.data.files || []))
+      .catch(() => setRecordFiles([]));
+  }, [isFileSource]);
 
   /* ── ECharts options (light theme for white panel) ──── */
   const waveOption = useMemo(() => ({
@@ -561,7 +571,7 @@ export default function App() {
                   <CascadeSelect
                     label="Source"
                     value={eegProtocol}
-                    onChange={setEegProtocol}
+                    onChange={(v) => { setEegProtocol(v); setFilePath(''); }}
                     options={[
                       { value: 'tcp',      label: 'TCP Stream' },
                       { value: 'lsl',      label: 'LSL Stream' },
@@ -569,6 +579,18 @@ export default function App() {
                       { value: 'lsl_file', label: 'LSL File' },
                     ]}
                   />
+
+                  {isFileSource && (
+                    <CascadeSelect
+                      label="File"
+                      value={filePath}
+                      onChange={setFilePath}
+                      options={[
+                        { value: '', label: '— select file —' },
+                        ...recordFiles.map((f) => ({ value: f, label: f })),
+                      ]}
+                    />
+                  )}
 
                   <ChannelPicker
                     channels={CHANNEL_PRESETS[eegBrand]}
@@ -588,18 +610,6 @@ export default function App() {
                 </>
               )}
             </div>
-
-            {inputMode === 'eeg' && (eegProtocol === 'tcp_file' || eegProtocol === 'lsl_file') && (
-              <div className="file-row" style={{ marginTop: 12 }}>
-                <label>File:</label>
-                <input
-                  type="text"
-                  value={filePath}
-                  placeholder="/path/to/recording.edf"
-                  onChange={(e) => setFilePath(e.target.value)}
-                />
-              </div>
-            )}
 
             <div className="btn-row">
               <button className="btn btn-cta"     onClick={startSystem}>Start</button>

@@ -100,6 +100,24 @@ async def list_tcp_files() -> dict[str, Any]:
     return {"files": txt_files}
 
 
+DATA_EXTENSIONS = {".easy", ".edf", ".txt", ".csv"}
+
+
+@app.get("/api/files/records")
+async def list_record_files() -> dict[str, Any]:
+    """Return list of all data files in records/ directory."""
+    from pathlib import Path
+    repo_root = Path(__file__).resolve().parents[3]
+    records_dir = repo_root / "records"
+    if not records_dir.exists():
+        return {"files": []}
+    files = sorted([
+        f.name for f in records_dir.iterdir()
+        if f.is_file() and f.suffix.lower() in DATA_EXTENSIONS
+    ])
+    return {"files": files}
+
+
 @app.post("/api/system/stop")
 def api_stop(req: CommandRequest) -> dict[str, Any]:
     return stop_system(dry_run=req.dry_run).model_dump()
