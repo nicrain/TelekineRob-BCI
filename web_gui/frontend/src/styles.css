@@ -177,10 +177,9 @@ body {
 }
 
 .controls-grid {
-  display: grid;
-  grid-template-columns: 1.4fr 1fr;
-  gap: var(--sp40);
-  align-items: start;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp32);
 }
 
 /* ─────────────────────────────────────────────────────────
