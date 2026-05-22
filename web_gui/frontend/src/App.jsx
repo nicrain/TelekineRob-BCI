@@ -5,6 +5,21 @@ import { api, getWsUrl } from './api';
 /* ── Constants ─────────────────────────────────────────── */
 const MAX_POINTS = 140;
 
+const CHANNEL_PRESETS = {
+  enobio: [
+    'Fp1', 'Fp2', 'F3', 'F4', 'C3', 'C4', 'P3', 'P4', 'O1', 'O2',
+    'F7', 'F8', 'T7', 'T8', 'P7', 'P8', 'Fz', 'Cz', 'Pz', 'Oz',
+  ],
+  gtec_hybrid: ['Fz', 'C3', 'Cz', 'C4', 'Pz', 'PO7', 'Oz', 'PO8'],
+  gtec_headband: ['Fp1', 'Fp2', 'T7', 'T8'],
+};
+
+const METRIC_OPTIONS = [
+  { value: 'alpha', label: 'Alpha', formula: 'α' },
+  { value: 'tbr',   label: 'TBR',   formula: 'θ/β' },
+  { value: 'ei',    label: 'EI',    formula: 'β/(α+θ)' },
+];
+
 /* ── Helpers ───────────────────────────────────────────── */
 function pushPoint(arr, value) {
   const out = [...arr, value];
@@ -21,24 +36,6 @@ function HeroEmblem() {
         alt="Thymio"
       />
     </div>
-  );
-}
-
-/* ── Mode Card ─────────────────────────────────────────── */
-function ModeCard({ value, title, desc, icon, selected, onSelect }) {
-  return (
-    <label className={`mode-card${selected ? ' selected' : ''}`}>
-      <input
-        type="radio"
-        name="input_mode"
-        value={value}
-        checked={selected}
-        onChange={() => onSelect(value)}
-      />
-      <span className="mode-card-icon">{icon}</span>
-      <span className="mode-card-title">{title}</span>
-      <span className="mode-card-desc">{desc}</span>
-    </label>
   );
 }
 
@@ -178,66 +175,85 @@ function TeleopPanel({ teleopWsRef, topic, connected }) {
   );
 }
 
-/* ── Sub Radio group ──────────────────────────────────── */
-function SubRadio({ options, value, onChange }) {
+/* ── Cascade Select (styled native <select>) ─────────── */
+function CascadeSelect({ label, value, onChange, options, disabled }) {
   return (
-    <div className="sub-radios">
-      {options.map((opt) => (
-        <label
-          key={opt.value}
-          className={`sub-radio${value === opt.value ? ' selected' : ''}`}
-        >
-          <input
-            type="radio"
-            name="eeg_option"
-            value={opt.value}
-            checked={value === opt.value}
-            onChange={() => onChange(opt.value)}
-          />
-          {opt.label}
-        </label>
-      ))}
+    <div className={`cascade-group${disabled ? ' disabled' : ''}`}>
+      <span className="cascade-label">{label}</span>
+      <select
+        className="cascade-select"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
+      >
+        {options.map((opt) => (
+          <option key={opt.value} value={opt.value}>
+            {opt.label}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }
 
-/* ── EEG sub-panel (white editorial card) ──────────────── */
-function EegSubPanel({ eegDevice, eegProtocol, filePath, onDevice, onProtocol, onFilePath }) {
+/* ── Channel Picker (multi-select with popover) ──────── */
+function ChannelPicker({ channels, selected, onChange, disabled }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    }
+    if (open) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [open]);
+
+  function toggleChannel(idx) {
+    onChange(
+      selected.includes(idx)
+        ? selected.filter((i) => i !== idx)
+        : [...selected, idx]
+    );
+  }
+
+  function selectAll() {
+    onChange(channels.map((_, i) => i));
+  }
+
+  function selectNone() {
+    onChange([]);
+  }
+
   return (
-    <div className="eeg-sub-panel">
-      <h3>EEG — Device &amp; Protocol</h3>
-
-      <span className="sub-label">Device</span>
-      <SubRadio
-        options={[
-          { value: 'enobio', label: 'Enobio' },
-          { value: 'gtec',   label: 'g.tec' },
-        ]}
-        value={eegDevice}
-        onChange={onDevice}
-      />
-
-      <span className="sub-label">Data Source</span>
-      <SubRadio
-        options={[
-          { value: 'tcp',      label: 'TCP' },
-          { value: 'lsl',      label: 'LSL' },
-          { value: 'tcp_file', label: 'TCP File Replay' },
-          { value: 'lsl_file', label: 'LSL File Replay' },
-        ]}
-        value={eegProtocol}
-        onChange={onProtocol}
-      />
-
-      {(eegProtocol === 'tcp_file' || eegProtocol === 'lsl_file') && (
-        <div className="file-row">
-          <label>File:</label>
-          <input
-            type="text"
-            value={filePath}
-            placeholder="/path/to/recording.edf"
-            onChange={(e) => onFilePath(e.target.value)}
-          />
+    <div className={`cascade-group${disabled ? ' disabled' : ''}`} ref={ref}>
+      <span className="cascade-label">Channels</span>
+      <button
+        type="button"
+        className="cascade-select channel-picker-trigger"
+        onClick={() => !disabled && setOpen(!open)}
+        disabled={disabled}
+      >
+        {selected.length}/{channels.length}
+      </button>
+      {open && (
+        <div className="channel-picker-popover">
+          <div className="channel-picker-actions">
+            <button type="button" className="ch-action" onClick={selectAll}>All</button>
+            <button type="button" className="ch-action" onClick={selectNone}>None</button>
+          </div>
+          <div className="channel-picker-grid">
+            {channels.map((ch, idx) => (
+              <label key={idx} className="channel-checkbox">
+                <input
+                  type="checkbox"
+                  checked={selected.includes(idx)}
+                  onChange={() => toggleChannel(idx)}
+                />
+                <span>{ch}</span>
+              </label>
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -256,10 +272,12 @@ export default function App() {
   const [wsConnected, setWsConnected] = useState(false);
 
   /* ── UI mode state ─────────────────────────────────── */
-  const [inputMode, setInputMode]       = useState('mock');
-  const [eegDevice, setEegDevice]       = useState('enobio');
-  const [eegProtocol, setEegProtocol]   = useState('tcp');
-  const [filePath, setFilePath]         = useState('');
+  const [inputMode, setInputMode]         = useState('eeg');
+  const [eegBrand, setEegBrand]           = useState('enobio');
+  const [eegProtocol, setEegProtocol]     = useState('tcp');
+  const [filePath, setFilePath]           = useState('');
+  const [selectedChannels, setSelectedChannels] = useState([0, 1, 2]);
+  const [metric, setMetric]               = useState('tbr');
 
   const [outputMode, setOutputMode]         = useState('thymio_simu');
   const [showWaveform, setShowWaveform]     = useState(true);
@@ -283,7 +301,8 @@ export default function App() {
         if (cfg.eeg) {
           const inp = cfg.eeg.input || 'mock';
           if (inp === 'mock') {
-            setInputMode('mock');
+            setInputMode('eeg');
+            setEegProtocol('tcp');
           } else if (inp === 'tcp_file') {
             setInputMode('eeg');
             setEegProtocol('tcp_file');
@@ -298,6 +317,13 @@ export default function App() {
             setEegProtocol('tcp');
           }
           if (cfg.eeg.file_path) setFilePath(cfg.eeg.file_path);
+        }
+        if (cfg.pipeline) {
+          if (cfg.pipeline.selected_channels) setSelectedChannels(cfg.pipeline.selected_channels);
+          if (cfg.pipeline.algorithm) {
+            const algMap = { alpha_only: 'alpha', theta_beta_ratio: 'tbr', engagement_index: 'ei' };
+            setMetric(algMap[cfg.pipeline.algorithm] || 'tbr');
+          }
         }
         if (cfg.launch) {
           setOutputMode(cfg.launch.use_sim ? 'thymio_simu' : 'thymio');
@@ -409,11 +435,11 @@ export default function App() {
   /* ── Build patch ─────────────────────────────────────── */
   function buildPatch() {
     const inputMap = {
-      mock:    'mock',
       eeg:     eegProtocol === 'tcp' ? 'tcp_client' : eegProtocol === 'tcp_file' ? 'tcp_file' : eegProtocol === 'lsl' ? 'lsl' : 'file',
       tobii:   'lsl',
       teleop:  'tcp_client',
     };
+    const algorithmMap = { alpha: 'alpha_only', tbr: 'theta_beta_ratio', ei: 'engagement_index' };
     const isSim = outputMode === 'thymio_simu';
     const patch = {
       eeg: {
@@ -426,11 +452,12 @@ export default function App() {
         lsl_stream_type: 'EEG',
         lsl_timeout:     8.0,
         lsl_channel_map: 'alpha=0,theta=1,beta=2,left_alpha=3,right_alpha=4',
+        brand:           eegBrand,
       },
       launch: {
         use_sim:           isSim,
         use_gui:           false,
-        run_eeg:           inputMode === 'eeg' || inputMode === 'mock',
+        run_eeg:           inputMode === 'eeg',
         run_gaze:          inputMode === 'tobii',
         use_teleop:        inputMode === 'teleop',
         use_tobii_bridge:  inputMode === 'tobii',
@@ -438,8 +465,8 @@ export default function App() {
       },
       pipeline: {
         source_type:       inputMap[inputMode] || 'mock',
-        selected_channels: [0, 1, 2],
-        algorithm:         'theta_beta_ratio',
+        selected_channels: selectedChannels,
+        algorithm:         algorithmMap[metric] || 'theta_beta_ratio',
       },
     };
     return patch;
@@ -505,50 +532,73 @@ export default function App() {
           {/* LEFT — Input Source */}
           <div>
             <span className="section-label">01 — Input Source</span>
-            <div className="mode-cards">
-              <ModeCard
-                value="mock"
-                title="Mock"
-                desc="Simulated EEG signals"
-                icon="◈"
-                selected={inputMode === 'mock'}
-                onSelect={setInputMode}
+
+            <div className="cascade-row">
+              <CascadeSelect
+                label="Device"
+                value={inputMode}
+                onChange={setInputMode}
+                options={[
+                  { value: 'eeg',    label: 'EEG' },
+                  { value: 'tobii',  label: 'Tobii' },
+                  { value: 'teleop', label: 'Keyboard' },
+                ]}
               />
-              <ModeCard
-                value="eeg"
-                title="EEG"
-                desc="Enobio / g.tec device"
-                icon="◉"
-                selected={inputMode === 'eeg'}
-                onSelect={setInputMode}
-              />
-              <ModeCard
-                value="tobii"
-                title="Tobii"
-                desc="Eye tracking → robot"
-                icon="◎"
-                selected={inputMode === 'tobii'}
-                onSelect={setInputMode}
-              />
-              <ModeCard
-                value="teleop"
-                title="Keyboard"
-                desc="Keyboard / joystick"
-                icon="⊕"
-                selected={inputMode === 'teleop'}
-                onSelect={setInputMode}
-              />
+
+              {inputMode === 'eeg' && (
+                <>
+                  <CascadeSelect
+                    label="Brand"
+                    value={eegBrand}
+                    onChange={(v) => { setEegBrand(v); setSelectedChannels([0, 1, 2]); }}
+                    options={[
+                      { value: 'enobio',         label: 'Enobio' },
+                      { value: 'gtec_hybrid',    label: 'g.tec Hybrid Black' },
+                      { value: 'gtec_headband',  label: 'g.tec Headband' },
+                    ]}
+                  />
+
+                  <CascadeSelect
+                    label="Source"
+                    value={eegProtocol}
+                    onChange={setEegProtocol}
+                    options={[
+                      { value: 'tcp',      label: 'TCP Stream' },
+                      { value: 'lsl',      label: 'LSL Stream' },
+                      { value: 'tcp_file', label: 'TCP File' },
+                      { value: 'lsl_file', label: 'LSL File' },
+                    ]}
+                  />
+
+                  <ChannelPicker
+                    channels={CHANNEL_PRESETS[eegBrand]}
+                    selected={selectedChannels}
+                    onChange={setSelectedChannels}
+                  />
+
+                  <CascadeSelect
+                    label="Metric"
+                    value={metric}
+                    onChange={setMetric}
+                    options={METRIC_OPTIONS.map((m) => ({
+                      value: m.value,
+                      label: `${m.label} (${m.formula})`,
+                    }))}
+                  />
+                </>
+              )}
             </div>
 
-            {inputMode === 'eeg' && (
-              <EegSubPanel
-                eegDevice={eegDevice}
-                eegProtocol={eegProtocol}
-                filePath={filePath}
-                onDevice={setEegDevice}
-                onProtocol={setEegProtocol}
-                onFilePath={setFilePath}
-              />
+            {inputMode === 'eeg' && (eegProtocol === 'tcp_file' || eegProtocol === 'lsl_file') && (
+              <div className="file-row" style={{ marginTop: 12 }}>
+                <label>File:</label>
+                <input
+                  type="text"
+                  value={filePath}
+                  placeholder="/path/to/recording.edf"
+                  onChange={(e) => setFilePath(e.target.value)}
+                />
+              </div>
             )}
 
             <div className="btn-row">

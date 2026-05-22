@@ -184,86 +184,13 @@ body {
 }
 
 /* ─────────────────────────────────────────────────────────
-   Mode Cards (radio, 4-across)
+   Cascade Dropdowns (horizontal cascading selects)
    ───────────────────────────────────────────────────────── */
-.mode-cards {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: var(--sp8);
-}
-
-.mode-card {
-  position: relative;
-  border: var(--sp2) solid #2a2a2a;
-  border-radius: var(--radius);
-  padding: var(--sp20) var(--sp16);
-  cursor: pointer;
-  background: #0c0c0c;
-  transition: border-color 0.15s ease, background 0.15s ease;
-  text-align: center;
-}
-
-.mode-card:hover {
-  border-color: #555;
-  background: #111;
-}
-
-.mode-card.selected {
-  border-color: var(--f-red);
-  background: #1a0c0c;
-}
-
-/* Ferrari Red indicator — top border only when selected */
-.mode-card.selected::before {
-  content: '';
-  position: absolute;
-  top: -2px;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: var(--f-red);
-  border-radius: var(--radius);
-}
-
-.mode-card input[type='radio'] {
-  position: absolute;
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.mode-card-icon {
-  font-size: 24px;
-  margin-bottom: var(--sp8);
-  display: block;
-}
-
-.mode-card-title {
-  font-family: var(--font-display);
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--f-white);
-  display: block;
-  margin-bottom: var(--sp4);
-}
-
-.mode-card-desc {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--f-silver);
-  letter-spacing: 0.3px;
-  display: block;
-  line-height: 1.4;
-}
-
-/* ─────────────────────────────────────────────────────────
-   EEG Sub-panel (white surface, editorial panel)
-   ───────────────────────────────────────────────────────── */
-.eeg-sub-panel {
-  background: var(--f-white);
-  border-radius: var(--radius);
-  padding: var(--sp24);
-  margin-top: var(--sp16);
+.cascade-row {
+  display: flex;
+  gap: var(--sp10);
+  flex-wrap: wrap;
+  align-items: flex-end;
   animation: slideDown 0.2s ease-out;
 }
 
@@ -272,63 +199,131 @@ body {
   to   { opacity: 1; transform: translateY(0); }
 }
 
-.eeg-sub-panel h3 {
-  font-family: var(--font-display);
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--f-near-black);
-  letter-spacing: 0.5px;
-  margin-bottom: var(--sp16);
+.cascade-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp4);
+  position: relative;
 }
 
-.eeg-sub-panel .sub-label {
+.cascade-group.disabled {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+.cascade-label {
   font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 500;
   letter-spacing: 1.5px;
   text-transform: uppercase;
   color: var(--f-silver);
-  display: block;
-  margin: var(--sp16) 0 var(--sp8);
 }
 
-.eeg-sub-panel .sub-label:first-child {
-  margin-top: 0;
-}
-
-/* Sub-radio pills (white card style) */
-.sub-radios {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--sp6);
-}
-
-.sub-radio {
-  border: 1px solid #ddd;
+.cascade-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: #0c0c0c;
+  border: var(--sp2) solid #2a2a2a;
   border-radius: var(--radius);
-  padding: var(--sp8) var(--sp14);
-  cursor: pointer;
+  padding: var(--sp8) var(--sp32) var(--sp8) var(--sp12);
   font-family: var(--font-display);
   font-size: 13px;
   font-weight: 500;
-  color: var(--f-dark-gray);
-  transition: border-color 0.15s, background 0.15s, color 0.15s;
-  user-select: none;
+  color: var(--f-white);
+  cursor: pointer;
+  min-width: 140px;
+  transition: border-color 0.15s;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23969696'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
 }
 
-.sub-radio:hover {
-  border-color: #999;
-  color: var(--f-near-black);
+.cascade-select:hover {
+  border-color: #555;
 }
 
-.sub-radio.selected {
-  background: var(--f-near-black);
-  border-color: var(--f-near-black);
+.cascade-select:focus {
+  outline: none;
+  border-color: var(--f-red);
+}
+
+/* ── Channel Picker ───────────────────────────────────── */
+.channel-picker-trigger {
+  text-align: left;
+}
+
+.channel-picker-popover {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 50;
+  margin-top: var(--sp4);
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: var(--radius-md);
+  padding: var(--sp10);
+  min-width: 240px;
+  max-height: 260px;
+  overflow-y: auto;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  animation: slideDown 0.15s ease-out;
+}
+
+.channel-picker-actions {
+  display: flex;
+  gap: var(--sp8);
+  margin-bottom: var(--sp8);
+  padding-bottom: var(--sp8);
+  border-bottom: 1px solid #2a2a2a;
+}
+
+.ch-action {
+  background: transparent;
+  border: 1px solid #444;
+  border-radius: var(--radius);
+  color: var(--f-silver);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  padding: var(--sp4) var(--sp8);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.ch-action:hover {
+  border-color: var(--f-red);
   color: var(--f-white);
 }
 
-.sub-radio input[type='radio'] {
-  display: none;
+.channel-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--sp4);
+}
+
+.channel-checkbox {
+  display: flex;
+  align-items: center;
+  gap: var(--sp6);
+  padding: var(--sp4) var(--sp6);
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--f-light-gray);
+  transition: background 0.1s;
+}
+
+.channel-checkbox:hover {
+  background: #252525;
+}
+
+.channel-checkbox input[type='checkbox'] {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--f-red);
+  cursor: pointer;
 }
 
 /* File path row */
@@ -343,19 +338,19 @@ body {
 .file-row label {
   font-family: var(--font-mono);
   font-size: 11px;
-  color: var(--f-dark-gray);
+  color: var(--f-silver);
   letter-spacing: 0.5px;
 }
 
 .file-row input {
   width: 100%;
-  border: 1px solid #ccc;
+  border: 1px solid #444;
   border-radius: var(--radius);
   padding: var(--sp8) var(--sp10);
   font-family: var(--font-mono);
   font-size: 13px;
-  color: var(--f-near-black);
-  background: #fafafa;
+  color: var(--f-white);
+  background: #0c0c0c;
 }
 
 .file-row input:focus {
@@ -684,8 +679,12 @@ body {
     gap: var(--sp32);
   }
 
-  .mode-cards {
-    grid-template-columns: repeat(2, 1fr);
+  .cascade-row {
+    gap: var(--sp8);
+  }
+
+  .cascade-select {
+    min-width: 120px;
   }
 
   .charts-grid {
@@ -703,8 +702,14 @@ body {
     padding: var(--sp32) var(--sp20);
   }
 
-  .mode-cards {
-    grid-template-columns: 1fr;
+  .cascade-row {
+    flex-direction: column;
+    gap: var(--sp10);
+  }
+
+  .cascade-select {
+    width: 100%;
+    min-width: 0;
   }
 
   .output-radios {
