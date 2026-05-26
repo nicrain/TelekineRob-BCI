@@ -818,7 +818,7 @@ export default function App() {
               <h3>Raw Wave &mdash; alpha / theta / beta</h3>
               <ReactECharts option={waveOption} style={{ height: 220 }} />
             </div>
-            <div className={`chart-card${inputMode !== 'eeg' ? ' dimmed-card' : ''}`}>
+            <div className={`chart-card${inputMode !== 'eeg' && inputMode !== 'mock' ? ' dimmed-card' : ''}`}>
               <h3>{metricLabels[metric]}</h3>
               <ReactECharts option={featureOption} style={{ height: 220 }} />
             </div>
