@@ -1,5 +1,5 @@
 """
-ROS2 subscriber for pipeline signal data → WebSocket bridge.
+ROS2 subscriber for pipeline signal data -> WebSocket bridge.
 
 Runs rclpy in a background thread, subscribes to /eeg_analysis,
 and stores the latest frame for the WebSocket /ws/stream endpoint.
@@ -8,9 +8,12 @@ and stores the latest frame for the WebSocket /ws/stream endpoint.
 from __future__ import annotations
 
 import json
+import logging
 import threading
 import time
 from typing import Any, Optional
+
+_log = logging.getLogger("signal_subscriber")
 
 
 class SignalSubscriber:
@@ -26,13 +29,18 @@ class SignalSubscriber:
         self._lock = threading.Lock()
         self._latest: Optional[dict[str, Any]] = None
         self._last_ts: float = 0.0
+        self._msg_count: int = 0
         self._thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()
         self._ready = threading.Event()
         self._error: Optional[str] = None
         self._thread = threading.Thread(target=self._run, daemon=True, name="rclpy_signal_sub")
         self._thread.start()
-        self._ready.wait(timeout=10.0)
+        if not self._ready.wait(timeout=10.0):
+            _log.warning("SignalSubscriber did not become ready within 10s")
+        if self._error:
+            _log.error("SignalSubscriber error: %s", self._error)
+        _log.info("SignalSubscriber ready=%s use_subprocess=%s", self.ready, getattr(self, "_use_subprocess", False))
 
     @property
     def ready(self) -> bool:
@@ -51,6 +59,11 @@ class SignalSubscriber:
                 return None
             return dict(self._latest)
 
+    @property
+    def msg_count(self) -> int:
+        with self._lock:
+            return self._msg_count
+
     def _run(self) -> None:
         try:
             import rclpy
@@ -58,14 +71,18 @@ class SignalSubscriber:
             from std_msgs.msg import String
         except Exception as e:
             self._error = f"rclpy import failed: {e}"
+            _log.warning("%s", self._error)
             self._ready.set()
             return
 
         try:
             if not rclpy.ok():
+                _log.info("rclpy.init() ...")
                 rclpy.init()
+                _log.info("rclpy.init() done")
         except Exception as e:
             self._error = f"rclpy.init() failed: {e}"
+            _log.warning("%s", self._error)
             self._ready.set()
             return
 
@@ -74,19 +91,24 @@ class SignalSubscriber:
             self._sub = self._node.create_subscription(
                 String, self._topic, self._on_analysis, 10
             )
+            _log.info("subscribed to %s", self._topic)
         except Exception as e:
             self._error = f"ROS2 subscriber setup failed: {e}"
+            _log.warning("%s", self._error)
             self._ready.set()
             return
 
         self._ready.set()
+        _log.info("spinning on %s", self._topic)
 
         while not self._stop_event.is_set():
             try:
                 rclpy.spin_once(self._node, timeout_sec=0.05)
-            except Exception:
+            except Exception as e:
+                _log.warning("spin_once exception: %s", e)
                 break
 
+        _log.info("spin loop ended")
         self._node.destroy_node()
         try:
             rclpy.shutdown()
@@ -131,6 +153,10 @@ class SignalSubscriber:
         with self._lock:
             self._latest = frame
             self._last_ts = time.monotonic()
+            was_first = self._msg_count == 0
+            self._msg_count += 1
+            if was_first:
+                _log.info("first message received: alpha=%.3f theta=%.3f beta=%.3f", alpha, theta, beta)
 
     def stop(self) -> None:
         self._stop_event.set()

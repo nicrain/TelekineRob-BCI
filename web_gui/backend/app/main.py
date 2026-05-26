@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 from pathlib import Path
 from typing import Any
+
+logging.basicConfig(level=logging.INFO, format="%(name)s | %(levelname)s | %(message)s")
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -60,7 +63,12 @@ async def _startup() -> None:
 
 @app.get("/api/health")
 def health() -> dict[str, Any]:
-    return {"ok": True}
+    return {
+        "ok": True,
+        "subscriber_ready": _subscriber.ready,
+        "subscriber_error": _subscriber.error,
+        "subscriber_msgs": _subscriber.msg_count,
+    }
 
 
 @app.get("/api/config")
