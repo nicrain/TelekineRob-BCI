@@ -615,11 +615,9 @@ export default function App() {
           <HeroEmblem />
           <span className="topbar-title">Thymio EEG Control</span>
         </div>
-        <div className={`topbar-status ${wsConnected ? 'ok' : 'warn'}`}>
-          <span className="status-dot-wrapper">
-            <span className={`status-dot ${wsConnected ? 'ok' : 'warn'}`} />
-          </span>
-          <span className="topbar-status-text">WebSocket {wsConnected ? 'connected' : 'disconnected'}</span>
+        <div className="topbar-actions">
+          <button className="btn btn-cta" disabled={running} onClick={startSystem}>{running ? 'Running...' : 'Start'}</button>
+          <button className="btn btn-ghost" disabled={!running} onClick={stopSystem}>Stop</button>
         </div>
       </header>
 
@@ -708,10 +706,6 @@ export default function App() {
               )}
             </div>
 
-            <div className="btn-row">
-              <button className="btn btn-cta" disabled={running} onClick={startSystem}>{running ? 'Running...' : 'Start'}</button>
-              <button className="btn btn-ghost" disabled={!running} onClick={stopSystem}>Stop</button>
-            </div>
           </div>
 
           {/* RIGHT — Output Target */}
