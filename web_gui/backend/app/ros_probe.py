@@ -17,7 +17,7 @@ def set_runtime_state(running: bool, err: str | None = None) -> None:
     _last_error = err
 
 
-def probe_system(mock_mode: bool) -> SystemStatus:
+def probe_system() -> SystemStatus:
     ros_ok = shutil.which("ros2") is not None
 
     # Best-effort probe; real env may expose devices differently.
@@ -30,7 +30,7 @@ def probe_system(mock_mode: bool) -> SystemStatus:
         detail = "THYMIO_CONNECTED env override"
 
     return SystemStatus(
-        mode="mock" if mock_mode else "real",
+        mode="real",
         ros_available=ros_ok,
         thymio_connected=thymio_connected,
         thymio_probe_detail=detail,

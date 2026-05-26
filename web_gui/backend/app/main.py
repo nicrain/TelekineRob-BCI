@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import os
-import time
 from pathlib import Path
 from typing import Any
 
@@ -11,7 +10,6 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .command_runner import start_system, stop_system
 from .config_store import get_config_envelope, init_store, patch_config
-from .mock_stream import MockSignalGenerator
 from .models import CommandRequest, ConfigPatch
 from .ros_probe import probe_system
 from .signal_subscriber import SignalSubscriber
@@ -52,20 +50,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-mock_mode = os.getenv("WEB_GUI_MOCK_MODE", "true").lower() in {"1", "true", "yes"}
-_generator = MockSignalGenerator()
-_subscriber: SignalSubscriber | None = None
-if not mock_mode:
-    _subscriber = SignalSubscriber()
-
-
-def _empty_frame() -> dict[str, Any]:
-    return {
-        "channels": None,
-        "features": None,
-        "control": None,
-        "timestamp": time.time(),
-    }
+_subscriber = SignalSubscriber()
 
 
 @app.on_event("startup")
@@ -75,7 +60,7 @@ async def _startup() -> None:
 
 @app.get("/api/health")
 def health() -> dict[str, Any]:
-    return {"ok": True, "mock_mode": mock_mode}
+    return {"ok": True}
 
 
 @app.get("/api/config")
@@ -90,7 +75,7 @@ def update_config(req: ConfigPatch) -> dict[str, Any]:
 
 @app.get("/api/status")
 def get_status() -> dict[str, Any]:
-    return probe_system(mock_mode).model_dump()
+    return probe_system().model_dump()
 
 
 @app.post("/api/system/start")
@@ -144,18 +129,13 @@ async def ws_stream(websocket: WebSocket) -> None:
     await websocket.accept()
     try:
         while True:
-            if mock_mode or _subscriber is None:
-                frame = _generator.next()
-            else:
-                frame = _subscriber.get_latest_frame()
-                if frame is None:
-                    frame = _empty_frame()
+            frame = _subscriber.get_latest_frame()
             payload = {
-                "status": probe_system(mock_mode).model_dump(),
-                "channels": frame["channels"],
-                "features": frame["features"],
-                "control": frame["control"],
-                "timestamp": frame["timestamp"],
+                "status": probe_system().model_dump(),
+                "channels": frame["channels"] if frame else None,
+                "features": frame["features"] if frame else None,
+                "control": frame["control"] if frame else None,
+                "timestamp": frame["timestamp"] if frame else None,
             }
             await websocket.send_json(payload)
             await asyncio.sleep(0.2)
