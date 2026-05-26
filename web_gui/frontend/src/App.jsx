@@ -713,17 +713,19 @@ export default function App() {
                     selected={selectedChannels}
                     onChange={setSelectedChannels}
                   />
-
-                  <CascadeSelect
-                    label="Metric"
-                    value={metric}
-                    onChange={setMetric}
-                    options={METRIC_OPTIONS.map((m) => ({
-                      value: m.value,
-                      label: `${m.label} (${m.formula})`,
-                    }))}
-                  />
                 </>
+              )}
+
+              {(inputMode === 'eeg' || inputMode === 'mock') && (
+                <CascadeSelect
+                  label="Metric"
+                  value={metric}
+                  onChange={setMetric}
+                  options={METRIC_OPTIONS.map((m) => ({
+                    value: m.value,
+                    label: `${m.label} (${m.formula})`,
+                  }))}
+                />
               )}
             </div>
 
