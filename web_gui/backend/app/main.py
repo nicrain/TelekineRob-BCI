@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import time
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +14,7 @@ from .config_store import get_config_envelope, init_store, patch_config
 from .mock_stream import MockSignalGenerator
 from .models import CommandRequest, ConfigPatch
 from .ros_probe import probe_system
+from .signal_subscriber import SignalSubscriber
 from .teleop_publisher import (
     IS_LINUX,
     ensure_publisher,
@@ -52,6 +54,18 @@ app.add_middleware(
 
 mock_mode = os.getenv("WEB_GUI_MOCK_MODE", "true").lower() in {"1", "true", "yes"}
 _generator = MockSignalGenerator()
+_subscriber: SignalSubscriber | None = None
+if not mock_mode:
+    _subscriber = SignalSubscriber()
+
+
+def _empty_frame() -> dict[str, Any]:
+    return {
+        "channels": None,
+        "features": None,
+        "control": None,
+        "timestamp": time.time(),
+    }
 
 
 @app.on_event("startup")
@@ -130,7 +144,12 @@ async def ws_stream(websocket: WebSocket) -> None:
     await websocket.accept()
     try:
         while True:
-            frame = _generator.next()
+            if mock_mode or _subscriber is None:
+                frame = _generator.next()
+            else:
+                frame = _subscriber.get_latest_frame()
+                if frame is None:
+                    frame = _empty_frame()
             payload = {
                 "status": probe_system(mock_mode).model_dump(),
                 "channels": frame["channels"],

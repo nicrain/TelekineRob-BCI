@@ -471,6 +471,7 @@ export default function App() {
     ws.onclose = () => setWsConnected(false);
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
+      if (data.channels == null) return;  // no real data yet — keep charts frozen
       if (!isControlMode) {
         setSeries((prev) => ({
           t:     pushPoint(prev.t,     new Date(data.timestamp * 1000).toLocaleTimeString()),
