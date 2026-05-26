@@ -37,11 +37,6 @@ class RosBridge:
         self._error: Optional[str] = None
         self._thread = threading.Thread(target=self._run, daemon=True, name="ros_bridge")
         self._thread.start()
-        if not self._ready.wait(timeout=10.0):
-            _log.warning("RosBridge did not become ready within 10s")
-        if self._error:
-            _log.error("RosBridge error: %s", self._error)
-        _log.info("RosBridge ready=%s", self.ready)
 
     @property
     def ready(self) -> bool:
