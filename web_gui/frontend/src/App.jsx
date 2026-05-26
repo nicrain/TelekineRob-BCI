@@ -373,7 +373,6 @@ export default function App() {
 
   const [outputMode, setOutputMode]         = useState('thymio_simu');
   const [showWaveform, setShowWaveform]     = useState(true);
-  const [useMockData, setUseMockData]       = useState(false);
   const [running, setRunning]               = useState(false);
 
   const wsRef = useRef(null);
@@ -426,44 +425,8 @@ export default function App() {
       .catch((err) => setFeedback(`Init failed: ${err.message}`));
   }, []);
 
-  /* ── Mock data generator ────────────────────────────── */
-  function generateMockPoint() {
-    const now = new Date().toLocaleTimeString();
-    const rand = (base, amp) => base + (Math.random() - 0.5) * amp;
-    return {
-      t: now,
-      alpha: rand(10, 6),
-      theta: rand(6, 4),
-      beta:  rand(8, 5),
-      ratio: rand(0.8, 0.4),
-      focus: rand(1.2, 0.6),
-      speed: Math.max(0, rand(0.3, 0.5)),
-      steer: rand(0.5, 0.4),
-    };
-  }
-
-  /* ── Mock data interval ─────────────────────────────── */
-  useEffect(() => {
-    if (!useMockData) return;
-    const id = setInterval(() => {
-      const d = generateMockPoint();
-      setSeries((prev) => ({
-        t:     pushPoint(prev.t,     d.t),
-        alpha: pushPoint(prev.alpha, d.alpha),
-        theta: pushPoint(prev.theta, d.theta),
-        beta:  pushPoint(prev.beta,  d.beta),
-        ratio: pushPoint(prev.ratio, d.ratio),
-        focus: pushPoint(prev.focus, d.focus),
-        speed: pushPoint(prev.speed, d.speed),
-        steer: pushPoint(prev.steer, d.steer),
-      }));
-    }, 200);
-    return () => clearInterval(id);
-  }, [useMockData]);
-
   /* ── WebSocket ──────────────────────────────────────── */
   useEffect(() => {
-    if (useMockData) return;
     if (wsRef.current) wsRef.current.close();
     const ws = new WebSocket(getWsUrl());
     wsRef.current = ws;
@@ -487,7 +450,7 @@ export default function App() {
       }
     };
     return () => ws.close();
-  }, [isControlMode, useMockData]);
+  }, [isControlMode]);
 
   /* ── Teleop WebSocket ─────────────────────────────── */
   useEffect(() => {
@@ -848,16 +811,6 @@ export default function App() {
               <span className="section-label">03 — Real-time Signals</span>
               <h2 className="section-heading">Signal Monitoring</h2>
             </div>
-            <label className={`data-toggle${useMockData ? ' mock' : ''}`}>
-              <span className="data-toggle-label">Real</span>
-              <input
-                type="checkbox"
-                checked={useMockData}
-                onChange={(e) => setUseMockData(e.target.checked)}
-              />
-              <span className="data-toggle-track" />
-              <span className="data-toggle-label">Mock</span>
-            </label>
           </div>
 
           <div className={`charts-grid${!showWaveform || isControlMode ? ' dimmed' : ''}`}>
