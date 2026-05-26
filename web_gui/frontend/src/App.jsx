@@ -374,6 +374,7 @@ export default function App() {
   const [outputMode, setOutputMode]         = useState('thymio_simu');
   const [showWaveform, setShowWaveform]     = useState(true);
   const [useMockData, setUseMockData]       = useState(false);
+  const [running, setRunning]               = useState(false);
 
   const wsRef = useRef(null);
   const teleopWsRef = useRef(null);
@@ -612,10 +613,19 @@ export default function App() {
     try {
       await saveConfig();
       await runAction('/api/system/start', false);
+      setRunning(true);
     } catch (err) {
       if (!String(err?.message || err).includes('Save failed')) {
         setFeedback(`Start failed: ${err.message}`);
       }
+    }
+  }
+
+  async function stopSystem() {
+    try {
+      await runAction('/api/system/stop', false);
+    } finally {
+      setRunning(false);
     }
   }
 
@@ -663,6 +673,7 @@ export default function App() {
                 label="Device"
                 value={inputMode}
                 onChange={setInputMode}
+                disabled={running}
                 options={[
                   { value: 'eeg',    label: 'EEG' },
                   { value: 'mock',   label: 'Mock' },
@@ -677,6 +688,7 @@ export default function App() {
                     label="Brand"
                     value={eegBrand}
                     onChange={(v) => { setEegBrand(v); setSelectedChannels([0, 1, 2]); }}
+                    disabled={running}
                     options={[
                       { value: 'enobio',         label: 'Enobio' },
                       { value: 'gtec_hybrid',    label: 'g.tec Hybrid Black' },
@@ -688,6 +700,7 @@ export default function App() {
                     label="Source"
                     value={eegProtocol}
                     onChange={(v) => { setEegProtocol(v); setFilePath(''); }}
+                    disabled={running}
                     options={[
                       { value: 'tcp',      label: 'TCP Stream' },
                       { value: 'lsl',      label: 'LSL Stream' },
@@ -701,6 +714,7 @@ export default function App() {
                       label="File"
                       value={filePath}
                       onChange={setFilePath}
+                      disabled={running}
                       options={[
                         { value: '', label: '— select file —' },
                         ...recordFiles.map((f) => ({ value: f, label: f })),
@@ -712,6 +726,7 @@ export default function App() {
                     channels={CHANNEL_PRESETS[eegBrand]}
                     selected={selectedChannels}
                     onChange={setSelectedChannels}
+                    disabled={running}
                   />
                 </>
               )}
@@ -721,6 +736,7 @@ export default function App() {
                   label="Metric"
                   value={metric}
                   onChange={setMetric}
+                  disabled={running}
                   options={METRIC_OPTIONS.map((m) => ({
                     value: m.value,
                     label: `${m.label} (${m.formula})`,
@@ -730,8 +746,8 @@ export default function App() {
             </div>
 
             <div className="btn-row">
-              <button className="btn btn-cta"     onClick={startSystem}>Start</button>
-              <button className="btn btn-ghost"   onClick={() => runAction('/api/system/stop',  false)}>Stop</button>
+              <button className="btn btn-cta" disabled={running} onClick={startSystem}>{running ? 'Running...' : 'Start'}</button>
+              <button className="btn btn-ghost" disabled={!running} onClick={stopSystem}>Stop</button>
             </div>
           </div>
 
@@ -756,6 +772,7 @@ export default function App() {
                       value={opt.value}
                       checked={outputMode === opt.value}
                       onChange={() => setOutputMode(opt.value)}
+                      disabled={running}
                     />
                     <span className="output-radio-title">{opt.title}</span>
                     <span className="output-radio-desc">{opt.desc}</span>
