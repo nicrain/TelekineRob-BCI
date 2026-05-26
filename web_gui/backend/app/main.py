@@ -15,13 +15,7 @@ from .command_runner import start_system, stop_system
 from .config_store import get_config_envelope, init_store, patch_config
 from .models import CommandRequest, ConfigPatch
 from .ros_probe import probe_system
-from .signal_subscriber import SignalSubscriber
-from .teleop_publisher import (
-    IS_LINUX,
-    ensure_publisher,
-    publish_twist_async,
-    TELEOP_DIRECTIONS,
-)
+from .signal_subscriber import RosBridge
 
 app = FastAPI(title="Thymio Web GUI Backend", version="0.1.0")
 
@@ -53,13 +47,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-_subscriber: SignalSubscriber | None = None
+_subscriber: RosBridge | None = None
 
 
-def _get_subscriber() -> SignalSubscriber:
+def _get_subscriber() -> RosBridge:
     global _subscriber
     if _subscriber is None:
-        _subscriber = SignalSubscriber()
+        _subscriber = RosBridge()
     return _subscriber
 
 
@@ -230,34 +224,14 @@ async def ws_teleop(websocket: WebSocket) -> None:
         "topic": "/model/thymio/cmd_vel" if use_sim else "/cmd_vel",
     })
 
-    # Kick off publisher and wait for it to be ready before processing commands
     _log = logging.getLogger("teleop")
-    pub = ensure_publisher(use_sim, cfg)
-    _log.info("publisher ready=%s use_subprocess=%s error=%s", pub.ready, getattr(pub, "_use_subprocess", None), pub.error)
-    if not pub.ready:
-        ok = pub.wait_ready(timeout=10.0)
-        if not ok:
-            await websocket.send_json({
-                "type": "error",
-                "detail": "Publisher failed to start: " + (pub.error or "unknown error"),
-            })
-            return
-
-    _log = logging.getLogger("teleop")
+    bridge = _get_subscriber()
     try:
         while True:
             msg = await websocket.receive_json()
             direction = msg.get("direction", "")
             _log.info("received direction=%s", direction)
-            if direction not in TELEOP_DIRECTIONS:
-                await websocket.send_json({
-                    "type": "error",
-                    "detail": f"Unknown direction: {direction!r}. "
-                              f"Valid: {sorted(TELEOP_DIRECTIONS)}",
-                })
-                continue
-
-            ok, detail = await publish_twist_async(direction, use_sim, cfg)
+            ok, detail = bridge.publish_teleop(direction, use_sim, cfg)
             _log.info("publish direction=%s ok=%s detail=%s", direction, ok, detail)
             await websocket.send_json({
                 "type": "ack" if ok else "error",
