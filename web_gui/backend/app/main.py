@@ -69,6 +69,14 @@ async def _startup() -> None:
     _get_subscriber()
 
 
+@app.on_event("shutdown")
+async def _shutdown() -> None:
+    global _subscriber
+    if _subscriber is not None:
+        _subscriber.stop()
+        _subscriber = None
+
+
 @app.get("/api/health")
 def health() -> dict[str, Any]:
     sub = _get_subscriber()
@@ -156,7 +164,7 @@ async def ws_stream(websocket: WebSocket) -> None:
             }
             await websocket.send_json(payload)
             await asyncio.sleep(0.2)
-    except WebSocketDisconnect:
+    except (WebSocketDisconnect, asyncio.CancelledError):
         return
 
 
