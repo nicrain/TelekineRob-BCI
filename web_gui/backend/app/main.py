@@ -231,7 +231,9 @@ async def ws_teleop(websocket: WebSocket) -> None:
     })
 
     # Kick off publisher and wait for it to be ready before processing commands
+    _log = logging.getLogger("teleop")
     pub = ensure_publisher(use_sim, cfg)
+    _log.info("publisher ready=%s use_subprocess=%s error=%s", pub.ready, getattr(pub, "_use_subprocess", None), pub.error)
     if not pub.ready:
         ok = pub.wait_ready(timeout=10.0)
         if not ok:
@@ -241,10 +243,12 @@ async def ws_teleop(websocket: WebSocket) -> None:
             })
             return
 
+    _log = logging.getLogger("teleop")
     try:
         while True:
             msg = await websocket.receive_json()
             direction = msg.get("direction", "")
+            _log.info("received direction=%s", direction)
             if direction not in TELEOP_DIRECTIONS:
                 await websocket.send_json({
                     "type": "error",
@@ -254,6 +258,7 @@ async def ws_teleop(websocket: WebSocket) -> None:
                 continue
 
             ok, detail = await publish_twist_async(direction, use_sim, cfg)
+            _log.info("publish direction=%s ok=%s detail=%s", direction, ok, detail)
             await websocket.send_json({
                 "type": "ack" if ok else "error",
                 "direction": direction,
