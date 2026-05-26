@@ -53,21 +53,30 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-_subscriber = SignalSubscriber()
+_subscriber: SignalSubscriber | None = None
+
+
+def _get_subscriber() -> SignalSubscriber:
+    global _subscriber
+    if _subscriber is None:
+        _subscriber = SignalSubscriber()
+    return _subscriber
 
 
 @app.on_event("startup")
 async def _startup() -> None:
     init_store()
+    _get_subscriber()
 
 
 @app.get("/api/health")
 def health() -> dict[str, Any]:
+    sub = _get_subscriber()
     return {
         "ok": True,
-        "subscriber_ready": _subscriber.ready,
-        "subscriber_error": _subscriber.error,
-        "subscriber_msgs": _subscriber.msg_count,
+        "subscriber_ready": sub.ready,
+        "subscriber_error": sub.error,
+        "subscriber_msgs": sub.msg_count,
     }
 
 
@@ -137,7 +146,7 @@ async def ws_stream(websocket: WebSocket) -> None:
     await websocket.accept()
     try:
         while True:
-            frame = _subscriber.get_latest_frame()
+            frame = _get_subscriber().get_latest_frame()
             payload = {
                 "status": probe_system().model_dump(),
                 "channels": frame["channels"] if frame else None,
