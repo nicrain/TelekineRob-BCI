@@ -389,6 +389,7 @@ class EegControlNode(Node):
 			if not has_band_features:
 				self.pub.publish(Twist())
 				return
+			self.pub.publish(self._intents_to_twist(self.last_intents))
 			if self.verbose:
 				self.get_logger().info(
 					(
