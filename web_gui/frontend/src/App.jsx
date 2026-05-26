@@ -582,7 +582,7 @@ export default function App() {
       launch: {
         use_sim:           isSim,
         use_gui:           false,
-        run_eeg:           inputMode === 'eeg',
+        run_eeg:           inputMode === 'eeg' || inputMode === 'mock',
         run_gaze:          inputMode === 'tobii',
         use_teleop:        inputMode === 'teleop',
         use_tobii_bridge:  inputMode === 'tobii',
@@ -665,6 +665,7 @@ export default function App() {
                 onChange={setInputMode}
                 options={[
                   { value: 'eeg',    label: 'EEG' },
+                  { value: 'mock',   label: 'Mock' },
                   { value: 'tobii',  label: 'Tobii' },
                   { value: 'teleop', label: 'Keyboard' },
                 ]}
