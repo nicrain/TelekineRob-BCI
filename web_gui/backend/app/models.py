@@ -11,7 +11,6 @@ class LaunchConfig(BaseModel):
     run_eeg: bool = False
     run_gaze: bool = False
     run_rviz: bool = False
-    use_teleop: bool = True
     use_tobii_bridge: bool = False
     use_enobio_bridge: bool = False
 

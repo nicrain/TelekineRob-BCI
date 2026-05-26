@@ -27,7 +27,6 @@ def _build_launch_command(cfg: AppConfig) -> list[str]:
         f"use_gui:={_bool_str(launch.use_gui)}",
         f"run_eeg:={_bool_str(launch.run_eeg)}",
         f"run_gaze:={_bool_str(launch.run_gaze)}",
-        f"use_teleop:={_bool_str(launch.use_teleop)}",
         f"use_tobii_bridge:={_bool_str(launch.use_tobii_bridge)}",
         f"use_enobio_bridge:={_bool_str(launch.use_enobio_bridge)}",
     ]

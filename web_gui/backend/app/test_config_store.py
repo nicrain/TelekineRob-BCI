@@ -23,7 +23,6 @@ def test_patch_config_persists_to_yaml(monkeypatch, tmp_path: Path):
             "use_gui": True,
             "run_eeg": False,
             "run_gaze": False,
-            "use_teleop": True,
             "use_tobii_bridge": False,
             "use_enobio_bridge": False,
         },
