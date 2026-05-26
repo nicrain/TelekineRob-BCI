@@ -123,7 +123,8 @@ class _TeleopPublisherRclpy:
             return
 
         try:
-            rclpy.init()
+            if not rclpy.ok():
+                rclpy.init()
         except Exception as e:
             self._start_error = "rclpy.init() failed: %s" % e
             self._use_subprocess = True
