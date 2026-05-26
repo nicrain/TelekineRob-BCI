@@ -11,7 +11,7 @@ logging.basicConfig(level=logging.INFO, format="%(name)s | %(levelname)s | %(mes
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
-from .command_runner import start_system, stop_system
+from .command_runner import cleanup_residual_processes, start_system, stop_system
 from .config_store import get_config_envelope, init_store, patch_config
 from .models import CommandRequest, ConfigPatch
 from .ros_probe import probe_system
@@ -61,6 +61,8 @@ def _get_subscriber() -> RosBridge:
 async def _startup() -> None:
     init_store()
     _get_subscriber()
+    _log = logging.getLogger("main")
+    _log.info(cleanup_residual_processes())
 
 
 @app.on_event("shutdown")
@@ -69,6 +71,8 @@ async def _shutdown() -> None:
     if _subscriber is not None:
         _subscriber.stop()
         _subscriber = None
+    _log = logging.getLogger("main")
+    _log.info(cleanup_residual_processes())
 
 
 @app.get("/api/health")

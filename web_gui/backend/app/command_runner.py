@@ -159,25 +159,48 @@ def start_system(cfg: AppConfig, dry_run: bool = True) -> CommandResult:
     )
 
 
-def stop_system(dry_run: bool = True) -> CommandResult:
-    _stop_runtime_processes()
-    # Also kill any orphaned ROS/Gazebo processes
-    kill_cmds = [
-        "pkill -f 'ros2 launch thymio_control'",
-        "pkill -f 'eeg_control_node'",
-        "pkill -f 'gz sim'",
-        "pkill -f 'parameter_bridge'",
-        "pkill -f 'gazebo_camera_bridge'",
-    ]
-    for c in kill_cmds:
+_KILL_PATTERNS = [
+    "ros2 launch thymio_control",
+    "eeg_control_node",
+    "gaze_control_node",
+    "gz sim",
+    "gz server",
+    "gz client",
+    "parameter_bridge",
+    "gazebo_camera_bridge",
+    "robot_state_publisher",
+]
+
+
+def _kill_ros_processes() -> None:
+    """Kill all known ROS/Gazebo processes by command pattern."""
+    for pattern in _KILL_PATTERNS:
         try:
-            subprocess.run(shlex.split(c), timeout=3, capture_output=True)
+            subprocess.run(
+                ["pkill", "-f", pattern],
+                timeout=3,
+                capture_output=True,
+            )
         except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
             pass
+
+
+def cleanup_residual_processes() -> str:
+    """Kill any leftover ROS/Gazebo processes. Safe to call at startup."""
+    import shutil
+    if shutil.which("pkill") is None:
+        return "pkill not available"
+    _kill_ros_processes()
+    return "Cleaned up residual processes"
+
+
+def stop_system(dry_run: bool = True) -> CommandResult:
+    _stop_runtime_processes()
+    _kill_ros_processes()
     set_runtime_state(False, None)
     return CommandResult(
         accepted=True,
         dry_run=dry_run,
-        command="; ".join(kill_cmds),
+        command="; ".join(f"pkill -f '{p}'" for p in _KILL_PATTERNS),
         detail="ROS/Gazebo processes terminated.",
     )
