@@ -548,7 +548,7 @@ export default function App() {
         use_gui:           false,
         run_eeg:           inputMode === 'eeg' || inputMode === 'mock',
         run_gaze:          inputMode === 'tobii',
-        use_teleop:        inputMode === 'teleop',
+        use_teleop:        false,
         use_tobii_bridge:  inputMode === 'tobii',
         use_enobio_bridge: false,
       },
