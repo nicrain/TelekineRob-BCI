@@ -89,22 +89,26 @@ class RosBridge:
         else:
             lin, ang = (0.0, 0.0)
 
-        self._ensure_twist_publisher(topic)
-        try:
-            self._twist_queue.put_nowait((topic, lin, ang))
-            return True, f"Published {direction} to {topic}"
-        except Exception as e:
-            return False, str(e)
+        if self._twist_publisher is None or self._twist_topic != topic:
+            self._twist_queue.put(("__create__", topic, 0.0))
+            deadline = time.monotonic() + 3.0
+            while self._twist_publisher is None and time.monotonic() < deadline:
+                time.sleep(0.005)
 
-    def _ensure_twist_publisher(self, topic: str) -> None:
-        """Lazily create the Twist publisher for the given topic."""
-        if self._twist_publisher is not None and self._twist_topic == topic:
-            return
-        self._twist_queue.put(("__create__", topic, 0.0))
-        # Wait briefly for the rclpy thread to process the creation request
-        deadline = time.monotonic() + 3.0
-        while self._twist_publisher is None and time.monotonic() < deadline:
-            time.sleep(0.01)
+        pub = self._twist_publisher
+        if pub is None:
+            return False, "Teleop publisher not ready"
+
+        from geometry_msgs.msg import Twist
+        msg = Twist()
+        msg.linear.x = float(lin)
+        msg.linear.y = 0.0
+        msg.linear.z = 0.0
+        msg.angular.x = 0.0
+        msg.angular.y = 0.0
+        msg.angular.z = float(ang)
+        pub.publish(msg)
+        return True, f"Published {direction} to {self._twist_topic}"
 
     # ── Thread ───────────────────────────────────────────────────────────────
 
@@ -162,31 +166,19 @@ class RosBridge:
             pass
 
     def _drain_twist_queue(self) -> None:
-        """Process pending teleop Twist publishes in the rclpy thread."""
-        from geometry_msgs.msg import Twist
-
+        """Process publisher creation requests in the rclpy thread."""
         while True:
             try:
                 item = self._twist_queue.get_nowait()
             except queue.Empty:
                 return
 
-            topic, a, b = item
-            if topic == "__create__":
-                # a = topic, b unused — create publisher
-                from rclpy.node import Node
-                self._twist_publisher = self._rclpy_node.create_publisher(Twist, a, 10)
-                self._twist_topic = a
-                _log.info("created teleop publisher on %s", a)
-            else:
-                msg = Twist()
-                msg.linear.x = float(a)
-                msg.linear.y = 0.0
-                msg.linear.z = 0.0
-                msg.angular.x = 0.0
-                msg.angular.y = 0.0
-                msg.angular.z = float(b)
-                self._twist_publisher.publish(msg)
+            _tag, topic, *_rest = item
+            if _tag == "__create__":
+                from geometry_msgs.msg import Twist
+                self._twist_publisher = self._rclpy_node.create_publisher(Twist, topic, 10)
+                self._twist_topic = topic
+                _log.info("created teleop publisher on %s", topic)
 
     # ── Analysis callback ────────────────────────────────────────────────────
 
