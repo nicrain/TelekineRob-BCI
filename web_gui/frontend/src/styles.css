@@ -400,6 +400,11 @@ body {
   background: #1a0c0c;
 }
 
+.output-radio.disabled {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
 .output-radio.selected::before {
   content: '';
   position: absolute;

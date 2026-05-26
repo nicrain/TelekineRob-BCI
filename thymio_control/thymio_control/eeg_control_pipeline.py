@@ -269,12 +269,14 @@ class MockAdapter(BaseAdapter):
 
     def read_frame(self) -> Optional[EegFrame]:
         t = time.time() - self.t0
-        # 生成平滑的模拟频段数据，用于快速联调。
-        alpha = 12.0 + 3.0 * math.sin(0.8 * t)
-        theta = 7.0 + 2.0 * math.sin(0.5 * t + 1.2)
-        beta = 9.0 + 2.5 * math.sin(1.1 * t + 0.5)
-        left_alpha = alpha * (0.95 + 0.08 * math.sin(0.4 * t))
-        right_alpha = alpha * (1.05 + 0.08 * math.sin(0.4 * t + 2.2))
+        # Values calibrated for FocusPolicy (beta_alpha_theta range ~0.3–5.0
+        # maps to full speed range: reverse < 0.73 < forward < 2.36 < full).
+        alpha = 2.0 + 1.5 * math.sin(0.7 * t)
+        theta = 1.5 + 1.0 * math.sin(0.5 * t + 1.2)
+        beta = 3.0 + 2.0 * math.sin(0.9 * t + 0.5)
+        # Significant asymmetry so steer varies visibly between left/right
+        left_alpha = alpha * (0.7 + 0.5 * math.sin(0.3 * t))
+        right_alpha = alpha * (1.3 + 0.5 * math.sin(0.3 * t + 2.2))
         return EegFrame(
             ts=time.time(),
             source="mock",

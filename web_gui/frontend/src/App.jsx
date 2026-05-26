@@ -764,7 +764,7 @@ export default function App() {
                 ].map((opt) => (
                   <label
                     key={opt.value}
-                    className={`output-radio${outputMode === opt.value ? ' selected' : ''}`}
+                    className={`output-radio${outputMode === opt.value ? ' selected' : ''}${running ? ' disabled' : ''}`}
                   >
                     <input
                       type="radio"
