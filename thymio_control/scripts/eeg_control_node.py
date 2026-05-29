@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""EEG 原生 ROS2 控制节点（复制到 thymio_control 以便新路径使用）。"""
+"""EEG 原生 ROS2 控制节点。
+
+使用新模块化架构（thymio_control.pipeline + processors.enrich）。
+legacy eeg_control_pipeline.py 仍作为回滚路径保留。
+"""
 
 import csv
 import json
@@ -13,13 +17,9 @@ from rclpy.node import Node
 from sensor_msgs.msg import Range
 from std_msgs.msg import String
 
-from thymio_control.eeg_control_pipeline import (
-	POLICIES,
-	build_adapter,
-	clip01,
-	enrich_features,
-	feature_to_twist,
-)
+# --- 新架构导入 ---
+from thymio_control.pipeline import POLICIES, build_adapter
+from thymio_control.processors.enrich import clip01, enrich_features, feature_to_twist
 
 
 class _AdapterArgs:
@@ -87,7 +87,8 @@ class EegControlNode(Node):
 			input_mode = eeg_input_override
 		policy_name = self.get_parameter("policy").value
 		if policy_name not in POLICIES:
-			raise RuntimeError(f"Unknown policy: {policy_name}")
+			valid = ", ".join(sorted(POLICIES.keys()))
+			raise RuntimeError(f"Unknown policy: {policy_name!r} (valid: {valid})")
 
 		adapter_args = _AdapterArgs(
 			input_mode=input_mode,

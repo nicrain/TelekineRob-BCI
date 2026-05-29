@@ -151,3 +151,105 @@ def compute_pipeline_feature(
     if algorithm is None:
         raise ValueError(f"Unsupported pipeline algorithm: {algorithm_name!r}")
     return float(algorithm(filtered_data))
+
+
+# ---------------------------------------------------------------------------
+# TCP feature → Twist mapping (migrated from eeg_control_pipeline.py)
+# ---------------------------------------------------------------------------
+
+def _clone_twist(twist: Any) -> Any:
+    """Clone a geometry_msgs Twist object (or any duck-typed equivalent)."""
+    try:
+        from geometry_msgs.msg import Twist  # noqa: PLC0415
+    except ImportError:
+        from dataclasses import dataclass  # noqa: PLC0415
+
+        @dataclass
+        class _Vec3:
+            x: float = 0.0
+            y: float = 0.0
+            z: float = 0.0
+
+        class Twist:  # type: ignore
+            def __init__(self) -> None:
+                self.linear = _Vec3()
+                self.angular = _Vec3()
+
+    cloned = Twist()
+    cloned.linear.x  = float(getattr(twist.linear,  "x", 0.0))
+    cloned.linear.y  = float(getattr(twist.linear,  "y", 0.0))
+    cloned.linear.z  = float(getattr(twist.linear,  "z", 0.0))
+    cloned.angular.x = float(getattr(twist.angular, "x", 0.0))
+    cloned.angular.y = float(getattr(twist.angular, "y", 0.0))
+    cloned.angular.z = float(getattr(twist.angular, "z", 0.0))
+    return cloned
+
+
+def feature_to_twist(
+    feature: Any,
+    *,
+    max_forward_speed: float = 0.2,
+    turn_angular_speed: float = 1.2,
+    steer_deadzone: float = 0.1,
+    last_twist: Any = None,
+) -> Any:
+    """Map a scalar TCP *feature* value to a Twist command.
+
+    Mapping convention (mirrors the legacy ``eeg_control_pipeline`` logic):
+
+    * ``0 < feature < 0.5`` → forward at *max_forward_speed*
+    * ``0.5 < feature < 1.0`` → reverse at 75 % of *max_forward_speed*
+    * ``feature == 1.0`` → rotate in place at *turn_angular_speed*
+    * any other value → stop (zero Twist)
+    * ``feature`` missing / non-numeric → fall back to *last_twist*
+
+    Parameters
+    ----------
+    feature :
+        Scalar feature value (convertible to float), or ``None``.
+    max_forward_speed : float
+        Linear speed for the forward band (m/s).
+    turn_angular_speed : float
+        Angular speed for the rotation command (rad/s).
+    steer_deadzone : float
+        Reserved for future use (not yet applied here).
+    last_twist :
+        Fallback Twist when *feature* cannot be converted.
+
+    Returns
+    -------
+    Twist
+        A ``geometry_msgs.msg.Twist`` (or compatible duck type).
+    """
+    try:
+        from geometry_msgs.msg import Twist  # noqa: PLC0415
+    except ImportError:
+        from dataclasses import dataclass  # noqa: PLC0415
+
+        @dataclass
+        class _Vec3:
+            x: float = 0.0
+            y: float = 0.0
+            z: float = 0.0
+
+        class Twist:  # type: ignore
+            def __init__(self) -> None:
+                self.linear = _Vec3()
+                self.angular = _Vec3()
+
+    try:
+        value = float(feature)
+    except Exception:
+        if last_twist is not None:
+            return _clone_twist(last_twist)
+        return Twist()
+
+    twist = Twist()
+    if 0.0 < value < 0.5:
+        twist.linear.x = float(max_forward_speed)
+    elif 0.5 < value < 1.0:
+        twist.linear.x = float(max_forward_speed) * -0.75
+    elif value == 1.0:
+        twist.angular.z = float(turn_angular_speed)
+    # else: stop (zero twist)
+    return twist
