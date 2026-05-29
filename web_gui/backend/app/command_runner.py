@@ -35,7 +35,7 @@ def _build_launch_command(cfg: AppConfig) -> list[str]:
         resolved_file = _resolve_tcp_file_path(cfg.eeg.file_path)
         cmd.append(f"file_path:={resolved_file}")
     if cfg.eeg.input:
-        cmd.append(f"eeg_input:={cfg.eeg.input}")
+        cmd.append(f"input:={cfg.eeg.input}")
     return cmd
 
 

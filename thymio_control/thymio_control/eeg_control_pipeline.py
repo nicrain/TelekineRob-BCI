@@ -1,5 +1,16 @@
 #!/usr/bin/env python3
-"""EEG 控制管线（短期可落地骨架）。
+# =============================================================================
+# DEPRECATED — 请使用 thymio_control.pipeline（新模块化架构）
+#
+# 本文件自 2026-05-29（commit ca588f7）起不再是 eeg_control_node.py 的默认导入。
+# eeg_control_node.py 现已切换至：
+#   from thymio_control.pipeline import POLICIES, build_adapter
+#   from thymio_control.processors.enrich import clip01, enrich_features, feature_to_twist
+#
+# 本文件保留为回滚路径，将在下一个实验周期结束后删除。
+# 如需回滚：在 eeg_control_node.py 中将 import 改回 eeg_control_pipeline。
+# =============================================================================
+"""EEG 控制管线（legacy 单文件骨架，已 deprecated）。
 
 目标：
 - 从 TCP / LSL / mock 输入读取 EEG 指标。

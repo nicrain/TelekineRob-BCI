@@ -50,7 +50,6 @@ class EegControlNode(Node):
 
 		# 输入与策略参数
 		self.declare_parameter("input", "mock")
-		self.declare_parameter("eeg_input", "")
 		self.declare_parameter("policy", "focus")
 		self.declare_parameter("tcp_control_mode", "feature")
 		self.declare_parameter("tcp_host", "0.0.0.0")
@@ -82,9 +81,6 @@ class EegControlNode(Node):
 		self.declare_parameter("line_mode", "")  # '', 'blackline', 'whiteline'
 
 		input_mode = self.get_parameter("input").value
-		eeg_input_override = self.get_parameter("eeg_input").value
-		if eeg_input_override:
-			input_mode = eeg_input_override
 		policy_name = self.get_parameter("policy").value
 		if policy_name not in POLICIES:
 			valid = ", ".join(sorted(POLICIES.keys()))
