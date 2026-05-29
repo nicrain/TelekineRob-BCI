@@ -1,19 +1,17 @@
-# Thymio Web GUI
+# TelekineRob-BCI Web GUI
 
-Web UI + Python backend prototype for the `ros_thymio` workspace.
+Web UI + Python backend for the `TelekineRob-BCI` workspace.
 
 ## Goals
 
 - Works on local machine even when ROS2 hardware runtime is unavailable.
-- Default mock mode provides full dashboard interactions and realtime charts.
-- Preserves an upgrade path to real ROS2 runtime probing and launch control.
+- Charts display real pipeline data via `RosBridge` when pipeline is running, empty when idle.
+- Provides full experiment configuration, start/stop control, and web-based teleop.
 
 ## Directory Layout
 
-- `backend/`: FastAPI service, WebSocket stream, config model, runtime probes.
+- `backend/`: FastAPI service, WebSocket streams, RosBridge, config model, command runner.
 - `frontend/`: React + Vite + ECharts dashboard.
-- `DESIGN.md`: visual language reference provided by user.
-- `design.md`: implementation notes mapping design reference to this prototype.
 
 ## Quick Start
 
@@ -38,28 +36,38 @@ npm run dev
 
 Frontend defaults to `http://localhost:5173`.
 
-## Runtime Mode
+## Architecture
 
-- Mock mode is enabled by default via `WEB_GUI_MOCK_MODE=true`.
-- To switch to real mode:
-
-```bash
-export WEB_GUI_MOCK_MODE=false
+```
+frontend ←WebSocket→ backend ←rclpy→ ROS2 topics
+                │
+                ├── /ws/stream  ← RosBridge ← /eeg_analysis
+                ├── /ws/teleop  → RosBridge → /cmd_vel (Twist)
+                ├── /ws/gazebo_frame ← camera_bridge proxy
+                ├── /api/config  ← config_store (YAML persistence)
+                └── /api/system/start|stop → command_runner (subprocess)
 ```
 
-Current prototype still keeps command execution in dry-run mode by default.
+- **RosBridge**: single rclpy thread manages both signal subscription and teleop publishing
+- **Signal flow**: pipeline → `/eeg_analysis` (JSON) → RosBridge → WebSocket → charts
+- **Teleop flow**: web keypad → `/ws/teleop` → RosBridge `pub.publish()` (direct, zero-latency)
+- **Config persistence**: web UI changes are written back to `launch_args.yaml`, `eeg_control_node.params.yaml`, `experiment_config.yaml`
 
 ## Available APIs
 
-- `GET /api/health`
-- `GET /api/config`
-- `PUT /api/config`
-- `GET /api/status`
-- `POST /api/system/start`
-- `POST /api/system/stop`
-- `WS /ws/stream`
+| Endpoint | Method | Description |
+|---|---|---|
+| `/api/health` | GET | Health + RosBridge status (ready, error, msg_count) |
+| `/api/config` | GET/PUT | Full experiment configuration |
+| `/api/status` | GET | System status (ROS, Thymio, stream alive) |
+| `/api/system/start` | POST | Save config + launch ROS2 pipeline |
+| `/api/system/stop` | POST | Stop pipeline + kill all ROS/Gazebo processes |
+| `/ws/stream` | WS | Real-time signal data (channels, features, control) |
+| `/ws/teleop` | WS | Directional teleop commands |
+| `/ws/gazebo_frame` | WS | Gazebo camera proxy |
 
-## Notes
+## Process Lifecycle
 
-- `PUT /api/config` currently updates backend in-memory config model.
-- Real `ros2 launch` process supervision is reserved for next step.
+- **Startup**: cleans residual ROS/Gazebo processes, inits RosBridge in background
+- **Stop button**: SIGTERM child processes + `pkill` all known ROS/Gazebo patterns
+- **Shutdown (Ctrl+C)**: same cleanup as Stop

@@ -37,33 +37,51 @@ cd web_gui/frontend && npm install && npm run dev
 
 ## Architecture
 
-Four main components communicate via ROS2 topics, WebSockets, and UDP/TCP:
+Main components communicate via ROS2 topics, WebSockets, and UDP/TCP:
 
 ```
-web_gui (React + FastAPI) ←REST/WebSocket→ thymio_web_bridge (Gazebo camera)
-                                        ↓ ROS2 topics
-                              thymio_control (EEG/Gaze processing)
-                                        ↓ /cmd_vel
-                              Gazebo sim OR Real Thymio (asebaros)
+web_gui (React + FastAPI) ←──WebSocket──→ RosBridge (single rclpy thread)
+         │                      │                ├── sub: /eeg_analysis
+         │                      │                └── pub: /cmd_vel (teleop)
+         │                      │
+         │              thymio_web_bridge (Gazebo camera proxy)
+         │                      ↑
+         │              ros2 launch (subprocess)
+         │                      ↓
+         │              thymio_control (EEG/Gaze processing)
+         │                      ↓ /cmd_vel
+         │              Gazebo sim OR Real Thymio (asebaros)
+         │
+         └── REST: /api/config, /api/system/start|stop
 ```
 
 WSL ↔ Windows bridges handle Tobii eye-tracker (UDP) and Enobio EEG (TCP).
 
 ### Key Files
-- `thymio_control/thymio_control/eeg_control_pipeline.py` — Core EEG signal processing pipeline
+- `thymio_control/thymio_control/eeg_control_pipeline.py` — Core EEG signal processing pipeline + adapters
+- `thymio_control/scripts/eeg_control_node.py` — ROS2 node wrapper (subscribes adapters, publishes Twist + analysis)
 - `thymio_control/launch/experiment_core.launch.py` — Main launch orchestration
 - `thymio_control/config/experiment_config.yaml` — Pipeline config (source type, channels, algorithm)
 - `thymio_control/config/eeg_control_node.params.yaml` — ROS2 node parameters
+- `thymio_control/config/thymio_world.sdf` — Gazebo world (ground plane + overhead camera)
+- `web_gui/backend/app/main.py` — FastAPI app (REST + WebSocket endpoints)
+- `web_gui/backend/app/signal_subscriber.py` — RosBridge (single rclpy thread: signal sub + teleop pub)
+- `web_gui/backend/app/command_runner.py` — Subprocess launcher + process cleanup
+- `web_gui/backend/app/config_store.py` — YAML config persistence
+- `web_gui/frontend/src/App.jsx` — React dashboard (controls, charts, teleop, camera)
 
 ### Data Flow
-1. Enobio EEG device → TCP → `eeg_control_pipeline.py` parses and computes features
-2. Features mapped to `geometry_msgs/Twist` via swappable strategy algorithms
-3. Published to `/cmd_vel` → robot moves
+1. Adapter (TCP/LSL/File/Mock) → reads EEG data → `EegFrame` with metrics
+2. `enrich_features()` computes derived features (theta/beta, alpha asymmetry, etc.)
+3. `Policy.compute_intents()` maps features → `speed_intent` / `steer_intent`
+4. `_intents_to_twist()` converts intents → `geometry_msgs/Twist` → `/cmd_vel`
+5. Analysis JSON (metrics + features + intents) published to `/eeg_analysis`
+6. RosBridge subscribes to `/eeg_analysis` → transforms to web format → WebSocket → charts
 
 ### Key ROS2 Topics
 - `/cmd_vel` — velocity commands (Twist)
-- `/eeg_analysis` — EEG feature analysis output
-- `/camera/image_raw` — camera feed from Gazebo or real robot
+- `/eeg_analysis` — EEG feature analysis output (JSON string)
+- `/camera/image_raw` — camera feed from Gazebo overhead camera
 
 ## Key Design Principles
 
@@ -88,9 +106,21 @@ Given the difficulty of physical robot testing, the project uses **test-driven d
 
 `experiment_config.yaml` controls the data source via `pipeline_config.source_type`:
 - `"tcp_client"` — live Enobio EEG via TCP
-- `"lsl"` — Lab Streaming Layer
-- `"file"` — offline `.easy`/`.info` Enobio recordings in `records/`
-- `"mock"` — simulated data for testing
+- `"tcp_file"` — offline TCP data replay (`.txt` files in `records/`)
+- `"lsl"` — Lab Streaming Layer (real-time)
+- `"file"` — offline EDF file playback via `EdfFileAdapter` (supports `records/` directory)
+- `"mock"` — simulated band power data (drives robot, shows in charts)
+
+The Web GUI exposes these as Device + Source combinations:
+| Device | Source | `source_type` |
+|---|---|---|
+| EEG | TCP Stream | `tcp_client` |
+| EEG | LSL Stream | `lsl` |
+| EEG | TCP File | `tcp_file` |
+| EEG | LSL File | `file` (EDF) |
+| Mock | — | `mock` |
+| Tobii | — | `lsl` |
+| Keyboard | — | (teleop via `/ws/teleop`, no pipeline)
 
 ## Development Guidelines
 

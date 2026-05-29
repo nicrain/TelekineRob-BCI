@@ -329,8 +329,10 @@ This section records how the first implementation maps this design system to the
 - Stronger typographic hierarchy calibration to FerrariSans metrics.
 - Interactive transitions between dark and light editorial panels.
 
-### Constraints in this prototype
-- Running in local non-runtime environment by default, so data is mock-first.
-- Process execution remains dry-run for safety until command supervisor is added.
-- Filter controls are UI-first placeholders where backend DSP is not wired yet.
+### Current state (2026-05)
+- RosBridge provides real pipeline data (channels / features / control) via WebSocket.
+- Web teleop publishes Twist directly through rclpy for zero-latency robot control.
+- Start/Stop buttons with full ROS2 + Gazebo lifecycle management and auto-cleanup.
+- Config persistence to YAML files, with UI controls locked during runtime.
+- Input devices: EEG (TCP/LSL/file), Mock (simulated band data), Tobii, Keyboard teleop.
 

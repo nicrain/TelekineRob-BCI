@@ -1,4 +1,6 @@
-# ros_thymio
+# TelekineRob-BCI
+
+脑机接口（BCI）驱动的 Thymio 机器人控制平台。基于 ROS2 + Gazebo，支持 EEG 信号处理、视线追踪（Gaze）和 Web 远程控制。
 
 本仓库是一个用于 Thymio 机器人的 ROS/ROS2 工作区，主要包含：
 
@@ -234,13 +236,29 @@ python3 thymio_control/scripts/eeg_control_node.py --ros-args --params-file thym
 
 ## Web GUI
 
-FastAPI 后端 + React 前端，提供实验可视化与配置界面。
+FastAPI 后端 + React 前端，提供实验配置、实时信号可视化和远程控制。
+
+### 架构
+
+```
+前端 (React + ECharts) ←WebSocket→ 后端 (FastAPI + RosBridge)
+                                        ↓ rclpy
+                                   ROS2 /eeg_analysis (订阅信号)
+                                   ROS2 /cmd_vel (发布遥操作 Twist)
+                                        ↓ subprocess
+                                   ros2 launch (启停 pipeline)
+```
+
+- **RosBridge**：单 rclpy 线程同时处理 `/eeg_analysis` 订阅和 teleop Twist 发布，避免 executor 冲突
+- **Signal data**：pipeline 通过 `/eeg_analysis` 推送 JSON → RosBridge → WebSocket → 前端图表
+- **Teleop**：前端 Web 键盘 → `/ws/teleop` → RosBridge 直接 `pub.publish()` Twist，零延迟
+- **Camera**：Gazebo overhead camera → `gazebo_camera_bridge` → `/ws/gazebo_frame` 代理
 
 ### 启动后端
 
 ```bash
-cd ~/ros_thymio/web_gui/backend
-source ~/ros_thymio/.venv/bin/activate
+cd ~/TelekineRob-BCI/web_gui/backend
+source ~/TelekineRob-BCI/.venv/bin/activate
 python -m app.main
 ```
 
@@ -249,30 +267,25 @@ python -m app.main
 ### 启动前端
 
 ```bash
-cd ~/ros_thymio/web_gui/frontend
+cd ~/TelekineRob-BCI/web_gui/frontend
 npm run dev
 ```
 
 前端运行在 `http://localhost:5173`。
 
-### Gazebo 摄像头无窗口模式
+### Gazebo 摄像头
 
-启动 Gazebo 仿真（无窗口）：
+通过 Web GUI Start 按钮一键启动，或手动：
 
 ```bash
 ros2 launch thymio_control experiment_core.launch.py use_sim:=true use_gui:=false
-```
-
-确保摄像头 bridge 在跑：
-
-```bash
 ros2 run thymio_web_bridge gazebo_camera_bridge
 ```
 
-完整数据链路：
+数据链路：
 
 ```
-Gazebo (headless)
+Gazebo overhead_camera (2.5m 高度, 1.5rad FOV)
   → /camera/image_raw
   → ros_gz_bridge → /image_topic
   → gazebo_camera_bridge (cv_bridge → jpg)
