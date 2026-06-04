@@ -19,30 +19,46 @@ from .signal_subscriber import RosBridge
 
 app = FastAPI(title="Thymio Web GUI Backend", version="0.1.0")
 
-frontend_origin = os.getenv("WEB_GUI_FRONTEND_ORIGIN", "http://localhost:5173")
+# Origin whitelist for CORS + WebSocket.  Set to a specific origin (e.g.
+# "https://eeg.zhaoyu.wang") to lock down access; leave unset or set to "*"
+# to allow any origin (convenient for research / shared use).
+_frontend_origin = os.getenv("WEB_GUI_FRONTEND_ORIGIN", "*").strip()
+_wildcard_origin = _frontend_origin in ("", "*")
+
 
 def _validate_origin(origin: str) -> bool:
     """Validate origin has http/https scheme and matches allowed list."""
+    if _wildcard_origin:
+        return True
     if not origin or not isinstance(origin, str):
         return False
     if not (origin.startswith("http://") or origin.startswith("https://")):
         return False
-    allowed = [frontend_origin, "http://127.0.0.1:5173", "https://127.0.0.1:5173"]
+    allowed = [_frontend_origin, "http://127.0.0.1:5173", "https://127.0.0.1:5173"]
     return origin in allowed
 
 
 async def _reject_invalid_origin(websocket: WebSocket) -> bool:
     """Reject websocket requests from invalid Origin values."""
+    if _wildcard_origin:
+        return False
     origin = websocket.headers.get("origin", "")
     if _validate_origin(origin):
         return False
     await websocket.close(code=1008, reason="invalid origin")
     return True
 
+
+_cors_origins = ["*"] if _wildcard_origin else [
+    _frontend_origin,
+    "http://127.0.0.1:5173",
+    "https://127.0.0.1:5173",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[frontend_origin, "http://127.0.0.1:5173", "https://127.0.0.1:5173"],
-    allow_credentials=True,
+    allow_origins=_cors_origins,
+    allow_credentials=not _wildcard_origin,
     allow_methods=["*"],
     allow_headers=["*"],
 )
