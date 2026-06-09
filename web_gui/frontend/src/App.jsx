@@ -496,7 +496,7 @@ export default function App() {
   }, [isFileSource]);
 
   /* ── ECharts options (adapt to theme) ────────────────── */
-  const isDarkCharts = theme === 'dark';
+  const isDarkCharts = theme === 'light';
   const waveOption = useMemo(() => ({
     backgroundColor: 'transparent',
     tooltip: { trigger: 'axis', backgroundColor: isDarkCharts ? '#fff' : '#2a2a2a', borderColor: isDarkCharts ? '#ddd' : '#444', textStyle: { color: isDarkCharts ? '#333' : '#ddd' } },

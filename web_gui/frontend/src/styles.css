@@ -60,11 +60,11 @@
   --f-status-dot-off:     #3a3a3a;
   --f-camera-bg:          #181818;
   --f-camera-border:      #666666;
-  --f-chart-section-bg:   #FFFFFF;
-  --f-chart-card-bg:      #f8f8f8;
-  --f-chart-card-border:  #e8e8e8;
-  --f-chart-text:         #555555;
-  --f-chart-axis:         #999999;
+  --f-chart-section-bg:   #1C1C1C;
+  --f-chart-card-bg:      #2a2a2a;
+  --f-chart-card-border:  #444444;
+  --f-chart-text:         #BBBBBB;
+  --f-chart-axis:         #888888;
   --f-btn-primary-bg:     #FFFFFF;
   --f-btn-primary-text:   #000000;
   --f-btn-primary-hover:  #e0e0e0;
@@ -124,11 +124,11 @@
   --f-status-dot-off: #CCCCCC;
   --f-camera-bg:      #E8E8E8;
   --f-camera-border:  #CCCCCC;
-  --f-chart-section-bg: #1C1C1C;
-  --f-chart-card-bg:  #2a2a2a;
-  --f-chart-card-border: #444444;
-  --f-chart-text:     #BBBBBB;
-  --f-chart-axis:     #888888;
+  --f-chart-section-bg: #FFFFFF;
+  --f-chart-card-bg:  #f8f8f8;
+  --f-chart-card-border: #e8e8e8;
+  --f-chart-text:     #555555;
+  --f-chart-axis:     #999999;
   --f-btn-primary-bg: #DA291C;
   --f-btn-primary-text: #FFFFFF;
   --f-btn-primary-hover: #B01E0A;
@@ -192,6 +192,10 @@ body {
   height: 100%;
   object-fit: contain;
   filter: sepia(1) saturate(10) hue-rotate(-10deg);
+}
+
+[data-theme="light"] .topbar-brand .hero-emblem img {
+  filter: sepia(1) saturate(10) hue-rotate(-10deg) drop-shadow(0 0 1.5px #181818);
 }
 
 .topbar-title {
