@@ -374,6 +374,13 @@ export default function App() {
   const [outputMode, setOutputMode]         = useState('thymio_simu');
   const [showWaveform, setShowWaveform]     = useState(true);
   const [running, setRunning]               = useState(false);
+  const [theme, setTheme]                   = useState(() => localStorage.getItem('theme') || 'dark');
+
+  /* ── Sync theme to <html> ──────────────────────────── */
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem('theme', theme);
+  }, [theme]);
 
   const wsRef = useRef(null);
   const teleopWsRef = useRef(null);
@@ -488,38 +495,39 @@ export default function App() {
       .catch(() => setRecordFiles([]));
   }, [isFileSource]);
 
-  /* ── ECharts options (light theme for white panel) ──── */
+  /* ── ECharts options (adapt to theme) ────────────────── */
+  const isDarkCharts = theme === 'dark';
   const waveOption = useMemo(() => ({
     backgroundColor: 'transparent',
-    tooltip: { trigger: 'axis', backgroundColor: '#fff', borderColor: '#ddd', textStyle: { color: '#333' } },
-    legend: { textStyle: { color: '#555' }, top: 2 },
+    tooltip: { trigger: 'axis', backgroundColor: isDarkCharts ? '#fff' : '#2a2a2a', borderColor: isDarkCharts ? '#ddd' : '#444', textStyle: { color: isDarkCharts ? '#333' : '#ddd' } },
+    legend: { textStyle: { color: isDarkCharts ? '#555' : '#aaa' }, top: 2 },
     grid: { left: 28, right: 16, top: 36, bottom: 24 },
-    xAxis: { type: 'category', data: series.t, axisLabel: { color: '#999', fontSize: 10 } },
-    yAxis: { type: 'value', axisLabel: { color: '#999', fontSize: 10 } },
+    xAxis: { type: 'category', data: series.t, axisLabel: { color: isDarkCharts ? '#999' : '#888', fontSize: 10 } },
+    yAxis: { type: 'value', axisLabel: { color: isDarkCharts ? '#999' : '#888', fontSize: 10 } },
     series: [
       { name: 'alpha', type: 'line', smooth: true, showSymbol: false, data: series.alpha },
       { name: 'theta', type: 'line', smooth: true, showSymbol: false, data: series.theta },
       { name: 'beta',  type: 'line', smooth: true, showSymbol: false, data: series.beta  },
     ],
-    color: ['#DA291C', '#F6E500', '#000000'],
+    color: isDarkCharts ? ['#DA291C', '#F6E500', '#000000'] : ['#DA291C', '#F6E500', '#CCCCCC'],
     animation: false,
-  }), [series]);
+  }), [series, isDarkCharts]);
 
   const metricLabels = { alpha: 'Alpha (α)', tbr: 'TBR (θ/β)', ei: 'EI (β/(α+θ))' };
   const metricDataKey = { alpha: 'alpha', tbr: 'ratio', ei: 'focus' };
   const featureOption = useMemo(() => ({
     backgroundColor: 'transparent',
-    tooltip: { trigger: 'axis', backgroundColor: '#fff', borderColor: '#ddd', textStyle: { color: '#333' } },
-    legend: { textStyle: { color: '#555' }, top: 2 },
+    tooltip: { trigger: 'axis', backgroundColor: isDarkCharts ? '#fff' : '#2a2a2a', borderColor: isDarkCharts ? '#ddd' : '#444', textStyle: { color: isDarkCharts ? '#333' : '#ddd' } },
+    legend: { textStyle: { color: isDarkCharts ? '#555' : '#aaa' }, top: 2 },
     grid: { left: 28, right: 16, top: 36, bottom: 24 },
-    xAxis: { type: 'category', data: series.t, axisLabel: { color: '#999', fontSize: 10 } },
-    yAxis: { type: 'value', axisLabel: { color: '#999', fontSize: 10 } },
+    xAxis: { type: 'category', data: series.t, axisLabel: { color: isDarkCharts ? '#999' : '#888', fontSize: 10 } },
+    yAxis: { type: 'value', axisLabel: { color: isDarkCharts ? '#999' : '#888', fontSize: 10 } },
     series: [
       { name: metricLabels[metric], type: 'line', smooth: true, showSymbol: false, data: series[metricDataKey[metric]] },
     ],
     color: ['#DA291C'],
     animation: false,
-  }), [series, metric]);
+  }), [series, metric, isDarkCharts]);
 
   /* ── Build patch ─────────────────────────────────────── */
   function buildPatch() {
@@ -615,6 +623,13 @@ export default function App() {
           <span className="topbar-title">Thymio EEG Control</span>
         </div>
         <div className="topbar-actions">
+          <button
+            className="btn btn-theme-toggle"
+            onClick={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
+            title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          >
+            {theme === 'dark' ? '☀' : '☾'}
+          </button>
           <button className="btn btn-cta" disabled={running} onClick={startSystem}>{running ? 'Running...' : 'Start'}</button>
           <button className="btn btn-ghost" disabled={!running} onClick={stopSystem}>Stop</button>
         </div>
