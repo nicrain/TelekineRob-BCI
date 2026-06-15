@@ -32,7 +32,7 @@ function HeroEmblem() {
   return (
     <div className="hero-emblem">
       <img
-        src="https://play-lh.googleusercontent.com/_S_Xg6eG0b3rFbtPrc9DVd2DbFbM71_1YO9HZQqxGnYyKy8SuPmtfE9m_ynqxj_WTIw=w600-h300-pc0xffffff-pd"
+        src="/thymio-logo.png"
         alt="Thymio"
       />
     </div>
