@@ -118,20 +118,36 @@ const DIR_LABELS = {
 function TeleopPanel({ teleopWsRef, topic, connected }) {
   const [activeDir, setActiveDir] = useState(null);
   const [ackMsg, setAckMsg] = useState('');
+  const lastCmdRef = useRef(null);
+  const watchdogRef = useRef(null);
 
   function send(dir) {
     if (!teleopWsRef.current || teleopWsRef.current.readyState !== WebSocket.OPEN) return;
     teleopWsRef.current.send(JSON.stringify({ direction: dir }));
+    lastCmdRef.current = { dir, time: Date.now() };
+  }
+
+  // Watchdog: if no new command for 300ms, send stop
+  function resetWatchdog() {
+    if (watchdogRef.current) clearTimeout(watchdogRef.current);
+    watchdogRef.current = setTimeout(() => {
+      if (lastCmdRef.current && lastCmdRef.current.dir !== 'stop') {
+        send('stop');
+        setActiveDir(null);
+      }
+    }, 300);
   }
 
   function handleDirDown(dir) {
     setActiveDir(dir);
     send(dir);
+    resetWatchdog();
   }
 
   function handleDirUp() {
     setActiveDir(null);
     send('stop');
+    if (watchdogRef.current) clearTimeout(watchdogRef.current);
   }
 
   const dirs = [
