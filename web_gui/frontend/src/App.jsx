@@ -376,6 +376,9 @@ export default function App() {
   const [running, setRunning]               = useState(false);
   const [theme, setTheme]                   = useState(() => localStorage.getItem('theme') || 'dark');
 
+  /* ── System status (ROS2 + Thymio) ──────────────────── */
+  const [systemStatus, setSystemStatus] = useState({ ros_available: false, thymio_connected: false });
+
   /* ── Sync theme to <html> ──────────────────────────── */
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -430,6 +433,18 @@ export default function App() {
         }
       })
       .catch((err) => setFeedback(`Init failed: ${err.message}`));
+  }, []);
+
+  /* ── Poll system status (ROS2 + Thymio) ─────────────── */
+  useEffect(() => {
+    const poll = () => {
+      api.get('/api/status')
+        .then((r) => setSystemStatus(r.data))
+        .catch(() => {});  // silent fail
+    };
+    poll();  // initial fetch
+    const timer = setInterval(poll, 3000);  // poll every 3s
+    return () => clearInterval(timer);
   }, []);
 
   /* ── WebSocket ──────────────────────────────────────── */
@@ -758,14 +773,14 @@ export default function App() {
                   <span className="status-value">{wsConnected ? 'connected' : 'disconnected'}</span>
                 </div>
                 <div className="status-row">
-                  <div className="status-dot off" />
+                  <div className={`status-dot ${systemStatus.ros_available ? 'ok' : 'off'}`} />
                   <span className="status-label">ROS2</span>
-                  <span className="status-value">—</span>
+                  <span className="status-value">{systemStatus.ros_available ? 'available' : 'not found'}</span>
                 </div>
                 <div className="status-row">
-                  <div className="status-dot off" />
+                  <div className={`status-dot ${systemStatus.thymio_connected ? 'ok' : 'off'}`} />
                   <span className="status-label">Thymio</span>
-                  <span className="status-value">—</span>
+                  <span className="status-value">{systemStatus.thymio_connected ? 'connected' : 'disconnected'}</span>
                 </div>
               </div>
             </div>
