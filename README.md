@@ -1,4 +1,4 @@
-# ros_thymio
+# TelekineRob-BCI
 
 本仓库是一个用于 Thymio 机器人的 ROS/ROS2 工作区，主要包含：
 
