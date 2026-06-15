@@ -372,6 +372,7 @@ export default function App() {
   const [recordFiles, setRecordFiles]     = useState([]);
 
   const [outputMode, setOutputMode]         = useState('thymio_simu');
+  const [thymioDevice, setThymioDevice]     = useState('ser:device=/dev/ttyACM0');
   const [showWaveform, setShowWaveform]     = useState(true);
   const [running, setRunning]               = useState(false);
   const [theme, setTheme]                   = useState(() => localStorage.getItem('theme') || 'dark');
@@ -573,6 +574,7 @@ export default function App() {
         run_gaze:          inputMode === 'tobii',
         use_tobii_bridge:  inputMode === 'tobii',
         use_enobio_bridge: false,
+        device:            outputMode === 'thymio' ? thymioDevice : '',
       },
       pipeline: {
         source_type:       inputMap[inputMode] || 'mock',
@@ -765,6 +767,20 @@ export default function App() {
                   </label>
                 ))}
               </div>
+
+              {outputMode === 'thymio' && (
+                <div className="thymio-device-input">
+                  <span className="cascade-label">Device</span>
+                  <input
+                    type="text"
+                    className="cascade-select"
+                    value={thymioDevice}
+                    onChange={(e) => setThymioDevice(e.target.value)}
+                    disabled={running}
+                    placeholder="ser:device=/dev/ttyACM0"
+                  />
+                </div>
+              )}
 
               <div className="status-strip">
                 <div className="status-row">

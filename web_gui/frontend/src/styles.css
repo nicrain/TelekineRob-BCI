@@ -313,6 +313,19 @@ body {
   border-color: var(--f-red);
 }
 
+/* ── Thymio Device Input ────────────────────────────────── */
+.thymio-device-input {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp4);
+  margin-top: var(--sp8);
+}
+
+.thymio-device-input .cascade-select {
+  width: 100%;
+  min-width: 200px;
+}
+
 /* ── Channel Picker ───────────────────────────────────── */
 .channel-picker-trigger {
   text-align: left;

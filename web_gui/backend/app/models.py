@@ -13,6 +13,7 @@ class LaunchConfig(BaseModel):
     run_rviz: bool = False
     use_tobii_bridge: bool = False
     use_enobio_bridge: bool = False
+    device: str = ""
 
 
 class EegConfig(BaseModel):

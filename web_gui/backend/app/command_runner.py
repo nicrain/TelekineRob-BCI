@@ -36,6 +36,8 @@ def _build_launch_command(cfg: AppConfig) -> list[str]:
         cmd.append(f"file_path:={resolved_file}")
     if cfg.eeg.input:
         cmd.append(f"input:={cfg.eeg.input}")
+    if launch.device and not launch.use_sim:
+        cmd.append(f"device:={launch.device}")
     return cmd
 
 

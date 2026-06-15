@@ -51,6 +51,7 @@ def generate_launch_description():
     use_enobio_bridge = LaunchConfiguration("use_enobio_bridge")
     tobii_udp_port = LaunchConfiguration("tobii_udp_port")
     enobio_udp_port = LaunchConfiguration("enobio_udp_port")
+    device = LaunchConfiguration("device")
 
     decls = [
         DeclareLaunchArgument("use_sim", default_value=_str(defaults.get("use_sim", False))),
@@ -81,6 +82,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument("file_path", default_value=""),
         DeclareLaunchArgument("input", default_value=""),
+        DeclareLaunchArgument("device", default_value=""),
     ]
 
     cmd_topic = PythonExpression(["'/model/thymio/cmd_vel' if '", use_sim, "' == 'true' else '/cmd_vel'"])
@@ -138,6 +140,7 @@ def generate_launch_description():
             AnyLaunchDescriptionSource(
                 [PathJoinSubstitution([get_package_share_directory("thymio_driver"), "launch", "main.launch"])]
             ),
+            launch_arguments={"device": device}.items(),
             condition=UnlessCondition(use_sim),
         )
     except PackageNotFoundError:
