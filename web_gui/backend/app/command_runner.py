@@ -196,7 +196,24 @@ def cleanup_residual_processes() -> str:
     return "Cleaned up residual processes"
 
 
+def _send_stop_to_thymio() -> None:
+    """Send zero velocity command to Thymio before stopping."""
+    try:
+        env = _load_ros_env()
+        # Send zero velocity for 0.5 seconds
+        subprocess.run(
+            ["ros2", "topic", "pub", "--once", "/cmd_vel", "geometry_msgs/Twist",
+             "{linear: {x: 0.0, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.0}}"],
+            env=env,
+            timeout=1.0,
+            capture_output=True,
+        )
+    except Exception:
+        pass  # Ignore errors (e.g., topic not available)
+
+
 def stop_system(dry_run: bool = True) -> CommandResult:
+    _send_stop_to_thymio()
     _stop_runtime_processes()
     _kill_ros_processes()
     set_runtime_state(False, None)
