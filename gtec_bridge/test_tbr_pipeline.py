@@ -81,17 +81,10 @@ if __name__ == "__main__":
     tbr = gp.Equation("a / b")
 
     # ------------------------------------------------------------------
-    # Merge raw + TBR for visualisation
+    # TWO separate scopes — different amplitude scales
     # ------------------------------------------------------------------
-    merger = gp.Router(
-        input_channels={"raw": gp.Router.ALL, "tbr": [0]},
-        output_channels=gp.Router.ALL,
-    )
-
-    # ------------------------------------------------------------------
-    # Scope
-    # ------------------------------------------------------------------
-    scope = gp.TimeSeriesScope(amplitude_limit=50, time_window=10)
+    scope_raw = gp.TimeSeriesScope(amplitude_limit=100, time_window=10)
+    scope_tbr = gp.TimeSeriesScope(amplitude_limit=3, time_window=10)
 
     # ==================================================================
     # Connections
@@ -115,19 +108,27 @@ if __name__ == "__main__":
     p.connect(beta_pow, beta_smooth)
     p.connect(beta_smooth, tbr["b"])
 
-    # Merge: raw (4ch) + TBR (1ch) → 5 channels to scope
-    p.connect(ch_splitter["all"], merger["raw"])
-    p.connect(tbr, merger["tbr"])
+    # Display: raw EEG on one scope, TBR on another
+    p.connect(ch_splitter["all"], scope_raw)
+    p.connect(tbr, scope_tbr)
 
-    # Display
-    p.connect(merger, scope)
+    # Also record TBR to CSV
+    csv = gp.CsvWriter(file_name="test_tbr_output.csv")
+    p.connect(tbr, csv)
 
-    app.add_widget(scope)
+    app.add_widget(scope_raw)
+    app.add_widget(scope_tbr)
 
-    print("[INFO] Pipeline started. Scope shows:")
-    print("       Ch0-3 = filtered raw EEG")
-    print("       Ch4   = TBR (theta/beta ratio from Fz)")
-    print("[INFO] Close the scope window to stop.\n")
+    print("[INFO] Pipeline started. TWO scope windows:")
+    print("       Scope 1 (amplitude=100) : filtered raw EEG, 4 channels")
+    print("       Scope 2 (amplitude=3)   : TBR = theta/beta ratio")
+    print("")
+    print("[INFO] Interpreting TBR trace:")
+    print("       TBR > 1 → theta dominant → relaxed / drowsy")
+    print("       TBR < 1 → beta  dominant → alert / focused")
+    print("       Try closing your eyes → TBR should rise")
+    print("[INFO] TBR also saved to test_tbr_output.csv")
+    print("[INFO] Close scope windows or Ctrl+C to stop.\n")
 
     signal.signal(signal.SIGINT, lambda sig, frame: (_cleanup(p), sys.exit(0)))
 
