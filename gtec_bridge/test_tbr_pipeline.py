@@ -22,7 +22,17 @@ Usage
     # Close the scope window to stop.
 """
 
+import signal
+import sys
 import gpype as gp
+
+
+def _cleanup(pipeline):
+    try:
+        pipeline.stop()
+        print("[INFO] Pipeline stopped (BLE disconnected).")
+    except Exception:
+        pass
 
 FS = 250  # BCI Core sampling rate
 
@@ -119,8 +129,12 @@ if __name__ == "__main__":
     print("       Ch4   = TBR (theta/beta ratio from Fz)")
     print("[INFO] Close the scope window to stop.\n")
 
-    p.start()
-    app.run()
-    p.stop()
+    signal.signal(signal.SIGINT, lambda sig, frame: (_cleanup(p), sys.exit(0)))
+
+    try:
+        p.start()
+        app.run()
+    finally:
+        _cleanup(p)
 
     print("[INFO] Test completed.")

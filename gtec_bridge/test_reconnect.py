@@ -3,19 +3,32 @@
 
 Scenario
 --------
-1. Connect to BCI Core-4, stream 5 seconds → scope visible
+1. Connect to BCI Core-4, stream 10 seconds → scope visible
 2. p.stop()  (disconnect)
-3. Wait 2 seconds
-4. p.start() (reconnect) — does it work without Windows re-pairing?
-5. Stream another 5 seconds
+3. Wait 3 seconds
+4. New pipeline + new BCICore8 → start() (reconnect)
+5. Stream another 10 seconds
+
+If round 3 shows EEG → reconnection works in g.pype.
+If round 3 is blank → problem is deeper (gtec_ble / Windows BLE stack).
 
 Usage
 -----
     python gtec_bridge/test_reconnect.py
 """
 
+import signal
+import sys
 import time
 import gpype as gp
+
+
+def _cleanup(pipeline):
+    try:
+        pipeline.stop()
+        print("[INFO] Pipeline stopped (BLE disconnected).")
+    except Exception:
+        pass
 
 if __name__ == "__main__":
     app = gp.MainApp()
@@ -27,20 +40,23 @@ if __name__ == "__main__":
     p.connect(source, scope)
     app.add_widget(scope)
 
-    # ------------------------------------------------------------------
-    # Round 1: initial connection
-    # ------------------------------------------------------------------
-    print("[1] Starting first connection...")
-    p.start()
-    print("[1] Running 10 seconds — confirm you see EEG waveforms.")
-    print("[1] (if scope is blank, the initial connection failed)")
-    time.sleep(10)
+    signal.signal(signal.SIGINT, lambda sig, frame: (_cleanup(p), sys.exit(0)))
+
+    try:
+        # --------------------------------------------------------------
+        # Round 1: initial connection
+        # --------------------------------------------------------------
+        print("[1] Starting first connection...")
+        p.start()
+        print("[1] Running 10 seconds — confirm you see EEG waveforms.")
+        print("[1] (if scope is blank, the initial connection failed)")
+        time.sleep(10)
+    finally:
+        _cleanup(p)
 
     # ------------------------------------------------------------------
     # Disconnect
     # ------------------------------------------------------------------
-    print("[2] Stopping pipeline (disconnecting BLE)...")
-    p.stop()
     print("[2] Pipeline stopped. Waiting 3 seconds...")
     time.sleep(3)
 
@@ -60,11 +76,15 @@ if __name__ == "__main__":
     p2.connect(source2, scope2)
     app.add_widget(scope2)
 
-    p2.start()
-    print("[3] Running 10 seconds — check the NEW scope window...")
-    time.sleep(10)
+    signal.signal(signal.SIGINT, lambda sig, frame: (_cleanup(p2), sys.exit(0)))
 
-    p2.stop()
+    try:
+        p2.start()
+        print("[3] Running 10 seconds — check the NEW scope window...")
+        time.sleep(10)
+    finally:
+        _cleanup(p2)
+
     print("[4] Test finished.")
     print("[4] If round 3 showed EEG → g.pype reconnection works fine.")
     print("[4] If round 3 was blank → problem confirmed, need to dig deeper.")

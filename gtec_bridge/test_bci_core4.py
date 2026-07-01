@@ -15,7 +15,19 @@ Expected outcome
 - Close the window to stop.
 """
 
+import signal
+import sys
 import gpype as gp
+
+
+def _cleanup(pipeline):
+    """Ensure BLE connection is properly released to avoid zombie state."""
+    try:
+        pipeline.stop()
+        print("[INFO] Pipeline stopped (BLE disconnected).")
+    except Exception:
+        pass
+
 
 if __name__ == "__main__":
     # ------------------------------------------------------------------
@@ -49,7 +61,10 @@ if __name__ == "__main__":
         print("        1. The headset is turned on and paired via Bluetooth")
         print("        2. g.pype SDK is installed: pip install gpype")
         print("        3. No other application is using the device")
-        exit(1)
+        sys.exit(1)
+
+    # Register Ctrl+C handler so BLE is always cleaned up
+    signal.signal(signal.SIGINT, lambda sig, frame: (_cleanup(p), sys.exit(0)))
 
     # ------------------------------------------------------------------
     # Basic signal chain: source → bandpass → notch(50Hz) → scope
@@ -67,10 +82,13 @@ if __name__ == "__main__":
 
     print(f"\n[INFO] Source class : {source_name}")
     print(f"[INFO] Pipeline started — you should see EEG waveforms.")
-    print(f"[INFO] Close the scope window to stop.\n")
+    print(f"[INFO] Close the scope window to stop, or Ctrl+C.\n")
 
-    p.start()
-    app.run()
-    p.stop()
+    # try/finally ensures p.stop() runs even if the window is killed
+    try:
+        p.start()
+        app.run()
+    finally:
+        _cleanup(p)
 
     print("[INFO] Test completed.")
