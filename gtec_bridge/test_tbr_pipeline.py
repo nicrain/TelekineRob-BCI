@@ -78,13 +78,13 @@ if __name__ == "__main__":
     # ------------------------------------------------------------------
     # TBR = theta_power / beta_power
     # ------------------------------------------------------------------
-    tbr = gp.Equation("a / b")
+    tbr = gp.Equation("min(a / max(b, 0.001), 5)")
 
     # ------------------------------------------------------------------
     # TWO separate scopes — different amplitude scales
     # ------------------------------------------------------------------
     scope_raw = gp.TimeSeriesScope(amplitude_limit=100, time_window=10)
-    scope_tbr = gp.TimeSeriesScope(amplitude_limit=3, time_window=10)
+    scope_tbr = gp.TimeSeriesScope(amplitude_limit=5, time_window=10)
 
     # ==================================================================
     # Connections
