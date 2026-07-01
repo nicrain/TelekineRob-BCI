@@ -18,6 +18,10 @@ Expected outcome
 import gpype as gp
 
 if __name__ == "__main__":
+    # ------------------------------------------------------------------
+    # MainApp MUST come first — it initialises Qt before any widget
+    # ------------------------------------------------------------------
+    app = gp.MainApp()
     p = gp.Pipeline()
 
     # ------------------------------------------------------------------
@@ -59,10 +63,6 @@ if __name__ == "__main__":
     p.connect(bandpass, notch50)
     p.connect(notch50, scope)
 
-    # ------------------------------------------------------------------
-    # GUI
-    # ------------------------------------------------------------------
-    app = gp.MainApp()
     app.add_widget(scope)
 
     print(f"\n[INFO] Source class : {source_name}")
