@@ -15,8 +15,8 @@ import gpype as gp
 if __name__ == "__main__":
     p = gp.Pipeline()
 
-    source = gp.BCICore8()
-    print(f"[OK] BCICore8 source created")
+    source = gp.BCICore8(channel_count=4)
+    print(f"[OK] BCICore8 source created (channel_count=4)")
 
     # Count how many non-zero channels we see
     # Use CsvWriter as a data tap — it writes to file without GUI

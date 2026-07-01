@@ -32,8 +32,8 @@ if __name__ == "__main__":
     source_name = ""
 
     for cls_name, cls_factory in [
-        ("BCICore8", lambda: gp.BCICore8()),
-        ("HybridBlack", lambda: gp.HybridBlack()),
+        ("BCICore8", lambda: gp.BCICore8(channel_count=4)),
+        ("HybridBlack", lambda: gp.HybridBlack(channel_count=4)),
     ]:
         try:
             source = cls_factory()
