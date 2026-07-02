@@ -1,4 +1,4 @@
-"""FocusPolicy — maps focus level and alpha asymmetry to control intents.
+"""EiPolicy — maps focus level and alpha asymmetry to control intents.
 
 Algorithm
 ---------
@@ -22,7 +22,7 @@ from thymio_control.policies.base import Policy
 from thymio_control.processors.enrich import clip01
 
 
-class FocusPolicy(Policy):
+class EiPolicy(Policy):
     """Map focus level and alpha lateralisation to speed / steer intents.
 
     Attributes are intentionally exposed as class-level defaults so they can

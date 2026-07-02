@@ -1,4 +1,4 @@
-"""AlphaOnlyPolicy — uses alpha band power alone for speed control.
+"""AlphaPolicy — uses alpha band power alone for speed control.
 
 Algorithm
 ---------
@@ -12,8 +12,8 @@ Calibration
 -----------
 Parameters are **placeholder values** estimated from the alpha range
 observed in ``20260408111446_Patient01.edf`` (~0.5–7.5 µV²).
-NOT yet calibrated via p5/p95 statistics like FocusPolicy and
-ThetaBetaPolicy.  TODO: run formal calibration against the
+NOT yet calibrated via p5/p95 statistics like EiPolicy and
+TbrPolicy.  TODO: run formal calibration against the
 reference EDF before production use.
 """
 from __future__ import annotations
@@ -24,7 +24,7 @@ from thymio_control.policies.base import Policy
 from thymio_control.processors.enrich import clip01
 
 
-class AlphaOnlyPolicy(Policy):
+class AlphaPolicy(Policy):
     """Use alpha power inversely for speed intent; steering disabled."""
 
     # Normalisation: clip01(1.0 - (alpha_smooth - offset) / scale)

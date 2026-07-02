@@ -568,7 +568,7 @@ export default function App() {
     const patch = {
       eeg: {
         input:           inputMap[inputMode] || 'mock',
-        policy:          'focus',
+        policy:          metric,
         tcp_control_mode: 'feature',
         tcp_host:        '127.0.0.1',
         tcp_port:        1234,

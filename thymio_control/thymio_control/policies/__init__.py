@@ -1,7 +1,7 @@
 """Policies package — intent inference from EEG features."""
 
-from thymio_control.policies.alpha_only import AlphaOnlyPolicy
-from thymio_control.policies.focus import FocusPolicy
-from thymio_control.policies.theta_beta import ThetaBetaPolicy
+from thymio_control.policies.alpha import AlphaPolicy
+from thymio_control.policies.ei    import EiPolicy
+from thymio_control.policies.tbr   import TbrPolicy
 
-__all__ = ["AlphaOnlyPolicy", "FocusPolicy", "ThetaBetaPolicy"]
+__all__ = ["AlphaPolicy", "EiPolicy", "TbrPolicy"]

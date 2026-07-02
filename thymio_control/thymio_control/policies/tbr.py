@@ -1,11 +1,11 @@
-"""ThetaBetaPolicy — uses theta/beta ratio for speed and alpha asymmetry for steering.
+"""TbrPolicy — uses theta/beta ratio for speed and alpha asymmetry for steering.
 
 Algorithm
 ---------
 - **speed_intent**: inversely proportional to ``theta_beta`` (theta/beta ratio, TBR).
   A higher TBR typically indicates lower attentional engagement,
   so higher ratio → lower speed intent.  EMA smoothing (α=0.35) applied.
-- **steer_intent**: same alpha asymmetry mapping as FocusPolicy.
+- **steer_intent**: same alpha asymmetry mapping as EiPolicy.
 
 Calibration
 -----------
@@ -20,7 +20,7 @@ from thymio_control.policies.base import Policy
 from thymio_control.processors.enrich import clip01
 
 
-class ThetaBetaPolicy(Policy):
+class TbrPolicy(Policy):
     """Use theta/beta ratio for speed intent and alpha asymmetry for steering."""
 
     # Normalisation: clip01(1.0 - (ratio_smooth - offset) / scale)

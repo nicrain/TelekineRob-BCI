@@ -42,14 +42,14 @@ _log = logging.getLogger(__name__)
 # Public registry of policies
 # ---------------------------------------------------------------------------
 
-from thymio_control.policies.focus      import FocusPolicy
-from thymio_control.policies.theta_beta import ThetaBetaPolicy
-from thymio_control.policies.alpha_only import AlphaOnlyPolicy
+from thymio_control.policies.ei    import EiPolicy
+from thymio_control.policies.tbr   import TbrPolicy
+from thymio_control.policies.alpha import AlphaPolicy
 
 POLICIES: Dict[str, type] = {
-    "focus":      FocusPolicy,
-    "theta_beta": ThetaBetaPolicy,
-    "alpha_only": AlphaOnlyPolicy,
+    "ei":    EiPolicy,
+    "tbr":   TbrPolicy,
+    "alpha": AlphaPolicy,
 }
 
 # ---------------------------------------------------------------------------
@@ -194,13 +194,13 @@ def build_pipeline(
         )
         adapter   = _legacy_build_adapter(args)
         processor = enrich_features
-        policy    = _POLICIES[getattr(args, "policy", "focus")]()
+        policy    = _POLICIES[getattr(args, "policy", "tbr")]()
         return adapter, processor, policy
 
     _log.info("pipeline: using NEW modular path")
     adapter    = build_adapter(args)
     processor  = build_processor()
-    policy_name = getattr(args, "policy", "focus")
+    policy_name = getattr(args, "policy", "tbr")
     if policy_name not in POLICIES:
         raise ValueError(
             f"Unknown policy: {policy_name!r}. "

@@ -50,7 +50,7 @@ class EegControlNode(Node):
 
 		# 输入与策略参数
 		self.declare_parameter("input", "mock")
-		self.declare_parameter("policy", "focus")
+		self.declare_parameter("policy", "tbr")
 		self.declare_parameter("tcp_control_mode", "feature")
 		self.declare_parameter("tcp_host", "0.0.0.0")
 		self.declare_parameter("tcp_port", 6001)
@@ -459,9 +459,6 @@ class EegControlNode(Node):
 				else:
 					twist.angular.z = -w_spin
 		else:
-			if speed_intent < self.reverse_threshold:
-				twist.linear.x = self.reverse_speed
-				return twist
 			twist.linear.x = self.max_forward_speed * speed_intent
 			steer = (steer_intent - 0.5) * 2.0
 			if abs(steer) >= self.steer_deadzone:

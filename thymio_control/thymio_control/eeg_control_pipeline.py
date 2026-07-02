@@ -280,7 +280,7 @@ class MockAdapter(BaseAdapter):
 
     def read_frame(self) -> Optional[EegFrame]:
         t = time.time() - self.t0
-        # Values calibrated for FocusPolicy (beta_alpha_theta range ~0.3–5.0
+        # Values calibrated for EiPolicy (beta_alpha_theta range ~0.3–5.0
         # maps to full speed range: reverse < 0.73 < forward < 2.36 < full).
         alpha = 2.0 + 1.5 * math.sin(0.7 * t)
         theta = 1.5 + 1.0 * math.sin(0.5 * t + 1.2)
@@ -607,7 +607,7 @@ class Policy:
         raise NotImplementedError
 
 
-class FocusPolicy(Policy):
+class EiPolicy(Policy):
     """将专注相关分数映射为速度，将 alpha 非对称映射为转向。
 
     输出语义：
@@ -639,7 +639,7 @@ class FocusPolicy(Policy):
         return {"speed_intent": speed_intent, "steer_intent": steer_intent}
 
 
-class ThetaBetaPolicy(Policy):
+class TbrPolicy(Policy):
     """使用 theta/beta 比值控制速度，使用 alpha 非对称控制转向。
 
     EMA 平滑 theta_beta（α=0.35）减少帧间抖动。
@@ -668,7 +668,7 @@ class ThetaBetaPolicy(Policy):
         return {"speed_intent": speed_intent, "steer_intent": steer_intent}
 
 
-class AlphaOnlyPolicy(Policy):
+class AlphaPolicy(Policy):
     """仅使用 alpha 频段功率控制速度。
 
     alpha 抑制（alpha 降低）表示皮层激活和更高注意力，
@@ -700,9 +700,9 @@ class AlphaOnlyPolicy(Policy):
 
 
 POLICIES = {
-    "focus": FocusPolicy,
-    "theta_beta": ThetaBetaPolicy,
-    "alpha_only": AlphaOnlyPolicy,
+    "ei": EiPolicy,
+    "tbr": TbrPolicy,
+    "alpha": AlphaPolicy,
 }
 
 
@@ -860,7 +860,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="EEG -> UDP intent pipeline for Thymio")
     parser.add_argument("--config", default="", help="Path to YAML config file")
     parser.add_argument("--input", choices=["mock", "tcp_client", "tcp_file", "lsl", "file"], default="mock")
-    parser.add_argument("--policy", choices=sorted(POLICIES.keys()), default="focus")
+    parser.add_argument("--policy", choices=sorted(POLICIES.keys()), default="ei")
     parser.add_argument(
         "--eeg-device",
         choices=sorted(EEG_DEVICE_CONFIGS.keys()),
