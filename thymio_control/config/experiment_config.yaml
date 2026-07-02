@@ -12,6 +12,7 @@ adapter:
   tcp_port: 1234
   lsl_stream_type: EEG
   lsl_timeout: 8.0
+  lsl_source_id: ""
   lsl_channel_map:
     alpha: 0
     theta: 1

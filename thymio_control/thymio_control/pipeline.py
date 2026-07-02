@@ -144,10 +144,12 @@ def build_adapter(args: Any):
 
     if mode == "lsl_raw":
         # Raw EEG → on-board DSP path (Phase 1 validated)
+        # source_id enables targeting a specific LSL stream (e.g. gtec bridge)
         from thymio_control.adapters.lsl_raw import RawLslAdapter
         return RawLslAdapter(
             stream_type=getattr(args, "lsl_stream_type", "EEG"),
             timeout=getattr(args, "lsl_timeout", 5.0),
+            source_id=getattr(args, "lsl_source_id", "") or None,
         )
 
     raise RuntimeError(f"Unsupported input mode: {mode!r}")
