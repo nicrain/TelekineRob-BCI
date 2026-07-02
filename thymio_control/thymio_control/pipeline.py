@@ -127,21 +127,6 @@ def build_adapter(args: Any):
         from thymio_control.adapters.edf_file import EdfFileAdapter
         return EdfFileAdapter(file_path, realtime=True)
 
-    if mode == "lsl":
-        # Pre-computed feature stream (legacy LSL path)
-        channel_map = _parse_channel_map(getattr(args, "lsl_channel_map", ""))
-        if not channel_map:
-            from thymio_control.device_profiles import get_device_config
-            eeg_device = getattr(args, "eeg_device", "enobio-20")
-            dev_cfg = get_device_config(eeg_device)
-            channel_map = dict(dev_cfg["default_lsl_channel_map"])
-            _log.info(
-                "Using default LSL channel map for %s (%d channels)",
-                dev_cfg["label"], len(channel_map),
-            )
-        from thymio_control.adapters.lsl_feature import LslFeatureAdapter
-        return LslFeatureAdapter(args.lsl_stream_type, args.lsl_timeout, channel_map)
-
     if mode == "lsl_raw":
         # Raw EEG → on-board DSP path (Phase 1 validated)
         # source_id enables targeting a specific LSL stream (e.g. gtec bridge)
