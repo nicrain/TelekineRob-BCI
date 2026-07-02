@@ -33,6 +33,7 @@ class _AdapterArgs:
 		lsl_stream_type: str,
 		lsl_timeout: float,
 		lsl_channel_map,
+			lsl_source_id: str,
 		file_path: str,
 	):
 		self.input = input_mode
@@ -41,6 +42,7 @@ class _AdapterArgs:
 		self.lsl_stream_type = lsl_stream_type
 		self.lsl_timeout = lsl_timeout
 		self.lsl_channel_map = lsl_channel_map
+			self.lsl_source_id = lsl_source_id
 		self.file_path = file_path
 
 
@@ -58,6 +60,7 @@ class EegControlNode(Node):
 		self.declare_parameter("lsl_stream_type", "EEG")
 		self.declare_parameter("lsl_timeout", 8.0)
 		self.declare_parameter("lsl_channel_map", "alpha=0,theta=1,beta=2,left_alpha=3,right_alpha=4")
+		self.declare_parameter("lsl_source_id", "")
 
 		# 输出与控制参数
 		self.declare_parameter("cmd_topic", "/cmd_vel")
@@ -93,6 +96,7 @@ class EegControlNode(Node):
 			lsl_stream_type=self.get_parameter("lsl_stream_type").value,
 			lsl_timeout=float(self.get_parameter("lsl_timeout").value),
 			lsl_channel_map=self.get_parameter("lsl_channel_map").value,
+			lsl_source_id=self.get_parameter("lsl_source_id").value,
 			file_path=self.get_parameter("file_path").value,
 		)
 		self.adapter = build_adapter(adapter_args)
