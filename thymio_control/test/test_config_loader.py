@@ -9,8 +9,11 @@ def _validate_pipeline_config(config: dict) -> None:
     if not isinstance(pipeline_config, dict):
         raise ValueError("pipeline_config must be a mapping")
 
-    if pipeline_config.get("source_type") not in {"lsl", "tcp_client", "tcp_file", "file"}:
-        raise ValueError("pipeline_config.source_type must be lsl, tcp_client, tcp_file, or file")
+    valid = {"mock", "lsl", "tcp_client", "tcp_file", "file"}
+    if pipeline_config.get("source_type") not in valid:
+        raise ValueError(
+            f"pipeline_config.source_type must be one of {sorted(valid)}"
+        )
 
     selected_channels = pipeline_config.get("selected_channels")
     if not isinstance(selected_channels, list) or not selected_channels:
