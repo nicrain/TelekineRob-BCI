@@ -39,7 +39,6 @@ def test_patch_config_persists_to_yaml(monkeypatch, tmp_path: Path):
                     "tcp_port": 6001,
                     "lsl_stream_type": "EEG",
                     "lsl_timeout": 8.0,
-                    "lsl_channel_map": "alpha=0,theta=1,beta=2,left_alpha=3,right_alpha=4",
                     "max_forward_speed": 0.2,
                     "reverse_speed": -0.15,
                     "turn_forward_speed": 0.1,

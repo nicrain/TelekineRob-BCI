@@ -17,7 +17,7 @@ class LaunchConfig(BaseModel):
 
 
 class EegConfig(BaseModel):
-    input: Literal["mock", "tcp_client", "tcp_file", "lsl_raw", "file"] = "mock"
+    input: Literal["mock", "tcp_client", "tcp_file", "lsl", "file"] = "mock"
     policy: Literal["focus", "theta_beta"] = "focus"
     tcp_control_mode: Literal["feature", "movement"] = "feature"
     tcp_host: str = "127.0.0.1"
@@ -26,7 +26,6 @@ class EegConfig(BaseModel):
     lsl_stream_type: str = "EEG"
     lsl_timeout: float = 8.0
     lsl_source_id: str = ""
-    lsl_channel_map: str = "alpha=0,theta=1,beta=2,left_alpha=3,right_alpha=4"
 
 
 class FilterConfig(BaseModel):
@@ -49,7 +48,7 @@ class MotionConfig(BaseModel):
 
 
 class PipelineConfig(BaseModel):
-    source_type: Literal["mock", "tcp_client", "tcp_file", "lsl_raw", "file"] = "mock"
+    source_type: Literal["mock", "tcp_client", "tcp_file", "lsl", "file"] = "mock"
     selected_channels: list[int] = Field(default_factory=lambda: [0, 1, 2])
     algorithm: Literal["theta_beta_ratio", "alpha_beta_ratio", "alpha_only", "engagement_index", "custom"] = "theta_beta_ratio"
 

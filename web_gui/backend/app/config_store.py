@@ -50,7 +50,7 @@ def _load_defaults() -> AppConfig:
     cfg.eeg.file_path = str(ros_params.get("file_path", cfg.eeg.file_path))
     cfg.eeg.lsl_stream_type = str(ros_params.get("lsl_stream_type", cfg.eeg.lsl_stream_type))
     cfg.eeg.lsl_timeout = float(ros_params.get("lsl_timeout", cfg.eeg.lsl_timeout))
-    cfg.eeg.lsl_channel_map = str(ros_params.get("lsl_channel_map", cfg.eeg.lsl_channel_map))
+    cfg.eeg.lsl_source_id = str(ros_params.get("lsl_source_id", cfg.eeg.lsl_source_id))
 
     cfg.motion.max_forward_speed = float(ros_params.get("max_forward_speed", cfg.motion.max_forward_speed))
     cfg.motion.reverse_speed = float(ros_params.get("reverse_speed", cfg.motion.reverse_speed))
@@ -98,7 +98,7 @@ def _persist_config(cfg: AppConfig) -> None:
             "file_path": str(cfg.eeg.file_path),
             "lsl_stream_type": str(cfg.eeg.lsl_stream_type),
             "lsl_timeout": float(cfg.eeg.lsl_timeout),
-            "lsl_channel_map": str(cfg.eeg.lsl_channel_map),
+            "lsl_source_id": str(cfg.eeg.lsl_source_id),
             "max_forward_speed": float(cfg.motion.max_forward_speed),
             "reverse_speed": float(cfg.motion.reverse_speed),
             "turn_forward_speed": float(cfg.motion.turn_forward_speed),

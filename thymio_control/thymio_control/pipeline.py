@@ -85,7 +85,7 @@ def build_adapter(args: Any):
 
     Supports the same ``input`` choices as the legacy pipeline:
     ``mock``, ``keyboard``, ``tcp_client``, ``tcp_file``, ``lsl``,
-    plus the new ``lsl_raw`` mode that applies on-device DSP.
+    plus the new ``lsl`` mode that applies on-device DSP.
 
     Parameters
     ----------
@@ -127,8 +127,8 @@ def build_adapter(args: Any):
         from thymio_control.adapters.edf_file import EdfFileAdapter
         return EdfFileAdapter(file_path, realtime=True)
 
-    if mode == "lsl_raw":
-        # Raw EEG → on-board DSP path (Phase 1 validated)
+    if mode == "lsl":
+        # Raw EEG → on-board DSP via Welch PSD (RawLslAdapter)
         # source_id enables targeting a specific LSL stream (e.g. gtec bridge)
         from thymio_control.adapters.lsl_raw import RawLslAdapter
         return RawLslAdapter(

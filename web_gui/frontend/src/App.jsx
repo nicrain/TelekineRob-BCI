@@ -559,7 +559,7 @@ export default function App() {
   /* ── Build patch ─────────────────────────────────────── */
   function buildPatch() {
     const inputMap = {
-      eeg:     eegProtocol === 'tcp' ? 'tcp_client' : eegProtocol === 'tcp_file' ? 'tcp_file' : eegProtocol === 'lsl_raw' ? 'lsl_raw' : 'file',
+      eeg:     eegProtocol === 'tcp' ? 'tcp_client' : eegProtocol === 'tcp_file' ? 'tcp_file' : eegProtocol === 'lsl' ? 'lsl' : 'file',
       tobii:   'lsl',
       teleop:  'tcp_client',
     };
@@ -576,7 +576,6 @@ export default function App() {
         lsl_stream_type: 'EEG',
         lsl_timeout:     8.0,
 	        lsl_source_id:   eegBrand === 'gtec_headband' ? 'gtec_bci_core4' : eegBrand === 'gtec_hybrid' ? 'gtec_hybrid_black' : '',
-        lsl_channel_map: 'alpha=0,theta=1,beta=2,left_alpha=3,right_alpha=4',
         brand:           eegBrand,
       },
       launch: {
@@ -694,7 +693,7 @@ export default function App() {
                     onChange={(v) => {
                       setEegBrand(v);
                       setSelectedChannels([0, 1, 2]);
-                      if (v === 'gtec_headband' || v === 'gtec_hybrid') { setEegProtocol('lsl_raw'); setFilePath(''); }
+                      if (v === 'gtec_headband' || v === 'gtec_hybrid') { setEegProtocol('lsl'); setFilePath(''); }
                       else if (v === 'enobio') { setEegProtocol('tcp'); setFilePath(''); }
                     }}
                     disabled={running}
@@ -712,7 +711,7 @@ export default function App() {
                     disabled={running}
                     options={(
                       eegBrand === 'gtec_headband' || eegBrand === 'gtec_hybrid'
-                        ? [{ value: 'lsl_raw', label: 'LSL Stream' }]
+                        ? [{ value: 'lsl', label: 'LSL Stream' }]
                         : eegBrand === 'enobio'
                           ? [
                               { value: 'tcp',      label: 'TCP Stream' },
@@ -721,7 +720,7 @@ export default function App() {
                             ]
                           : [
                               { value: 'tcp',      label: 'TCP Stream' },
-                              { value: 'lsl_raw',  label: 'LSL Stream' },
+                              { value: 'lsl',  label: 'LSL Stream' },
                               { value: 'tcp_file', label: 'TCP File' },
                               { value: 'lsl_file', label: 'EDF File' },
                             ]
