@@ -218,21 +218,23 @@ class EegControlNode(Node):
 			except Exception:
 				pass
 
-			# --- write YAML ---
-			repo_root = Path(__file__).resolve().parents[3]
-			params_file = repo_root / "thymio_control" / "config" / "eeg_control_node.params.yaml"
-			try:
-				with params_file.open("r", encoding="utf-8") as f:
-					doc = yaml.safe_load(f) or {}
-			except Exception:
-				doc = {}
-			params = doc.setdefault("/**", {}).setdefault("ros__parameters", {})
-			params["calib_offset"] = offset
-			params["calib_scale"] = scale
-			params["calibrate"] = False
-			with params_file.open("w", encoding="utf-8") as f:
-				yaml.safe_dump(doc, f, sort_keys=False, allow_unicode=False)
-			self.get_logger().info(f"CALIB: wrote {params_file}")
+			# --- write YAML to install copy AND source tree ---
+			source_root = Path(__file__).resolve().parents[3]
+			install_dir = Path(__file__).parents[2] / "share" / "thymio_control" / "config"
+			for cfg_root in [install_dir, source_root / "thymio_control" / "config"]:
+				try:
+					cfg_file = cfg_root / "eeg_control_node.params.yaml"
+					with cfg_file.open("r", encoding="utf-8") as fhand:
+						doc = yaml.safe_load(fhand) or {}
+					params = doc.setdefault("/**", {}).setdefault("ros__parameters", {})
+					params["calib_offset"] = offset
+					params["calib_scale"] = scale
+					params["calibrate"] = False
+					with cfg_file.open("w", encoding="utf-8") as fhand:
+						yaml.safe_dump(doc, fhand, sort_keys=False, allow_unicode=False)
+					self.get_logger().info(f"CALIB: wrote {cfg_file}")
+				except Exception:
+					self.get_logger().error(f"CALIB: failed to write {cfg_root}")
 
 			# --- recreate policy ---
 			policy_name = str(self.get_parameter("policy").value)
