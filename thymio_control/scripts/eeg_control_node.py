@@ -185,10 +185,24 @@ class EegControlNode(Node):
 
 	def _finish_calibration(self) -> None:
 		"""Compute p5/p95 from collected samples and update the parameter file."""
+		import traceback
+		try:
+			self._finish_calibration_impl()
+		except Exception:
+			self.get_logger().error(
+				f"CALIB failed:\n{traceback.format_exc()}"
+			)
+			self._calibrate = False
+			self._calib_samples.clear()
+			self._calib_deadline = 0.0
+
+	def _finish_calibration_impl(self) -> None:
 		import numpy as np
 		import yaml
 
 		samples = np.array(self._calib_samples)
+		self.get_logger().info(f"CALIB: computing from {len(samples)} samples")
+
 		p5 = float(np.percentile(samples, 5))
 		p95 = float(np.percentile(samples, 95))
 		offset = round(p5, 4)
