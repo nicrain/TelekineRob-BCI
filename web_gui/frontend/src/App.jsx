@@ -389,7 +389,12 @@ export default function App() {
   const [thymioDevice, setThymioDevice]     = useState('ser:device=/dev/ttyACM0');
   const [showWaveform, setShowWaveform]     = useState(true);
   const [running, setRunning]               = useState(false);
+  const [calibrating, setCalibrating]        = useState(false);
+  const [calibCountdown, setCalibCountdown]  = useState(30);
+  const [calibOffset, setCalibOffset]        = useState(0);
+  const [calibScale, setCalibScale]          = useState(1);
   const [theme, setTheme]                   = useState(() => localStorage.getItem('theme') || 'dark');
+  const calibTimerRef                        = useRef(null);
 
   /* ── System status (ROS2 + Thymio) ──────────────────── */
   const [systemStatus, setSystemStatus] = useState({ ros_available: false, thymio_connected: false });
@@ -432,6 +437,8 @@ export default function App() {
             setEegProtocol('tcp');
           }
           if (cfg.eeg.file_path) setFilePath(cfg.eeg.file_path);
+          if (cfg.eeg.calib_offset != null) setCalibOffset(Number(cfg.eeg.calib_offset));
+          if (cfg.eeg.calib_scale != null) setCalibScale(Number(cfg.eeg.calib_scale));
         }
         if (cfg.pipeline) {
           if (cfg.pipeline.selected_channels) setSelectedChannels(cfg.pipeline.selected_channels);
@@ -542,19 +549,37 @@ export default function App() {
 
   const metricLabels = { alpha: 'Alpha (α)', tbr: 'TBR (θ/β)', ei: 'EI (β/(α+θ))' };
   const metricDataKey = { alpha: 'alpha', tbr: 'ratio', ei: 'focus' };
-  const featureOption = useMemo(() => ({
-    backgroundColor: 'transparent',
-    tooltip: { trigger: 'axis', backgroundColor: isDarkCharts ? '#fff' : '#2a2a2a', borderColor: isDarkCharts ? '#ddd' : '#444', textStyle: { color: isDarkCharts ? '#333' : '#ddd' } },
-    legend: { textStyle: { color: isDarkCharts ? '#555' : '#aaa' }, top: 2 },
-    grid: { left: 28, right: 16, top: 36, bottom: 24 },
-    xAxis: { type: 'category', data: series.t, axisLabel: { color: isDarkCharts ? '#999' : '#888', fontSize: 10 } },
-    yAxis: { type: 'value', axisLabel: { color: isDarkCharts ? '#999' : '#888', fontSize: 10 } },
-    series: [
-      { name: metricLabels[metric], type: 'line', smooth: true, showSymbol: false, data: series[metricDataKey[metric]] },
-    ],
-    color: ['#DA291C'],
-    animation: false,
-  }), [series, metric, isDarkCharts]);
+  const featureOption = useMemo(() => {
+    const showCalib = calibOffset !== 0 || calibScale !== 1;
+    const calibHigh = calibOffset + calibScale;
+    return {
+      backgroundColor: 'transparent',
+      tooltip: { trigger: 'axis', backgroundColor: isDarkCharts ? '#fff' : '#2a2a2a', borderColor: isDarkCharts ? '#ddd' : '#444', textStyle: { color: isDarkCharts ? '#333' : '#ddd' } },
+      legend: { textStyle: { color: isDarkCharts ? '#555' : '#aaa' }, top: 2 },
+      grid: { left: 28, right: 16, top: 36, bottom: 24 },
+      xAxis: { type: 'category', data: series.t, axisLabel: { color: isDarkCharts ? '#999' : '#888', fontSize: 10 } },
+      yAxis: { type: 'value', axisLabel: { color: isDarkCharts ? '#999' : '#888', fontSize: 10 } },
+      series: [
+        {
+          name: metricLabels[metric], type: 'line', smooth: true, showSymbol: false,
+          data: series[metricDataKey[metric]],
+          ...(showCalib ? {
+            markLine: {
+              silent: true, symbol: 'none',
+              lineStyle: { type: 'dashed', color: isDarkCharts ? '#888' : '#aaa', width: 1 },
+              label: { color: isDarkCharts ? '#888' : '#999', fontSize: 10, formatter: (p) => `p5=${p.value.toFixed(2)}` },
+              data: [
+                { yAxis: calibOffset, label: { formatter: `p5=${calibOffset.toFixed(2)}` } },
+                { yAxis: calibHigh, label: { formatter: `p95=${calibHigh.toFixed(2)}` } },
+              ],
+            },
+          } : {}),
+        },
+      ],
+      color: ['#DA291C'],
+      animation: false,
+    };
+  }, [series, metric, isDarkCharts, calibOffset, calibScale]);
 
   /* ── Build patch ─────────────────────────────────────── */
   function buildPatch() {
@@ -620,8 +645,22 @@ export default function App() {
     }
   }
 
+  function startCountdown() {
+    setCalibrating(true);
+    setCalibCountdown(30);
+    calibTimerRef.current = setInterval(() => {
+      setCalibCountdown((prev) => {
+        if (prev <= 1) { clearInterval(calibTimerRef.current); setCalibrating(false); return 30; }
+        return prev - 1;
+      });
+    }, 1000);
+  }
+
   async function stopSystem() {
     try {
+      clearInterval(calibTimerRef.current);
+      setCalibrating(false);
+      setCalibCountdown(30);
       await runAction('/api/system/stop', false);
     } finally {
       setRunning(false);
@@ -659,13 +698,18 @@ export default function App() {
           >
             {theme === 'dark' ? '☀' : '☾'}
           </button>
-          <button className="btn btn-cta" disabled={running} onClick={startSystem}>{running ? 'Running...' : 'Start'}</button>
-          <button className="btn btn-ghost" disabled={running} onClick={async () => {
-            const patch = buildPatch();
-            patch.eeg.calibrate = true;
-            await api.put('/api/config', { patch });
-            await startSystem();
-          }}>Calibrate</button>
+          <button className="btn btn-cta" disabled={running} onClick={startSystem}>
+            {running ? (calibrating ? `Calibrating... ${calibCountdown}s` : 'Running...') : 'Start'}
+          </button>
+          {(eegBrand === 'gtec_headband' || eegBrand === 'gtec_hybrid') && (
+            <button className="btn btn-ghost" disabled={running} onClick={async () => {
+              const patch = buildPatch();
+              patch.eeg.calibrate = true;
+              await api.put('/api/config', { patch });
+              startCountdown();
+              await startSystem();
+            }}>Calibrate</button>
+          )}
           <button className="btn btn-ghost" disabled={!running} onClick={stopSystem}>Stop</button>
         </div>
       </header>
