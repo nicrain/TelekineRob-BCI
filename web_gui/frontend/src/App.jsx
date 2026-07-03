@@ -567,10 +567,10 @@ export default function App() {
             markLine: {
               silent: true, symbol: 'none',
               lineStyle: { type: 'dashed', color: isDarkCharts ? '#888' : '#aaa', width: 1 },
-              label: { show: true, position: 'start', color: isDarkCharts ? '#888' : '#999', fontSize: 10 },
+              label: { position: 'insideStartTop', color: isDarkCharts ? '#888' : '#999', fontSize: 10 },
               data: [
-                { yAxis: calibOffset, name: 'p5' },
-                { yAxis: calibHigh, name: 'p95' },
+                { yAxis: calibOffset, name: `p5` },
+                { yAxis: calibHigh,  name: `p95` },
               ],
             },
           } : {}),
