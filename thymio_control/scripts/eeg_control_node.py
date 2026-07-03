@@ -282,9 +282,6 @@ class EegControlNode(Node):
 						"CALIB: collecting samples for metric={calib_key} (30s)"
 					)
 				if time.time() >= self._calib_deadline:
-				self.get_logger().info(
-					"CALIB: deadline reached — samples={len(self._calib_samples)}"
-				)
 					self._finish_calibration()
 			# ------------------------------------------------------------------
 
