@@ -550,7 +550,7 @@ export default function App() {
   const metricLabels = { alpha: 'Alpha (α)', tbr: 'TBR (θ/β)', ei: 'EI (β/(α+θ))' };
   const metricDataKey = { alpha: 'alpha', tbr: 'ratio', ei: 'focus' };
   const featureOption = useMemo(() => {
-    const showCalib = calibOffset !== 0 || calibScale !== 1;
+    const showCalib = calibrating || calibScale > 2;  // scale ≈ 1 when not calibrated
     const calibHigh = calibOffset + calibScale;
     return {
       backgroundColor: 'transparent',
@@ -567,10 +567,10 @@ export default function App() {
             markLine: {
               silent: true, symbol: 'none',
               lineStyle: { type: 'dashed', color: isDarkCharts ? '#888' : '#aaa', width: 1 },
-              label: { color: isDarkCharts ? '#888' : '#999', fontSize: 10, formatter: (p) => `p5=${p.value.toFixed(2)}` },
+              label: { show: true, position: 'start', color: isDarkCharts ? '#888' : '#999', fontSize: 10 },
               data: [
-                { yAxis: calibOffset, label: { formatter: `p5=${calibOffset.toFixed(2)}` } },
-                { yAxis: calibHigh, label: { formatter: `p95=${calibHigh.toFixed(2)}` } },
+                { yAxis: calibOffset, name: 'p5' },
+                { yAxis: calibHigh, name: 'p95' },
               ],
             },
           } : {}),
