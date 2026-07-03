@@ -236,8 +236,9 @@ class EegControlNode(Node):
 		self.policy = POLICIES[policy_name](offset=offset, scale=scale)
 
 		self.get_logger().info(
-			f"CALIB: saved offset={offset} scale={scale} — policy restarted"
-		)
+				f"CALIB: saved offset={offset} scale={scale} — stopping"
+			)
+
 
 	def _close_csv(self) -> None:
 		if self._csv_file is not None:
@@ -282,8 +283,9 @@ class EegControlNode(Node):
 			# ------------------------------------------------------------------
 
 			if has_band_features:
-				self.last_intents = self.policy.compute_intents(features)
-			else:
+				if not self._calibrate:
+					self.last_intents = self.policy.compute_intents(features)
+			elif not self._calibrate:
 				self.last_intents = {"speed_intent": 0.5, "steer_intent": 0.5}
 			self.last_msg_ts = time.time()
 			self._adapter_connected = True

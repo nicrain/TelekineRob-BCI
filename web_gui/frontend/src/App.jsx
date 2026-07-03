@@ -569,13 +569,14 @@ export default function App() {
       eeg: {
         input:           inputMap[inputMode] || 'mock',
         policy:          metric,
+        calibrate:       false,
         tcp_control_mode: 'feature',
         tcp_host:        '127.0.0.1',
         tcp_port:        1234,
         file_path:       filePath,
         lsl_stream_type: 'EEG',
         lsl_timeout:     8.0,
-	        lsl_source_id:   eegBrand === 'gtec_headband' ? 'gtec_bci_core4' : eegBrand === 'gtec_hybrid' ? 'gtec_hybrid_black' : '',
+        lsl_source_id:   eegBrand === 'gtec_headband' ? 'gtec_bci_core4' : eegBrand === 'gtec_hybrid' ? 'gtec_hybrid_black' : '',
         brand:           eegBrand,
       },
       launch: {
