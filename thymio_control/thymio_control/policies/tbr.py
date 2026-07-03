@@ -30,8 +30,10 @@ class TbrPolicy(Policy):
     steer_gain: float = 1.1
     ema_alpha:  float = 0.35
 
-    def __init__(self) -> None:
+    def __init__(self, offset: float = 0.207, scale: float = 2.215) -> None:
         super().__init__()
+        self.tbr_offset = offset
+        self.tbr_scale = scale
         self._tbr_smooth: float = 0.0
         self._primed: bool = False
 

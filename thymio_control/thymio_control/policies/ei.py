@@ -34,8 +34,10 @@ class EiPolicy(Policy):
     steer_gain:   float = 1.1
     ema_alpha:    float = 0.35
 
-    def __init__(self) -> None:
+    def __init__(self, offset: float = 0.323, scale: float = 2.036) -> None:
         super().__init__()
+        self.focus_offset = offset
+        self.focus_scale = scale
         self._bat_smooth: float = 0.0
         self._primed: bool = False
 

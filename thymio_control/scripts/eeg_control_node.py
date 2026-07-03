@@ -51,6 +51,9 @@ class EegControlNode(Node):
 		# 输入与策略参数
 		self.declare_parameter("input", "mock")
 		self.declare_parameter("policy", "tbr")
+		self.declare_parameter("calibrate", False)
+		self.declare_parameter("calib_offset", 0.0)
+		self.declare_parameter("calib_scale", 1.0)
 		self.declare_parameter("tcp_control_mode", "feature")
 		self.declare_parameter("tcp_host", "0.0.0.0")
 		self.declare_parameter("tcp_port", 6001)
@@ -96,7 +99,14 @@ class EegControlNode(Node):
 			file_path=self.get_parameter("file_path").value,
 		)
 		self.adapter = build_adapter(adapter_args)
-		self.policy = POLICIES[policy_name]()
+
+		calib_offset = float(self.get_parameter("calib_offset").value)
+		calib_scale = float(self.get_parameter("calib_scale").value)
+		self._calibrate = bool(self.get_parameter("calibrate").value)
+		self._calib_samples: list[float] = []
+		self._calib_deadline: float = 0.0
+
+		self.policy = POLICIES[policy_name](offset=calib_offset, scale=calib_scale)
 
 		self.pub = self.create_publisher(Twist, self.get_parameter("cmd_topic").value, 10)
 		self.analysis_pub = self.create_publisher(String, self.get_parameter("analysis_topic").value, 10)
@@ -173,6 +183,61 @@ class EegControlNode(Node):
 			)
 		)
 
+	def _finish_calibration(self) -> None:
+		"""Compute p5/p95 from collected samples and update the parameter file."""
+		import numpy as np
+		import yaml
+
+		samples = np.array(self._calib_samples)
+		p5 = float(np.percentile(samples, 5))
+		p95 = float(np.percentile(samples, 95))
+		offset = round(p5, 4)
+		scale = round(p95 - p5, 4)
+
+		self.get_logger().info(
+			f"CALIB: n={len(samples)} p5={p5:.4f} p95={p95:.4f} "
+			f"offset={offset} scale={scale}"
+		)
+
+		# Update ROS2 parameters in-memory
+		try:
+			from rclpy.parameter import Parameter
+			self.set_parameters([
+				Parameter("calib_offset", Parameter.Type.DOUBLE, offset),
+				Parameter("calib_scale", Parameter.Type.DOUBLE, scale),
+				Parameter("calibrate", Parameter.Type.BOOL, False),
+			])
+		except Exception:
+			pass
+
+		# Write back to YAML so calibration survives restart
+		from pathlib import Path
+		repo_root = Path(__file__).resolve().parents[3]
+		params_file = repo_root / "thymio_control" / "config" / "eeg_control_node.params.yaml"
+		try:
+			raw = params_file.read_text(encoding="utf-8")
+		except Exception:
+			raw = "/**:\n  ros__parameters:\n    calibrate: false\n"
+
+		# Simple in-place YAML update (avoids reordering / reformatting)
+		import re
+		raw = re.sub(r"(calib_offset:\s*)[\d.]+", rf"\g<1>{offset}", raw)
+		raw = re.sub(r"(calib_scale:\s*)[\d.]+", rf"\g<1>{scale}", raw)
+		raw = re.sub(r"(calibrate:\s*)true", r"\g<1>false", raw)
+		params_file.write_text(raw, encoding="utf-8")
+
+		self._calibrate = False
+		self._calib_samples.clear()
+		self._calib_deadline = 0.0
+
+		# Recreate policy with new calibration values
+		policy_name = str(self.get_parameter("policy").value)
+		self.policy = POLICIES[policy_name](offset=offset, scale=scale)
+
+		self.get_logger().info(
+			f"CALIB: saved offset={offset} scale={scale} — policy restarted"
+		)
+
 	def _close_csv(self) -> None:
 		if self._csv_file is not None:
 			try:
@@ -200,6 +265,21 @@ class EegControlNode(Node):
 			has_feature = isinstance(feature_value, (int, float))
 			has_band_features = all(key in frame.metrics for key in ("alpha", "theta", "beta"))
 			features = enrich_features(frame.metrics) if has_band_features else dict(frame.metrics)
+
+			# ------------------------------------------------------------------
+			# Calibration: collect metric samples for 30 s, then save p5/p95
+			# ------------------------------------------------------------------
+			_CALIB_METRIC = {"tbr": "theta_beta", "ei": "beta_alpha_theta", "alpha": "alpha"}
+			if self._calibrate and has_band_features:
+				calib_key = _CALIB_METRIC.get(str(self.get_parameter("policy").value))
+				if calib_key and calib_key in features:
+					self._calib_samples.append(float(features[calib_key]))
+				if self._calib_deadline == 0.0:
+					self._calib_deadline = time.time() + 30.0
+				if time.time() >= self._calib_deadline:
+					self._finish_calibration()
+			# ------------------------------------------------------------------
+
 			if has_band_features:
 				self.last_intents = self.policy.compute_intents(features)
 			else:

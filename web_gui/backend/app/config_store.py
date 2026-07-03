@@ -44,6 +44,9 @@ def _load_defaults() -> AppConfig:
     ros_params = eeg_root.get("/**", {}).get("ros__parameters", {})
     cfg.eeg.input = str(ros_params.get("input", cfg.eeg.input))
     cfg.eeg.policy = str(ros_params.get("policy", cfg.eeg.policy))
+    cfg.eeg.calibrate = bool(ros_params.get("calibrate", cfg.eeg.calibrate))
+    cfg.eeg.calib_offset = float(ros_params.get("calib_offset", cfg.eeg.calib_offset))
+    cfg.eeg.calib_scale = float(ros_params.get("calib_scale", cfg.eeg.calib_scale))
     cfg.eeg.tcp_control_mode = str(ros_params.get("tcp_control_mode", cfg.eeg.tcp_control_mode))
     cfg.eeg.tcp_host = str(ros_params.get("tcp_host", cfg.eeg.tcp_host))
     cfg.eeg.tcp_port = int(ros_params.get("tcp_port", cfg.eeg.tcp_port))
@@ -92,6 +95,9 @@ def _persist_config(cfg: AppConfig) -> None:
         {
             "input": str(cfg.eeg.input),
             "policy": str(cfg.eeg.policy),
+            "calibrate": bool(cfg.eeg.calibrate),
+            "calib_offset": float(cfg.eeg.calib_offset),
+            "calib_scale": float(cfg.eeg.calib_scale),
             "tcp_control_mode": str(cfg.eeg.tcp_control_mode),
             "tcp_host": str(cfg.eeg.tcp_host),
             "tcp_port": int(cfg.eeg.tcp_port),

@@ -659,6 +659,12 @@ export default function App() {
             {theme === 'dark' ? '☀' : '☾'}
           </button>
           <button className="btn btn-cta" disabled={running} onClick={startSystem}>{running ? 'Running...' : 'Start'}</button>
+          <button className="btn btn-ghost" disabled={running} onClick={async () => {
+            const patch = buildPatch();
+            patch.eeg.calibrate = true;
+            await api.put('/api/config', { patch });
+            await startSystem();
+          }}>Calibrate</button>
           <button className="btn btn-ghost" disabled={!running} onClick={stopSystem}>Stop</button>
         </div>
       </header>

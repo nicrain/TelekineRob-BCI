@@ -19,6 +19,9 @@ class LaunchConfig(BaseModel):
 class EegConfig(BaseModel):
     input: Literal["mock", "tcp_client", "tcp_file", "lsl", "file"] = "mock"
     policy: Literal["ei", "tbr", "alpha"] = "tbr"
+    calibrate: bool = False
+    calib_offset: float = 0.0
+    calib_scale: float = 1.0
     tcp_control_mode: Literal["feature", "movement"] = "feature"
     tcp_host: str = "127.0.0.1"
     tcp_port: int = 6001

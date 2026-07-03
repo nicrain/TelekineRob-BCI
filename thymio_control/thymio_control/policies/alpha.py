@@ -33,8 +33,10 @@ class AlphaPolicy(Policy):
     alpha_scale:  float = 7.0    # p95 - p5
     ema_alpha:    float = 0.35
 
-    def __init__(self) -> None:
+    def __init__(self, offset: float = 0.5, scale: float = 7.0) -> None:
         super().__init__()
+        self.alpha_offset = offset
+        self.alpha_scale = scale
         self._alpha_smooth: float = 0.0
         self._primed: bool = False
 
