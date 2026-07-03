@@ -633,9 +633,9 @@ export default function App() {
     }
   }
 
-  async function startSystem() {
+  async function startSystem(skipSave) {
     try {
-      await saveConfig();
+      if (!skipSave) await saveConfig();
       await runAction('/api/system/start', false);
       setRunning(true);
     } catch (err) {
@@ -707,7 +707,7 @@ export default function App() {
               patch.eeg.calibrate = true;
               await api.put('/api/config', { patch });
               startCountdown();
-              await startSystem();
+              await startSystem(true);  // skip saveConfig — already saved with calibrate=true
             }}>Calibrate</button>
           )}
           <button className="btn btn-ghost" disabled={!running} onClick={stopSystem}>Stop</button>
