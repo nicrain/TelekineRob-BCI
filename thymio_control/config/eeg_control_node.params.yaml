@@ -10,6 +10,9 @@
     lsl_stream_type: EEG
     lsl_timeout: 8.0
     lsl_source_id: ''
+    calibrate: false
+    calib_offset: 0.0
+    calib_scale: 1.0
     cmd_topic: /cmd_vel
     analysis_topic: /eeg_analysis
     publish_hz: 20.0

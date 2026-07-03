@@ -215,16 +215,17 @@ class EegControlNode(Node):
 		repo_root = Path(__file__).resolve().parents[3]
 		params_file = repo_root / "thymio_control" / "config" / "eeg_control_node.params.yaml"
 		try:
-			raw = params_file.read_text(encoding="utf-8")
+			with params_file.open("r", encoding="utf-8") as f:
+				doc = yaml.safe_load(f) or {}
 		except Exception:
-			raw = "/**:\n  ros__parameters:\n    calibrate: false\n"
+			doc = {}
+		params = doc.setdefault("/**", {}).setdefault("ros__parameters", {})
+		params["calib_offset"] = offset
+		params["calib_scale"] = scale
+		params["calibrate"] = False
+		with params_file.open("w", encoding="utf-8") as f:
+			yaml.safe_dump(doc, f, sort_keys=False, allow_unicode=False)
 
-		# Simple in-place YAML update (avoids reordering / reformatting)
-		import re
-		raw = re.sub(r"(calib_offset:\s*)[\d.]+", rf"\g<1>{offset}", raw)
-		raw = re.sub(r"(calib_scale:\s*)[\d.]+", rf"\g<1>{scale}", raw)
-		raw = re.sub(r"(calibrate:\s*)true", r"\g<1>false", raw)
-		params_file.write_text(raw, encoding="utf-8")
 
 		self._calibrate = False
 		self._calib_samples.clear()
