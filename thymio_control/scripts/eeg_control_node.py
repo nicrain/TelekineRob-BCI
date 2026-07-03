@@ -286,9 +286,8 @@ class EegControlNode(Node):
 			# ------------------------------------------------------------------
 
 			if has_band_features:
-				if not self._calibrate:
-					self.last_intents = self.policy.compute_intents(features)
-			elif not self._calibrate:
+				self.last_intents = self.policy.compute_intents(features)
+			else:
 				self.last_intents = {"speed_intent": 0.5, "steer_intent": 0.5}
 			self.last_msg_ts = time.time()
 			self._adapter_connected = True
@@ -472,7 +471,8 @@ class EegControlNode(Node):
 			if not has_band_features:
 				self.pub.publish(Twist())
 				return
-			self.pub.publish(self._intents_to_twist(self.last_intents))
+			if not self._calibrate:
+					self.pub.publish(self._intents_to_twist(self.last_intents))
 			if self.verbose:
 				self.get_logger().info(
 					(
