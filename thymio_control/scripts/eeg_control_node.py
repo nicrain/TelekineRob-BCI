@@ -185,73 +185,65 @@ class EegControlNode(Node):
 
 	def _finish_calibration(self) -> None:
 		"""Compute p5/p95 from collected samples and update the parameter file."""
+		import numpy as np
+		import yaml
 		import traceback
+		from pathlib import Path
+
 		try:
-			self._finish_calibration_impl()
-		except Exception:
-			self.get_logger().error(
-				f"CALIB failed:\n{traceback.format_exc()}"
+			# --- compute p5/p95 ---
+			samples = np.array(self._calib_samples)
+			n = len(samples)
+			self.get_logger().info(f"CALIB: {n} samples collected")
+			if n < 2:
+				self.get_logger().error("CALIB: not enough samples — abort")
+				return
+			p5 = float(np.percentile(samples, 5))
+			p95 = float(np.percentile(samples, 95))
+			offset = round(p5, 4)
+			scale = round(max(p95 - p5, 0.001), 4)
+
+			self.get_logger().info(
+				f"CALIB: p5={p5:.4f} p95={p95:.4f} offset={offset} scale={scale}"
 			)
+
+			# --- update ROS2 params ---
+			try:
+				from rclpy.parameter import Parameter
+				self.set_parameters([
+					Parameter("calib_offset", Parameter.Type.DOUBLE, offset),
+					Parameter("calib_scale", Parameter.Type.DOUBLE, scale),
+					Parameter("calibrate", Parameter.Type.BOOL, False),
+				])
+			except Exception:
+				pass
+
+			# --- write YAML ---
+			repo_root = Path(__file__).resolve().parents[3]
+			params_file = repo_root / "thymio_control" / "config" / "eeg_control_node.params.yaml"
+			try:
+				with params_file.open("r", encoding="utf-8") as f:
+					doc = yaml.safe_load(f) or {}
+			except Exception:
+				doc = {}
+			params = doc.setdefault("/**", {}).setdefault("ros__parameters", {})
+			params["calib_offset"] = offset
+			params["calib_scale"] = scale
+			params["calibrate"] = False
+			with params_file.open("w", encoding="utf-8") as f:
+				yaml.safe_dump(doc, f, sort_keys=False, allow_unicode=False)
+			self.get_logger().info(f"CALIB: wrote {params_file}")
+
+			# --- recreate policy ---
+			policy_name = str(self.get_parameter("policy").value)
+			self.policy = POLICIES[policy_name](offset=offset, scale=scale)
+
+		except Exception:
+			self.get_logger().error(f"CALIB failed:\n{traceback.format_exc()}")
+		finally:
 			self._calibrate = False
 			self._calib_samples.clear()
 			self._calib_deadline = 0.0
-
-	def _finish_calibration_impl(self) -> None:
-		import numpy as np
-		import yaml
-
-		samples = np.array(self._calib_samples)
-		self.get_logger().info(f"CALIB: computing from {len(samples)} samples")
-
-		p5 = float(np.percentile(samples, 5))
-		p95 = float(np.percentile(samples, 95))
-		offset = round(p5, 4)
-		scale = round(p95 - p5, 4)
-
-		self.get_logger().info(
-			f"CALIB: n={len(samples)} p5={p5:.4f} p95={p95:.4f} "
-			f"offset={offset} scale={scale}"
-		)
-
-		# Update ROS2 parameters in-memory
-		try:
-			from rclpy.parameter import Parameter
-			self.set_parameters([
-				Parameter("calib_offset", Parameter.Type.DOUBLE, offset),
-				Parameter("calib_scale", Parameter.Type.DOUBLE, scale),
-				Parameter("calibrate", Parameter.Type.BOOL, False),
-			])
-		except Exception:
-			pass
-
-		# Write back to YAML so calibration survives restart
-		from pathlib import Path
-		repo_root = Path(__file__).resolve().parents[3]
-		params_file = repo_root / "thymio_control" / "config" / "eeg_control_node.params.yaml"
-		try:
-			with params_file.open("r", encoding="utf-8") as f:
-				doc = yaml.safe_load(f) or {}
-		except Exception:
-			doc = {}
-		params = doc.setdefault("/**", {}).setdefault("ros__parameters", {})
-		params["calib_offset"] = offset
-		params["calib_scale"] = scale
-		params["calibrate"] = False
-		with params_file.open("w", encoding="utf-8") as f:
-			yaml.safe_dump(doc, f, sort_keys=False, allow_unicode=False)
-
-
-		self._calibrate = False
-		self._calib_samples.clear()
-		self._calib_deadline = 0.0
-
-		# Recreate policy with new calibration values
-		policy_name = str(self.get_parameter("policy").value)
-		self.policy = POLICIES[policy_name](offset=offset, scale=scale)
-
-		self.get_logger().info(
-				f"CALIB: saved offset={offset} scale={scale} — stopping"
-			)
 
 
 	def _close_csv(self) -> None:
