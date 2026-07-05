@@ -167,7 +167,7 @@ class RawLslAdapter(BaseAdapter):
         metrics = band_power_to_metrics(avg_bp, source_unit=self._cfg.source_unit)
 
         # Per-channel lateralisation metrics
-        # Expose per-channel alpha/theta/beta so FocusPolicy can use
+        # Expose per-channel alpha/theta/beta so EiPolicy can use
         # left_alpha / right_alpha for lateralisation without discarding
         # frontal/parietal spatial information.
         metrics.update(

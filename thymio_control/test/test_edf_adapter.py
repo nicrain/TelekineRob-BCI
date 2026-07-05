@@ -270,7 +270,7 @@ class TestBuildPipeline:
 
         class Args:
             input = "mock"
-            policy = "focus"
+            policy = "ei"
 
         result = build_pipeline(Args())
         assert len(result) == 3
@@ -279,14 +279,14 @@ class TestBuildPipeline:
 
     def test_build_pipeline_selects_correct_policy(self):
         from thymio_control.pipeline import build_pipeline
-        from thymio_control.policies.theta_beta import ThetaBetaPolicy
+        from thymio_control.policies.tbr import TbrPolicy
 
         class Args:
             input = "mock"
-            policy = "theta_beta"
+            policy = "tbr"
 
         _, _, policy = build_pipeline(Args())
-        assert isinstance(policy, ThetaBetaPolicy)
+        assert isinstance(policy, TbrPolicy)
 
     def test_build_pipeline_invalid_policy_raises(self):
         from thymio_control.pipeline import build_pipeline
@@ -303,7 +303,7 @@ class TestBuildPipeline:
 
         class Args:
             input = "mock"
-            policy = "focus"
+            policy = "ei"
 
         _, processor, _ = build_pipeline(Args())
         raw = {"alpha": 1.0, "theta": 0.5, "beta": 2.0, "delta": 0.3, "gamma": 0.1}
@@ -316,7 +316,7 @@ class TestBuildPipeline:
 
         class Args:
             input = "mock"
-            policy = "theta_beta"
+            policy = "tbr"
 
         adapter, processor, policy = build_pipeline(Args())
 

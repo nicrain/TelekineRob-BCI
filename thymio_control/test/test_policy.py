@@ -1,6 +1,8 @@
 import pytest
 
-from thymio_control.eeg_control_pipeline import EiPolicy, TbrPolicy, AlphaPolicy
+from thymio_control.policies.ei import EiPolicy
+from thymio_control.policies.tbr import TbrPolicy
+from thymio_control.policies.alpha import AlphaPolicy
 
 
 def test_focus_policy_clips_speed_and_steer_bounds():
