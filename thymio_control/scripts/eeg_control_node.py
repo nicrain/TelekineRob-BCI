@@ -179,6 +179,8 @@ class EegControlNode(Node):
         self.last_msg_ts = 0.0
         self._adapter_connected = False
         self.last_intents = {"speed_intent": 0.5, "steer_intent": 0.5}
+        self.last_mode = "intents"
+        self.last_twist = Twist()
 
         hz = float(self.get_parameter("publish_hz").value)
         self.create_timer(1.0 / max(hz, 1e-6), self._tick)
@@ -202,7 +204,7 @@ class EegControlNode(Node):
             samples = np.array(self._calib_samples)
             n = len(samples)
             self.get_logger().info(f"CALIB: {n} samples collected")
-            if n < 2:
+            if n < 60:
                 self.get_logger().error("CALIB: not enough samples — abort")
                 return
             p5 = float(np.percentile(samples, 5))
@@ -319,7 +321,7 @@ class EegControlNode(Node):
                     max_forward_speed=self.max_forward_speed,
                     turn_angular_speed=self.turn_angular_speed,
                     steer_deadzone=self.steer_deadzone,
-                    last_twist=getattr(self, "last_twist", Twist()),
+                    last_twist=self.last_twist,
                 )
                 command_linear_x = float(twist.linear.x)
                 command_angular_z = float(twist.angular.z)
@@ -515,8 +517,8 @@ class EegControlNode(Node):
                 self.pub.publish(Twist())
             return
 
-        if getattr(self, "last_mode", "intents") in ("movement", "feature"):
-            self.pub.publish(getattr(self, "last_twist", Twist()))
+        if self.last_mode in ("movement", "feature"):
+            self.pub.publish(self.last_twist)
         else:
             twist = self._intents_to_twist(self.last_intents)
             self.pub.publish(twist)
