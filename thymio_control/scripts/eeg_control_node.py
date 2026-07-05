@@ -45,6 +45,13 @@ class _AdapterArgs:
 
 
 class EegControlNode(Node):
+    # Maps policy name → the feature key to collect during calibration
+    _CALIB_METRIC: dict[str, str] = {
+        "tbr":   "theta_beta",
+        "ei":    "beta_alpha_theta",
+        "alpha": "alpha",
+    }
+
     def __init__(self) -> None:
         super().__init__("eeg_control_node")
 
@@ -207,7 +214,7 @@ class EegControlNode(Node):
                 f"CALIB: p5={p5:.4f} p95={p95:.4f} offset={offset} scale={scale}"
             )
 
-            # --- update ROS2 params ---
+            # --- update ROS2 params (best-effort; node continues even if this fails) ---
             try:
                 from rclpy.parameter import Parameter
                 self.set_parameters([
@@ -215,8 +222,10 @@ class EegControlNode(Node):
                     Parameter("calib_scale", Parameter.Type.DOUBLE, scale),
                     Parameter("calibrate", Parameter.Type.BOOL, False),
                 ])
-            except Exception:
-                pass
+            except Exception as exc:
+                self.get_logger().warning(
+                    f"CALIB: set_parameters() failed (in-memory params not updated): {exc}"
+                )
 
             # --- write YAML to install copy AND source tree ---
             source_root = Path(__file__).resolve().parents[3]
@@ -233,8 +242,10 @@ class EegControlNode(Node):
                     with cfg_file.open("w", encoding="utf-8") as fhand:
                         yaml.safe_dump(doc, fhand, sort_keys=False, allow_unicode=False)
                     self.get_logger().info(f"CALIB: wrote {cfg_file}")
-                except Exception:
-                    self.get_logger().error(f"CALIB: failed to write {cfg_root}")
+                except Exception as exc:
+                    self.get_logger().error(
+                        f"CALIB: failed to write {cfg_root}: {exc}"
+                    )
 
             # --- recreate policy ---
             policy_name = str(self.get_parameter("policy").value)
@@ -279,15 +290,14 @@ class EegControlNode(Node):
             # ------------------------------------------------------------------
             # Calibration: collect metric samples for 30 s, then save p5/p95
             # ------------------------------------------------------------------
-            _CALIB_METRIC = {"tbr": "theta_beta", "ei": "beta_alpha_theta", "alpha": "alpha"}
             if self._calibrate and has_band_features:
-                calib_key = _CALIB_METRIC.get(str(self.get_parameter("policy").value))
+                calib_key = self._CALIB_METRIC.get(str(self.get_parameter("policy").value))
                 if calib_key and calib_key in features:
                     self._calib_samples.append(float(features[calib_key]))
                 if self._calib_deadline == 0.0:
                     self._calib_deadline = time.time() + 30.0
                     self.get_logger().info(
-                        "CALIB: collecting samples for metric={calib_key} (30s)"
+                        f"CALIB: collecting samples for metric={calib_key} (30s)"
                     )
                 if time.time() >= self._calib_deadline:
                     self._finish_calibration()
