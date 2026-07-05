@@ -23,7 +23,7 @@ from thymio_control.processors.band_power import (
     DSPConfig,
     StreamingBandPowerExtractor,
     band_power_to_metrics,
-    convert_power_to_uv2,
+    per_channel_metrics,
 )
 
 _log = logging.getLogger(__name__)
@@ -223,7 +223,7 @@ class EdfFileAdapter(BaseAdapter):
         metrics = band_power_to_metrics(avg_bp, source_unit=self._cfg.source_unit)
 
         # Per-channel metrics
-        metrics.update(self._per_channel_metrics(latest, self._cfg.source_unit))
+        metrics.update(per_channel_metrics(self._channel_labels, latest, self._cfg.source_unit))
 
         self._last_yield = time.time()
         return EegFrame(ts=self._last_yield, source="edf_file", metrics=metrics)
@@ -242,45 +242,3 @@ class EdfFileAdapter(BaseAdapter):
     # Private
     # ------------------------------------------------------------------
 
-    def _per_channel_metrics(
-        self,
-        frame_bps: Dict[int, BandPowers],
-        source_unit: str,
-    ) -> Dict[str, float]:
-        """Build per-channel alpha/theta/beta keys (same logic as RawLslAdapter)."""
-        out: Dict[str, float] = {}
-        left_alphas:  List[float] = []
-        right_alphas: List[float] = []
-        left_thetas:  List[float] = []
-        right_thetas: List[float] = []
-
-        for ch_idx, bp in frame_bps.items():
-            label = (
-                self._channel_labels[ch_idx]
-                if ch_idx < len(self._channel_labels)
-                else f"ch{ch_idx}"
-            )
-            a = convert_power_to_uv2(bp.alpha, source_unit)
-            t = convert_power_to_uv2(bp.theta, source_unit)
-            b = convert_power_to_uv2(bp.beta,  source_unit)
-            out[f"alpha_{label}"] = a
-            out[f"theta_{label}"] = t
-            out[f"beta_{label}"]  = b
-
-            if any(s in label for s in ("1", "3", "7")):
-                left_alphas.append(a)
-                left_thetas.append(t)
-            elif any(s in label for s in ("2", "4", "8")):
-                right_alphas.append(a)
-                right_thetas.append(t)
-
-        if left_alphas:
-            out["left_alpha"] = sum(left_alphas) / len(left_alphas)
-        if right_alphas:
-            out["right_alpha"] = sum(right_alphas) / len(right_alphas)
-        if left_thetas:
-            out["left_theta"] = sum(left_thetas) / len(left_thetas)
-        if right_thetas:
-            out["right_theta"] = sum(right_thetas) / len(right_thetas)
-
-        return out

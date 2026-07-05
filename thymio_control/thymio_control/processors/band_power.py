@@ -473,3 +473,63 @@ class StreamingBandPowerExtractor:
             self._buf[:, :keep] = self._buf[:, self._hop_samples: self._window_samples]
         self._buf_len   = keep
         self._since_hop = 0
+
+
+# ---------------------------------------------------------------------------
+# Shared helper — used by RawLslAdapter and EdfFileAdapter
+# ---------------------------------------------------------------------------
+
+def per_channel_metrics(
+    channel_labels: list[str],
+    frame_bps: dict[int, BandPowers],
+    source_unit: str,
+) -> dict[str, float]:
+    """Build per-channel alpha/theta/beta keys using channel labels.
+
+    For example, with labels ``["Fz", "C3", "Cz", "C4", "Pz"]`` this emits
+    ``alpha_Fz``, ``theta_C3``, ``alpha_C3``, ``alpha_C4``, … allowing the
+    policy layer to compute left/right asymmetry without losing spatial
+    information.
+
+    It also synthesises ``left_alpha`` and ``right_alpha`` as the mean of
+    channels whose labels contain ``"3"`` (left) and ``"4"`` (right)
+    respectively, for compatibility with ``enrich_features``.
+    """
+    from typing import List  # noqa: PLC0415
+
+    out: dict[str, float] = {}
+    left_alphas:  List[float] = []
+    right_alphas: List[float] = []
+    left_thetas:  List[float] = []
+    right_thetas: List[float] = []
+
+    for ch_idx, bp in frame_bps.items():
+        label = (
+            channel_labels[ch_idx]
+            if ch_idx < len(channel_labels)
+            else f"ch{ch_idx}"
+        )
+        a = convert_power_to_uv2(bp.alpha, source_unit)
+        t = convert_power_to_uv2(bp.theta, source_unit)
+        b = convert_power_to_uv2(bp.beta,  source_unit)
+        out[f"alpha_{label}"] = a
+        out[f"theta_{label}"] = t
+        out[f"beta_{label}"]  = b
+
+        if any(s in label for s in ("1", "3", "7")):
+            left_alphas.append(a)
+            left_thetas.append(t)
+        elif any(s in label for s in ("2", "4", "8")):
+            right_alphas.append(a)
+            right_thetas.append(t)
+
+    if left_alphas:
+        out["left_alpha"] = sum(left_alphas) / len(left_alphas)
+    if right_alphas:
+        out["right_alpha"] = sum(right_alphas) / len(right_alphas)
+    if left_thetas:
+        out["left_theta"] = sum(left_thetas) / len(left_thetas)
+    if right_thetas:
+        out["right_theta"] = sum(right_thetas) / len(right_thetas)
+
+    return out
