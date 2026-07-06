@@ -672,6 +672,7 @@ export default function App() {
 
   async function startSystem(skipSave) {
     try {
+      await runAction('/api/system/stop', false);  // kill old processes, keep calib state
       if (!skipSave) await saveConfig();
       // Re-read calib values (may have been updated by a previous calibration run)
       const r = await api.get('/api/config', { params: { reload: true } });
@@ -760,7 +761,7 @@ export default function App() {
               await startSystem(true);  // skip saveConfig — already saved with calibrate=true
             }}>Calibrate</button>
           )}
-          <button className="btn btn-ghost" disabled={!running} onClick={stopSystem}>Stop</button>
+          <button className="btn btn-ghost" disabled={!running} onClick={() => stopSystem()}>Stop</button>
         </div>
       </header>
 
