@@ -171,6 +171,8 @@ _KILL_PATTERNS = [
     "parameter_bridge",
     "gazebo_camera_bridge",
     "robot_state_publisher",
+    "asebaros",
+    "thymio_driver",
 ]
 
 
