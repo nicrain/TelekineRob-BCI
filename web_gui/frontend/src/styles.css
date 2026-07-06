@@ -657,6 +657,15 @@ body {
   border-color: var(--f-btn-ghost-hover-bc);
 }
 
+.btn:disabled,
+.btn-cta:disabled,
+.btn-ghost:disabled,
+.btn-danger:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 .btn:focus {
   outline: 2px solid var(--f-red);
   outline-offset: 2px;
