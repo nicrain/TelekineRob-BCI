@@ -757,8 +757,8 @@ export default function App() {
               const patch = buildPatch();
               patch.eeg.calibrate = true;
               await api.put('/api/config', { patch });
-              startCountdown();
-              await startSystem(true);  // skip saveConfig — already saved with calibrate=true
+              await startSystem(true);  // stop old + start new (skip save — already saved)
+              startCountdown();         // begin calibration states AFTER system is running
             }}>Calibrate</button>
           )}
           <button className="btn btn-ghost" disabled={!running} onClick={stopSystem}>Stop</button>
