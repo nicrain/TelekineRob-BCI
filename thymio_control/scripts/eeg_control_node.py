@@ -517,11 +517,12 @@ class EegControlNode(Node):
                 self.pub.publish(Twist())
             return
 
-        if self.last_mode in ("movement", "feature"):
-            self.pub.publish(self.last_twist)
-        else:
-            twist = self._intents_to_twist(self.last_intents)
-            self.pub.publish(twist)
+        if not self._calibrate:
+            if self.last_mode in ("movement", "feature"):
+                self.pub.publish(self.last_twist)
+            else:
+                twist = self._intents_to_twist(self.last_intents)
+                self.pub.publish(twist)
 
     def _intents_to_twist(self, intents) -> Twist:
         speed_intent = clip01(float(intents.get("speed_intent", 0.0)))
