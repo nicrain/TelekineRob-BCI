@@ -636,6 +636,13 @@ export default function App() {
   async function startSystem(skipSave) {
     try {
       if (!skipSave) await saveConfig();
+      // Re-read calib values (may have been updated by a previous calibration run)
+      const r = await api.get('/api/config');
+      const eeg = r.data?.config?.eeg;
+      if (eeg) {
+        if (eeg.calib_offset != null) setCalibOffset(Number(eeg.calib_offset));
+        if (eeg.calib_scale != null) setCalibScale(Number(eeg.calib_scale));
+      }
       await runAction('/api/system/start', false);
       setRunning(true);
     } catch (err) {
@@ -650,7 +657,19 @@ export default function App() {
     setCalibCountdown(30);
     calibTimerRef.current = setInterval(() => {
       setCalibCountdown((prev) => {
-        if (prev <= 1) { clearInterval(calibTimerRef.current); setCalibrating(false); return 30; }
+        if (prev <= 1) {
+          clearInterval(calibTimerRef.current);
+          setCalibrating(false);
+          // Re-fetch calib values after calibration completes
+          api.get('/api/config').then(r => {
+            const eeg = r.data?.config?.eeg;
+            if (eeg) {
+              if (eeg.calib_offset != null) setCalibOffset(Number(eeg.calib_offset));
+              if (eeg.calib_scale != null) setCalibScale(Number(eeg.calib_scale));
+            }
+          }).catch(() => {});
+          return 30;
+        }
         return prev - 1;
       });
     }, 1000);
