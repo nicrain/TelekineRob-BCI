@@ -672,7 +672,7 @@ export default function App() {
 
   async function startSystem(skipSave) {
     try {
-      await stopSystem();
+      await stopSystem(true);  // stop ROS only, keep calib state intact
       if (!skipSave) await saveConfig();
       // Re-read calib values (may have been updated by a previous calibration run)
       const r = await api.get('/api/config', { params: { reload: true } });
@@ -705,16 +705,18 @@ export default function App() {
     setCalibCountdown(30);
   }
 
-  async function stopSystem() {
+  async function stopSystem(skipState) {
     try {
-      clearInterval(calibTimerRef.current);
-      calibWaitingRef.current = false;
-      setCalibrating(false);
-      setCalibPhase(null);
-      setCalibCountdown(30);
+      if (!skipState) {
+        clearInterval(calibTimerRef.current);
+        calibWaitingRef.current = false;
+        setCalibrating(false);
+        setCalibPhase(null);
+        setCalibCountdown(30);
+      }
       await runAction('/api/system/stop', false);
     } finally {
-      setRunning(false);
+      if (!skipState) setRunning(false);
     }
   }
 
@@ -761,7 +763,7 @@ export default function App() {
               startCountdown();         // begin calibration states AFTER system is running
             }}>Calibrate</button>
           )}
-          <button className="btn btn-ghost" disabled={!running} onClick={stopSystem}>Stop</button>
+          <button className="btn btn-ghost" disabled={!running} onClick={() => stopSystem()}>Stop</button>
         </div>
       </header>
 
