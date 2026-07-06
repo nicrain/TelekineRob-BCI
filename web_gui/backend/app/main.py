@@ -103,8 +103,8 @@ def health() -> dict[str, Any]:
 
 
 @app.get("/api/config")
-def get_config() -> dict[str, Any]:
-    return get_config_envelope().model_dump()
+def get_config(reload: bool = False) -> dict[str, Any]:
+    return get_config_envelope(reload=reload).model_dump()
 
 
 @app.put("/api/config")

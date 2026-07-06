@@ -155,9 +155,9 @@ def _deep_merge(base: dict[str, Any], patch: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-def get_config_envelope() -> ConfigEnvelope:
+def get_config_envelope(*, reload: bool = False) -> ConfigEnvelope:
     with _lock:
-        snap = _current
+        snap = _load_defaults() if reload else _current
     return ConfigEnvelope(
         config=snap,
         source_files={

@@ -576,10 +576,10 @@ export default function App() {
           } : {}),
         },
       ],
-      color: ['#DA291C'],
+      color: [calibrating ? '#888' : '#DA291C'],
       animation: false,
     };
-  }, [series, metric, isDarkCharts, calibOffset, calibScale]);
+  }, [series, metric, isDarkCharts, calibOffset, calibScale, calibrating]);
 
   /* ── Build patch ─────────────────────────────────────── */
   function buildPatch() {
@@ -637,7 +637,7 @@ export default function App() {
     try {
       if (!skipSave) await saveConfig();
       // Re-read calib values (may have been updated by a previous calibration run)
-      const r = await api.get('/api/config');
+      const r = await api.get('/api/config', { params: { reload: true } });
       const eeg = r.data?.config?.eeg;
       if (eeg) {
         if (eeg.calib_offset != null) setCalibOffset(Number(eeg.calib_offset));
@@ -661,7 +661,7 @@ export default function App() {
           clearInterval(calibTimerRef.current);
           setCalibrating(false);
           // Re-fetch calib values after calibration completes
-          api.get('/api/config').then(r => {
+          api.get('/api/config', { params: { reload: true } }).then(r => {
             const eeg = r.data?.config?.eeg;
             if (eeg) {
               if (eeg.calib_offset != null) setCalibOffset(Number(eeg.calib_offset));
