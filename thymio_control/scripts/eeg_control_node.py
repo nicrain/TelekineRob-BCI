@@ -230,7 +230,7 @@ class EegControlNode(Node):
                 )
 
             # --- write YAML to install copy AND source tree ---
-            source_root = Path(__file__).resolve().parents[3]
+            source_root = Path(__file__).resolve().parents[2]
             install_dir = Path(__file__).parents[2] / "share" / "thymio_control" / "config"
             for cfg_root in [install_dir, source_root / "thymio_control" / "config"]:
                 try:

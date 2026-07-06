@@ -675,7 +675,7 @@ export default function App() {
       setCalibCountdown((prev) => {
         if (prev <= 1) {
           clearInterval(calibTimerRef.current);
-          // Poll config every 2 s until calibration finishes (calibrate→false)
+          // Poll config every 0.5 s until calibration finishes (calibrate→false)
           const poll = setInterval(() => {
             api.get('/api/config', { params: { reload: true } }).then(r => {
               const eeg = r.data?.config?.eeg;
@@ -687,9 +687,9 @@ export default function App() {
                 if (eeg.calib_scale != null) setCalibScale(Number(eeg.calib_scale));
               }
             }).catch(() => {});
-          }, 2000);
+          }, 500);
           setTimeout(() => { clearInterval(poll); setCalibrating(false); }, 60000);
-          return 30;
+          return '...';
         }
         return prev - 1;
       });
@@ -739,7 +739,7 @@ export default function App() {
             {theme === 'dark' ? '☀' : '☾'}
           </button>
           <button className="btn btn-cta" disabled={running} onClick={startSystem}>
-            {running ? (calibrating ? `Calibrating... ${calibCountdown}s` : 'Running...') : 'Start'}
+            {running ? (calibrating ? (typeof calibCountdown === 'number' ? `Calibrating... ${calibCountdown}s` : 'Calibrating...') : 'Running...') : 'Start'}
           </button>
           {(eegBrand === 'gtec_headband' || eegBrand === 'gtec_hybrid') && (
             <button className="btn btn-ghost" disabled={running} onClick={async () => {
