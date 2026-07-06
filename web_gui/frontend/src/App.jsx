@@ -430,10 +430,8 @@ export default function App() {
           const inp = cfg.eeg.input || 'mock';
           if (inp === 'mock') {
             setInputMode('eeg');
-            setEegProtocol('tcp');
           } else if (inp === 'tcp_file') {
             setInputMode('eeg');
-            setEegProtocol('tcp_file');
           } else if (inp === 'file') {
             setInputMode('eeg');
             setEegProtocol('file');
@@ -442,7 +440,6 @@ export default function App() {
             setEegProtocol('lsl');
           } else {
             setInputMode('eeg');
-            setEegProtocol('tcp');
           }
           if (cfg.eeg.file_path) setFilePath(cfg.eeg.file_path);
           if (cfg.eeg.calib_offset != null) setCalibOffset(Number(cfg.eeg.calib_offset));
