@@ -672,6 +672,7 @@ export default function App() {
 
   async function startSystem(skipSave) {
     try {
+      await stopSystem();
       if (!skipSave) await saveConfig();
       // Re-read calib values (may have been updated by a previous calibration run)
       const r = await api.get('/api/config', { params: { reload: true } });
