@@ -659,15 +659,19 @@ export default function App() {
       setCalibCountdown((prev) => {
         if (prev <= 1) {
           clearInterval(calibTimerRef.current);
-          setCalibrating(false);
-          // Re-fetch calib values after calibration completes
-          api.get('/api/config', { params: { reload: true } }).then(r => {
-            const eeg = r.data?.config?.eeg;
-            if (eeg) {
-              if (eeg.calib_offset != null) setCalibOffset(Number(eeg.calib_offset));
-              if (eeg.calib_scale != null) setCalibScale(Number(eeg.calib_scale));
-            }
-          }).catch(() => {});
+          // Poll config every 2 s until calibration finishes (calibrate→false)
+          const poll = setInterval(() => {
+            api.get('/api/config', { params: { reload: true } }).then(r => {
+              const eeg = r.data?.config?.eeg;
+              if (eeg && !eeg.calibrate) {
+                clearInterval(poll);
+                setCalibrating(false);
+                if (eeg.calib_offset != null) setCalibOffset(Number(eeg.calib_offset));
+                if (eeg.calib_scale != null) setCalibScale(Number(eeg.calib_scale));
+              }
+            }).catch(() => {});
+          }, 2000);
+          setTimeout(() => { clearInterval(poll); setCalibrating(false); }, 60000);
           return 30;
         }
         return prev - 1;
