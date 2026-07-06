@@ -396,6 +396,9 @@ export default function App() {
   const [theme, setTheme]                   = useState(() => localStorage.getItem('theme') || 'dark');
   const calibTimerRef                        = useRef(null);
 
+  const INIT_SERIES = { t: [], alpha: [], theta: [], beta: [], ratio: [], focus: [], speed: [], steer: [] };
+  function clearSeries() { setSeries({ ...INIT_SERIES }); }
+
   /* ── System status (ROS2 + Thymio) ──────────────────── */
   const [systemStatus, setSystemStatus] = useState({ ros_available: false, thymio_connected: false });
 
@@ -578,6 +581,19 @@ export default function App() {
       ],
       color: [calibrating ? '#888' : '#DA291C'],
       animation: false,
+      ...(showCalib ? {
+        graphic: [
+          {
+            type: 'text',
+            left: 35, top: 6,
+            style: {
+              text: `p5=${calibOffset.toFixed(1)}  p95=${(calibOffset + calibScale).toFixed(1)}`,
+              fill: isDarkCharts ? '#aaa' : '#666',
+              fontSize: 11,
+            },
+          },
+        ],
+      } : {}),
     };
   }, [series, metric, isDarkCharts, calibOffset, calibScale, calibrating]);
 
@@ -666,6 +682,7 @@ export default function App() {
               if (eeg && !eeg.calibrate) {
                 clearInterval(poll);
                 setCalibrating(false);
+                clearSeries();
                 if (eeg.calib_offset != null) setCalibOffset(Number(eeg.calib_offset));
                 if (eeg.calib_scale != null) setCalibScale(Number(eeg.calib_scale));
               }
