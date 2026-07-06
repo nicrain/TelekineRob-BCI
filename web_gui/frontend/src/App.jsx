@@ -390,11 +390,13 @@ export default function App() {
   const [showWaveform, setShowWaveform]     = useState(true);
   const [running, setRunning]               = useState(false);
   const [calibrating, setCalibrating]        = useState(false);
+  const [calibPhase, setCalibPhase]          = useState(null);  // 'preparing' | 'counting'
   const [calibCountdown, setCalibCountdown]  = useState(30);
   const [calibOffset, setCalibOffset]        = useState(0);
   const [calibScale, setCalibScale]          = useState(1);
   const [theme, setTheme]                   = useState(() => localStorage.getItem('theme') || 'dark');
   const calibTimerRef                        = useRef(null);
+  const calibWaitingRef                      = useRef(false);  // waiting for first WS frame
 
   const INIT_SERIES = { t: [], alpha: [], theta: [], beta: [], ratio: [], focus: [], speed: [], steer: [] };
   function clearSeries() { setSeries({ ...INIT_SERIES }); }
@@ -480,6 +482,25 @@ export default function App() {
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
       if (data.channels == null) return;  // no real data yet — keep charts frozen
+      // First data frame arrived → environment ready, start real countdown
+      if (calibWaitingRef.current) {
+        calibWaitingRef.current = false;
+        setCalibPhase('counting');
+        calibTimerRef.current = setInterval(() => {
+          setCalibCountdown((prev) => {
+            if (prev <= 1) {
+              clearInterval(calibTimerRef.current);
+              // Countdown done — re-read config and transition to Running
+              api.get('/api/config', { params: { reload: true } }).then(r => {
+                const eeg = r.data?.config?.eeg;
+                finishCalibration(eeg || {});
+              }).catch(() => { setCalibrating(false); setCalibPhase(null); });
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+      }
       if (!isControlMode) {
         setSeries((prev) => ({
           t:     pushPoint(prev.t,     new Date(data.timestamp * 1000).toLocaleTimeString()),
@@ -668,38 +689,27 @@ export default function App() {
     }
   }
 
+  function finishCalibration(eeg) {
+    setCalibrating(false);
+    setCalibPhase(null);
+    clearSeries();
+    if (eeg?.calib_offset != null) setCalibOffset(Number(eeg.calib_offset));
+    if (eeg?.calib_scale != null) setCalibScale(Number(eeg.calib_scale));
+  }
+
   function startCountdown() {
+    calibWaitingRef.current = true;
     setCalibrating(true);
+    setCalibPhase('preparing');
     setCalibCountdown(30);
-    calibTimerRef.current = setInterval(() => {
-      setCalibCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(calibTimerRef.current);
-          // Poll config every 0.5 s until calibration finishes (calibrate→false)
-          const poll = setInterval(() => {
-            api.get('/api/config', { params: { reload: true } }).then(r => {
-              const eeg = r.data?.config?.eeg;
-              if (eeg && !eeg.calibrate) {
-                clearInterval(poll);
-                setCalibrating(false);
-                clearSeries();
-                if (eeg.calib_offset != null) setCalibOffset(Number(eeg.calib_offset));
-                if (eeg.calib_scale != null) setCalibScale(Number(eeg.calib_scale));
-              }
-            }).catch(() => {});
-          }, 500);
-          setTimeout(() => { clearInterval(poll); setCalibrating(false); }, 60000);
-          return '...';
-        }
-        return prev - 1;
-      });
-    }, 1000);
   }
 
   async function stopSystem() {
     try {
       clearInterval(calibTimerRef.current);
+      calibWaitingRef.current = false;
       setCalibrating(false);
+      setCalibPhase(null);
       setCalibCountdown(30);
       await runAction('/api/system/stop', false);
     } finally {
@@ -739,7 +749,7 @@ export default function App() {
             {theme === 'dark' ? '☀' : '☾'}
           </button>
           <button className="btn btn-cta" disabled={running} onClick={startSystem}>
-            {running ? (calibrating ? (typeof calibCountdown === 'number' ? `Calibrating... ${calibCountdown}s` : 'Calibrating...') : 'Running...') : 'Start'}
+            {running ? (calibPhase === 'preparing' ? 'Preparing...' : calibPhase === 'counting' ? `Calibrating... ${calibCountdown}s` : 'Running...') : 'Start'}
           </button>
           {(eegBrand === 'gtec_headband' || eegBrand === 'gtec_hybrid') && (
             <button className="btn btn-ghost" disabled={running} onClick={async () => {
