@@ -11,7 +11,7 @@ const CHANNEL_PRESETS = {
     'F7', 'F8', 'T7', 'T8', 'P7', 'P8', 'Fz', 'Cz', 'Pz', 'Oz',
   ],
   gtec_hybrid: ['Fz', 'C3', 'Cz', 'C4', 'Pz', 'PO7', 'Oz', 'PO8'],
-  gtec_headband: ['Fp1', 'Fp2', 'T7', 'T8'],
+  gtec_headband: ['F8', 'Fp2', 'Fp1', 'F7'],
 };
 
 const METRIC_OPTIONS = [
@@ -378,8 +378,8 @@ export default function App() {
 
   /* ── UI mode state ─────────────────────────────────── */
   const [inputMode, setInputMode]         = useState('eeg');
-  const [eegBrand, setEegBrand]           = useState('enobio');
-  const [eegProtocol, setEegProtocol]     = useState('tcp');
+  const [eegBrand, setEegBrand]           = useState('gtec_headband');
+  const [eegProtocol, setEegProtocol]     = useState('lsl');
   const [filePath, setFilePath]           = useState('');
   const [selectedChannels, setSelectedChannels] = useState([0, 1, 2]);
   const [metric, setMetric]               = useState('tbr');

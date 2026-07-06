@@ -57,9 +57,9 @@ EEG_DEVICE_CONFIGS: Dict[str, Dict[str, Any]] = {
         "label": "Unicorn BCI Core-4 Headband",
         "n_channels": 4,
         "sample_rate": 250,
-        "channel_labels": ["Fz", "Cz", "Pz", "Oz"],
+        "channel_labels": ["F8", "Fp2", "Fp1", "F7"],
         "default_lsl_channel_map": {
-            "Fz": 0, "Cz": 1, "Pz": 2, "Oz": 3,
+            "F8": 0, "Fp2": 1, "Fp1": 2, "F7": 3,
         },
     },
 }
