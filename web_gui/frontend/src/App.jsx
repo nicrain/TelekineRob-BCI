@@ -437,6 +437,9 @@ export default function App() {
           } else if (inp === 'file') {
             setInputMode('eeg');
             setEegProtocol('file');
+          } else if (inp === 'lsl') {
+            setInputMode('eeg');
+            setEegProtocol('lsl');
           } else {
             setInputMode('eeg');
             setEegProtocol('tcp');
