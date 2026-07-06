@@ -751,7 +751,7 @@ export default function App() {
           >
             {theme === 'dark' ? '☀' : '☾'}
           </button>
-          <button className="btn btn-cta" disabled={running} onClick={startSystem}>
+          <button className="btn btn-cta" disabled={running} onClick={() => startSystem()}>
             {running ? (calibPhase === 'preparing' ? 'Preparing...' : calibPhase === 'counting' ? `Calibrating... ${calibCountdown}s` : 'Running...') : 'Start'}
           </button>
           {(eegBrand === 'gtec_headband' || eegBrand === 'gtec_hybrid') && (
