@@ -574,7 +574,7 @@ export default function App() {
   const metricLabels = { alpha: 'Alpha (α)', tbr: 'TBR (θ/β)', ei: 'EI (β/(α+θ))' };
   const metricDataKey = { alpha: 'alpha', tbr: 'ratio', ei: 'focus' };
   const featureOption = useMemo(() => {
-    const showCalib = calibrating || calibScale > 2;  // scale ≈ 1 when not calibrated
+    const showCalib = !calibrating && calibScale > 2;  // only after calibration, not during
     const calibHigh = calibOffset + calibScale;
     return {
       backgroundColor: 'transparent',
