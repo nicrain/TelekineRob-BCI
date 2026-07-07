@@ -5,14 +5,7 @@ architecture.  External code (ROS nodes, scripts, notebooks) should import
 from here rather than from individual sub-modules, so internal restructuring
 remains transparent to callers.
 
-Backward compatibility
-----------------------
-The original ``eeg_control_pipeline.py`` is **preserved untouched** as a
-fallback.  Set ``use_legacy=True`` in ``build_pipeline()`` to route through
-it instead (controlled by the ``pipeline.use_legacy`` YAML key or the
-``EEG_PIPELINE_LEGACY`` environment variable).
-
-Typical usage (new path)::
+Typical usage::
 
     from thymio_control.pipeline import build_pipeline
 
@@ -23,12 +16,6 @@ Typical usage (new path)::
             features = processor(frame.metrics)
             intents  = policy.compute_intents(features)
             # → send intents over UDP / publish to ROS
-
-Typical usage (legacy path)::
-
-    from thymio_control.pipeline import build_pipeline
-    adapter, processor, policy = build_pipeline(args, use_legacy=True)
-    # identical call site — same interface, different implementation
 """
 from __future__ import annotations
 
