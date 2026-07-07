@@ -43,7 +43,7 @@ EEG_DEVICE_CONFIGS: Dict[str, Dict[str, Any]] = {
             "Fz":  16, "Cz":  17, "Pz": 18,  "Oz": 19,
         },
     },
-    "unicorn-8": {
+    "hybrid-black": {
         "label": "Unicorn Hybrid Black",
         "n_channels": 8,
         "sample_rate": 250,
@@ -53,7 +53,7 @@ EEG_DEVICE_CONFIGS: Dict[str, Dict[str, Any]] = {
             "Pz": 4, "PO7": 5, "Oz": 6, "PO8": 7,
         },
     },
-    "unicorn-4": {
+    "bci-core-4": {
         "label": "Unicorn BCI Core-4 Headband",
         "n_channels": 4,
         "sample_rate": 250,

@@ -65,7 +65,7 @@ def test_experiment_config_has_eeg_device():
 
     pipeline_config = config.get("pipeline_config", {})
     assert "eeg_device" in pipeline_config
-    assert pipeline_config["eeg_device"] in {"enobio-20", "unicorn-8", "unicorn-4"}
+    assert pipeline_config["eeg_device"] in {"enobio-20", "hybrid-black", "bci-core-4"}
 
 
 def test_eeg_launch_params_include_eeg_device():

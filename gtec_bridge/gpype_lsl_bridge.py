@@ -16,7 +16,7 @@ WSL2 counterpart (in existing launch config):
 
 Usage
 -----
-    python gtec_bridge/lsl_bridge.py
+    python gtec_bridge/gpype_lsl_bridge.py
     # Press Ctrl+C to stop.
 """
 

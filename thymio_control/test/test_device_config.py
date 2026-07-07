@@ -65,11 +65,11 @@ def test_extract_pipeline_config_explicit_device():
             "source_type": "lsl",
             "selected_channels": [0],
             "algorithm": "theta_beta_ratio",
-            "eeg_device": "unicorn-8",
+            "eeg_device": "hybrid-black",
         }
     }
     result = extract_pipeline_config(cfg)
-    assert result["eeg_device"] == "unicorn-8"
+    assert result["eeg_device"] == "hybrid-black"
 
 
 def test_enobio_20_has_20_channels():
@@ -79,12 +79,12 @@ def test_enobio_20_has_20_channels():
 
 
 def test_unicorn_8_has_8_channels():
-    cfg = get_device_config("unicorn-8")
+    cfg = get_device_config("hybrid-black")
     assert cfg["n_channels"] == 8
     assert cfg["sample_rate"] == 250
 
 
 def test_unicorn_4_has_4_channels():
-    cfg = get_device_config("unicorn-4")
+    cfg = get_device_config("bci-core-4")
     assert cfg["n_channels"] == 4
     assert cfg["sample_rate"] == 250

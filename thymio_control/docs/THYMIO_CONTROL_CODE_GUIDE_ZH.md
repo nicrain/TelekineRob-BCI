@@ -252,8 +252,8 @@ Windows 设备 SDK
 
 2. EEG 设备配置注册表（`EEG_DEVICE_CONFIGS`）
 - `enobio-20` — Enobio 20 通道，500Hz
-- `unicorn-8` — Unicorn Hybrid Black，8 通道，250Hz
-- `unicorn-4` — Unicorn BCI Core-4 Headband，4 通道，250Hz
+- `hybrid-black` — Unicorn Hybrid Black，8 通道，250Hz
+- `bci-core-4` — Unicorn BCI Core-4 Headband，4 通道，250Hz
 - `get_device_config(device_key)` — 按设备名获取配置
 
 3. 特征工程
@@ -288,7 +288,7 @@ Windows 设备 SDK
 - 可直接运行 pipeline 发 UDP（不依赖 ROS 节点）。
 - 支持 `--config`，并实现"命令行参数优先于 YAML"。
 - `--input` 支持 `mock`、`tcp_client`、`tcp_file`、`lsl`、`file`。
-- `--eeg-device` 支持 `enobio-20`、`unicorn-8`、`unicorn-4`。
+- `--eeg-device` 支持 `enobio-20`、`hybrid-black`、`bci-core-4`。
 - `--file-path` 指定回放文件路径。
 
 ### 4.6 模块化子包（新代码推荐使用）
@@ -301,7 +301,7 @@ Windows 设备 SDK
 
 #### `thymio_control/device_profiles.py`
 - 提取 `EEG_DEVICE_CONFIGS` 和 `get_device_config()`
-- 支持 3 种设备：`enobio-20`、`unicorn-8`、`unicorn-4`
+- 支持 3 种设备：`enobio-20`、`hybrid-black`、`bci-core-4`
 
 #### `thymio_control/pipeline.py`（模块化入口）
 - `build_pipeline(args)` → 返回 `(adapter, processor, policy)` 三元组
@@ -370,7 +370,7 @@ EEG 节点参数。
 - `tcp_host: 127.0.0.1`
 - `tcp_port: 1234`
 - `tcp_control_mode: feature`（默认；可选 `movement`）
-- `eeg_device: enobio-20`（支持 `enobio-20`、`unicorn-8`、`unicorn-4`）
+- `eeg_device: enobio-20`（支持 `enobio-20`、`hybrid-black`、`bci-core-4`）
 - `file_path: tcp_data.txt`（`tcp_file` 或 `file` 模式使用的文件路径）
 - `lsl_stream_type: EEG`
 - `lsl_timeout: 8.0`
