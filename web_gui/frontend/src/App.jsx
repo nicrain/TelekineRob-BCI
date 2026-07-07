@@ -445,13 +445,6 @@ export default function App() {
           if (cfg.eeg.calib_offset != null) setCalibOffset(Number(cfg.eeg.calib_offset));
           if (cfg.eeg.calib_scale != null) setCalibScale(Number(cfg.eeg.calib_scale));
         }
-        if (cfg.pipeline) {
-          if (cfg.pipeline.selected_channels) setSelectedChannels(cfg.pipeline.selected_channels);
-          if (cfg.pipeline.algorithm) {
-            const algMap = { alpha_only: 'alpha', theta_beta_ratio: 'tbr', engagement_index: 'ei' };
-            setMetric(algMap[cfg.pipeline.algorithm] || 'tbr');
-          }
-        }
         if (cfg.launch) {
           setOutputMode(cfg.launch.use_sim ? 'thymio_simu' : 'thymio');
         }
@@ -625,7 +618,6 @@ export default function App() {
       tobii:   'lsl',
       teleop:  'tcp_client',
     };
-    const algorithmMap = { alpha: 'alpha_only', tbr: 'theta_beta_ratio', ei: 'engagement_index' };
     const isSim = outputMode === 'thymio_simu';
     const patch = {
       eeg: {
@@ -649,11 +641,6 @@ export default function App() {
         use_tobii_bridge:  inputMode === 'tobii',
         use_enobio_bridge: false,
         device:            outputMode === 'thymio' ? thymioDevice : '',
-      },
-      pipeline: {
-        source_type:       inputMap[inputMode] || 'mock',
-        selected_channels: selectedChannels,
-        algorithm:         algorithmMap[metric] || 'theta_beta_ratio',
       },
     };
     return patch;

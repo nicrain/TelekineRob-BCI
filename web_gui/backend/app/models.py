@@ -50,18 +50,11 @@ class MotionConfig(BaseModel):
     line_mode: Literal["", "blackline", "whiteline"] = ""
 
 
-class PipelineConfig(BaseModel):
-    source_type: Literal["mock", "tcp_client", "tcp_file", "lsl", "file"] = "mock"
-    selected_channels: list[int] = Field(default_factory=lambda: [0, 1, 2])
-    algorithm: Literal["theta_beta_ratio", "alpha_beta_ratio", "alpha_only", "engagement_index", "custom"] = "theta_beta_ratio"
-
-
 class AppConfig(BaseModel):
     launch: LaunchConfig = Field(default_factory=LaunchConfig)
     eeg: EegConfig = Field(default_factory=EegConfig)
     filter: FilterConfig = Field(default_factory=FilterConfig)
     motion: MotionConfig = Field(default_factory=MotionConfig)
-    pipeline: PipelineConfig = Field(default_factory=PipelineConfig)
 
 
 class ConfigEnvelope(BaseModel):

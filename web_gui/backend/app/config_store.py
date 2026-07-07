@@ -12,7 +12,6 @@ from .models import AppConfig, ConfigEnvelope
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _LAUNCH_YAML = _REPO_ROOT / "thymio_control/config/launch_args.yaml"
 _EEG_YAML = _REPO_ROOT / "thymio_control/config/eeg_control_node.params.yaml"
-_PIPELINE_YAML = _REPO_ROOT / "thymio_control/config/experiment_config.yaml"
 
 _lock = Lock()
 _current = AppConfig()
@@ -63,12 +62,6 @@ def _load_defaults() -> AppConfig:
     cfg.motion.steer_deadzone = float(ros_params.get("steer_deadzone", cfg.motion.steer_deadzone))
     cfg.motion.line_mode = str(ros_params.get("line_mode", cfg.motion.line_mode))
 
-    pipeline_root = _safe_load(_PIPELINE_YAML)
-    pipeline_cfg = pipeline_root.get("pipeline_config", {})
-    cfg.pipeline.source_type = str(pipeline_cfg.get("source_type", cfg.pipeline.source_type))
-    cfg.pipeline.selected_channels = list(pipeline_cfg.get("selected_channels", cfg.pipeline.selected_channels))
-    cfg.pipeline.algorithm = str(pipeline_cfg.get("algorithm", cfg.pipeline.algorithm))
-
     return cfg
 
 
@@ -116,27 +109,12 @@ def _persist_config(cfg: AppConfig) -> None:
     )
     eeg_payload["/**"] = _deep_merge(eeg_payload.get("/**", {}), {"ros__parameters": ros_params})
 
-    pipeline_payload = _safe_load(_PIPELINE_YAML)
-    pipeline_root = dict(pipeline_payload.get("pipeline_config", {}))
-    pipeline_root.update(
-        {
-            "source_type": str(cfg.pipeline.source_type),
-            "selected_channels": list(cfg.pipeline.selected_channels),
-            "algorithm": str(cfg.pipeline.algorithm),
-        }
-    )
-    pipeline_payload["pipeline_config"] = pipeline_root
-
     _LAUNCH_YAML.parent.mkdir(parents=True, exist_ok=True)
     _EEG_YAML.parent.mkdir(parents=True, exist_ok=True)
-    _PIPELINE_YAML.parent.mkdir(parents=True, exist_ok=True)
-
     with _LAUNCH_YAML.open("w", encoding="utf-8") as f:
         yaml.safe_dump(launch_payload, f, sort_keys=False, allow_unicode=False)
     with _EEG_YAML.open("w", encoding="utf-8") as f:
         yaml.safe_dump(eeg_payload, f, sort_keys=False, allow_unicode=False)
-    with _PIPELINE_YAML.open("w", encoding="utf-8") as f:
-        yaml.safe_dump(pipeline_payload, f, sort_keys=False, allow_unicode=False)
 
 
 def init_store() -> None:
@@ -166,7 +144,6 @@ def get_config_envelope(*, reload: bool = False) -> ConfigEnvelope:
         source_files={
             "launch": str(_LAUNCH_YAML),
             "eeg": str(_EEG_YAML),
-            "pipeline": str(_PIPELINE_YAML),
         },
     )
 
@@ -177,7 +154,6 @@ def _build_envelope(cfg: AppConfig) -> ConfigEnvelope:
         source_files={
             "launch": str(_LAUNCH_YAML),
             "eeg": str(_EEG_YAML),
-            "pipeline": str(_PIPELINE_YAML),
         },
     )
 

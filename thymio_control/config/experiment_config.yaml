@@ -1,11 +1,3 @@
-pipeline_config:
-  source_type: tcp_client
-  eeg_device: enobio-20
-  selected_channels:
-  - 0
-  - 1
-  - 2
-  algorithm: theta_beta_ratio
 adapter:
   input: mock
   tcp_host: 0.0.0.0
