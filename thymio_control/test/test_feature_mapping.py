@@ -1,6 +1,22 @@
 import pytest
 
-from thymio_control.eeg_control_pipeline import Twist, feature_to_twist
+from thymio_control.processors.enrich import feature_to_twist
+
+try:
+    from geometry_msgs.msg import Twist
+except ImportError:
+    from dataclasses import dataclass
+
+    @dataclass
+    class _Vector3:
+        x: float = 0.0
+        y: float = 0.0
+        z: float = 0.0
+
+    class Twist:
+        def __init__(self) -> None:
+            self.linear = _Vector3()
+            self.angular = _Vector3()
 
 
 def _make_twist(linear_x: float = 0.0, angular_z: float = 0.0) -> Twist:

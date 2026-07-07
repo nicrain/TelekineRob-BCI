@@ -33,8 +33,7 @@ Typical usage (legacy path)::
 from __future__ import annotations
 
 import logging
-import os
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Tuple
 
 _log = logging.getLogger(__name__)
 
@@ -53,32 +52,8 @@ POLICIES: Dict[str, type] = {
 }
 
 # ---------------------------------------------------------------------------
-# Adapter factory helpers
+# Adapter factory
 # ---------------------------------------------------------------------------
-
-def _parse_channel_map(text: Any) -> Dict[str, int]:
-    """Parse a channel-map from a dict or a comma-separated ``name=idx`` string."""
-    out: Dict[str, int] = {}
-    if isinstance(text, dict):
-        for k, v in text.items():
-            idx = int(v)
-            if idx < 0:
-                raise ValueError(f"channel map index must be non-negative: {k}={idx}")
-            out[str(k)] = idx
-        return out
-    if not text:
-        return out
-    for item in str(text).split(","):
-        item = item.strip()
-        if not item or "=" not in item:
-            continue
-        k, v = item.split("=", 1)
-        idx = int(v.strip())
-        if idx < 0:
-            raise ValueError(f"channel map index must be non-negative: {k}={idx}")
-        out[k.strip()] = idx
-    return out
-
 
 def build_adapter(args: Any):
     """Instantiate the appropriate adapter based on ``args.input``.
@@ -157,20 +132,13 @@ def build_processor() -> Callable[[Dict[str, float]], Dict[str, float]]:
 # Top-level assembler
 # ---------------------------------------------------------------------------
 
-def build_pipeline(
-    args: Any,
-    *,
-    use_legacy: Optional[bool] = None,
-) -> Tuple[Any, Callable, Any]:
+def build_pipeline(args: Any) -> Tuple[Any, Callable, Any]:
     """Assemble and return ``(adapter, processor, policy)``.
 
     Parameters
     ----------
     args : argparse.Namespace
         Parsed command-line arguments (or any object with the same attrs).
-    use_legacy : bool, optional
-        If ``True``, route through the original ``eeg_control_pipeline.py``.
-        Defaults to the ``EEG_PIPELINE_LEGACY`` env-var, or ``False``.
 
     Returns
     -------
@@ -179,25 +147,6 @@ def build_pipeline(
         - *processor* is a callable ``metrics → enriched_metrics``
         - *policy*    implements ``compute_intents(features) -> dict``
     """
-    # Determine legacy flag
-    if use_legacy is None:
-        use_legacy = os.environ.get("EEG_PIPELINE_LEGACY", "").lower() in (
-            "1", "true", "yes",
-        )
-
-    if use_legacy:
-        _log.info("pipeline: using LEGACY eeg_control_pipeline path")
-        from thymio_control.eeg_control_pipeline import (  # noqa: PLC0415
-            build_adapter as _legacy_build_adapter,
-            enrich_features,
-            POLICIES as _POLICIES,
-        )
-        adapter   = _legacy_build_adapter(args)
-        processor = enrich_features
-        policy    = _POLICIES[getattr(args, "policy", "tbr")]()
-        return adapter, processor, policy
-
-    _log.info("pipeline: using NEW modular path")
     adapter    = build_adapter(args)
     processor  = build_processor()
     policy_name = getattr(args, "policy", "tbr")

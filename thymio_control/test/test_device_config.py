@@ -1,10 +1,6 @@
 import pytest
 
-from thymio_control.eeg_control_pipeline import (
-    EEG_DEVICE_CONFIGS,
-    extract_pipeline_config,
-    get_device_config,
-)
+from thymio_control.device_profiles import EEG_DEVICE_CONFIGS, get_device_config
 
 
 def test_all_devices_have_required_keys():
@@ -51,25 +47,6 @@ def test_get_device_config_case_insensitive():
 def test_get_device_config_invalid():
     with pytest.raises(ValueError, match="Unknown EEG device"):
         get_device_config("nonexistent-device")
-
-
-def test_extract_pipeline_config_default_device():
-    cfg = {"pipeline_config": {"source_type": "lsl", "selected_channels": [0], "algorithm": "theta_beta_ratio"}}
-    result = extract_pipeline_config(cfg)
-    assert result["eeg_device"] == "enobio-20"
-
-
-def test_extract_pipeline_config_explicit_device():
-    cfg = {
-        "pipeline_config": {
-            "source_type": "lsl",
-            "selected_channels": [0],
-            "algorithm": "theta_beta_ratio",
-            "eeg_device": "hybrid-black",
-        }
-    }
-    result = extract_pipeline_config(cfg)
-    assert result["eeg_device"] == "hybrid-black"
 
 
 def test_enobio_20_has_20_channels():
