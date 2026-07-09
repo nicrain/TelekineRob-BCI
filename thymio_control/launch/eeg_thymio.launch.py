@@ -12,10 +12,7 @@ def generate_launch_description():
         ),
         launch_arguments={
             "run_eeg": "true",
-            "run_gaze": "false",
             "use_teleop": "false",
-            "use_tobii_bridge": "false",
-            "use_enobio_bridge": "false",
         }.items(),
     )
     return LaunchDescription([core])

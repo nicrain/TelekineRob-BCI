@@ -58,7 +58,7 @@ web_gui (React + FastAPI) ←──WebSocket──→ RosBridge (single rclpy th
 WSL ↔ Windows bridges handle Tobii eye-tracker (UDP) and Enobio EEG (TCP).
 
 ### Key Files
-- `thymio_control/thymio_control/eeg_control_pipeline.py` — Core EEG signal processing pipeline + adapters
+- `thymio_control/thymio_control/pipeline.py` — Modular pipeline assembler (adapter + processor + policy)
 - `thymio_control/scripts/eeg_control_node.py` — ROS2 node wrapper (subscribes adapters, publishes Twist + analysis)
 - `thymio_control/launch/experiment_core.launch.py` — Main launch orchestration
 - `thymio_control/config/experiment_config.yaml` — Pipeline config (source type, channels, algorithm)

@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
-"""EEG 原生 ROS2 控制节点。
+"""EEG ROS2 control node — g.tec device support.
 
-使用新模块化架构（thymio_control.pipeline + processors.enrich）。
-legacy eeg_control_pipeline.py 仍作为回滚路径保留。
+Uses modular architecture (thymio_control.pipeline + processors.enrich).
 """
 
 import csv
@@ -17,31 +16,25 @@ from rclpy.node import Node
 from sensor_msgs.msg import Range
 from std_msgs.msg import String
 
-# --- 新架构导入 ---
+# --- Modular architecture ---
 from thymio_control.pipeline import POLICIES, build_adapter
-from thymio_control.processors.enrich import clip01, enrich_features, feature_to_twist
+from thymio_control.processors.enrich import clip01, enrich_features
 
 
 class _AdapterArgs:
-    """给 build_adapter 复用的轻量参数容器。"""
+    """Lightweight argument container for build_adapter."""
 
     def __init__(
         self,
         input_mode: str,
-        tcp_host: str,
-        tcp_port: int,
         lsl_stream_type: str,
         lsl_timeout: float,
         lsl_source_id: str,
-        file_path: str,
     ):
         self.input = input_mode
-        self.tcp_host = tcp_host
-        self.tcp_port = tcp_port
         self.lsl_stream_type = lsl_stream_type
         self.lsl_timeout = lsl_timeout
         self.lsl_source_id = lsl_source_id
-        self.file_path = file_path
 
 
 class EegControlNode(Node):
@@ -55,21 +48,17 @@ class EegControlNode(Node):
     def __init__(self) -> None:
         super().__init__("eeg_control_node")
 
-        # 输入与策略参数
+        # Input and policy parameters
         self.declare_parameter("input", "mock")
         self.declare_parameter("policy", "tbr")
         self.declare_parameter("calibrate", False)
         self.declare_parameter("calib_offset", 0.0)
         self.declare_parameter("calib_scale", 1.0)
-        self.declare_parameter("tcp_control_mode", "feature")
-        self.declare_parameter("tcp_host", "0.0.0.0")
-        self.declare_parameter("tcp_port", 6001)
-        self.declare_parameter("file_path", "")
         self.declare_parameter("lsl_stream_type", "EEG")
         self.declare_parameter("lsl_timeout", 8.0)
         self.declare_parameter("lsl_source_id", "")
 
-        # 输出与控制参数
+        # Output and control parameters
         self.declare_parameter("cmd_topic", "/cmd_vel")
         self.declare_parameter("analysis_topic", "/eeg_analysis")
         self.declare_parameter("publish_hz", 20.0)
@@ -79,7 +68,7 @@ class EegControlNode(Node):
         self.declare_parameter("record_csv", False)
         self.declare_parameter("csv_path", "/tmp/thymio_eeg_log.csv")
 
-        # 运动映射参数
+        # Motion mapping parameters
         self.declare_parameter("max_forward_speed", 0.2)
         self.declare_parameter("reverse_speed", -0.15)
         self.declare_parameter("turn_forward_speed", 0.1)
@@ -87,7 +76,7 @@ class EegControlNode(Node):
         self.declare_parameter("reverse_threshold", 0.2)
         self.declare_parameter("steer_deadzone", 0.1)
 
-        # 可选循线
+        # Optional line-following
         self.declare_parameter("line_mode", "")  # '', 'blackline', 'whiteline'
 
         input_mode = self.get_parameter("input").value
@@ -98,12 +87,9 @@ class EegControlNode(Node):
 
         adapter_args = _AdapterArgs(
             input_mode=input_mode,
-            tcp_host=self.get_parameter("tcp_host").value,
-            tcp_port=int(self.get_parameter("tcp_port").value),
             lsl_stream_type=self.get_parameter("lsl_stream_type").value,
             lsl_timeout=float(self.get_parameter("lsl_timeout").value),
             lsl_source_id=self.get_parameter("lsl_source_id").value,
-            file_path=self.get_parameter("file_path").value,
         )
         self.adapter = build_adapter(adapter_args)
 
@@ -132,7 +118,7 @@ class EegControlNode(Node):
         self._csv_file = None
         self._csv_writer = None
         self._csv_flush_counter = 0
-        self._csv_flush_every_n = 10  # flush every 10 frames, not every frame
+        self._csv_flush_every_n = 10
         if self.record_csv:
             csv_dir = os.path.dirname(self.csv_path)
             if csv_dir:
@@ -143,12 +129,6 @@ class EegControlNode(Node):
                 fieldnames=[
                     "ts",
                     "source",
-                    "control_mode",
-                    "packet_no",
-                    "feature_count",
-                    "movement",
-                    "artifact",
-                    "current_y_unused",
                     "metrics_json",
                     "command_linear_x",
                     "command_angular_z",
@@ -179,7 +159,6 @@ class EegControlNode(Node):
         self.last_msg_ts = 0.0
         self._adapter_connected = False
         self.last_intents = {"speed_intent": 0.5, "steer_intent": 0.5}
-        self.last_mode = "intents"
         self.last_twist = Twist()
 
         hz = float(self.get_parameter("publish_hz").value)
@@ -200,7 +179,6 @@ class EegControlNode(Node):
         from pathlib import Path
 
         try:
-            # --- compute p5/p95 ---
             samples = np.array(self._calib_samples)
             n = len(samples)
             self.get_logger().info(f"CALIB: {n} samples collected")
@@ -216,7 +194,6 @@ class EegControlNode(Node):
                 f"CALIB: p5={p5:.4f} p95={p95:.4f} offset={offset} scale={scale}"
             )
 
-            # --- update ROS2 params (best-effort; node continues even if this fails) ---
             try:
                 from rclpy.parameter import Parameter
                 self.set_parameters([
@@ -229,7 +206,6 @@ class EegControlNode(Node):
                     f"CALIB: set_parameters() failed (in-memory params not updated): {exc}"
                 )
 
-            # --- write YAML to install copy AND source tree ---
             source_root = Path(__file__).resolve().parents[2]
             install_dir = Path(__file__).parents[2] / "share" / "thymio_control" / "config"
             for cfg_root in [install_dir, source_root / "thymio_control" / "config"]:
@@ -249,7 +225,6 @@ class EegControlNode(Node):
                         f"CALIB: failed to write {cfg_root}: {exc}"
                     )
 
-            # --- recreate policy ---
             policy_name = str(self.get_parameter("policy").value)
             self.policy = POLICIES[policy_name](offset=offset, scale=scale)
 
@@ -259,7 +234,6 @@ class EegControlNode(Node):
             self._calibrate = False
             self._calib_samples.clear()
             self._calib_deadline = 0.0
-
 
     def _close_csv(self) -> None:
         if self._csv_file is not None:
@@ -279,19 +253,9 @@ class EegControlNode(Node):
     def _tick(self) -> None:
         frame = self.adapter.read_frame()
         if frame is not None:
-            input_mode = str(self.get_parameter("input").value).strip() or "mock"
-            default_mode = "feature" if input_mode == "tcp_file" else "movement"
-            tcp_control_mode = str(self.get_parameter("tcp_control_mode").value).strip() or default_mode
-            movement_value = frame.metrics.get("movement")
-            has_movement = isinstance(movement_value, (int, float))
-            feature_value = frame.metrics.get("feature")
-            has_feature = isinstance(feature_value, (int, float))
             has_band_features = all(key in frame.metrics for key in ("alpha", "theta", "beta"))
             features = enrich_features(frame.metrics) if has_band_features else dict(frame.metrics)
 
-            # ------------------------------------------------------------------
-            # Calibration: collect metric samples for 30 s, then save p5/p95
-            # ------------------------------------------------------------------
             if self._calibrate and has_band_features:
                 calib_key = self._CALIB_METRIC.get(str(self.get_parameter("policy").value))
                 if calib_key and calib_key in features:
@@ -303,7 +267,6 @@ class EegControlNode(Node):
                     )
                 if time.time() >= self._calib_deadline:
                     self._finish_calibration()
-            # ------------------------------------------------------------------
 
             if has_band_features:
                 self.last_intents = self.policy.compute_intents(features)
@@ -311,147 +274,6 @@ class EegControlNode(Node):
                 self.last_intents = {"speed_intent": 0.5, "steer_intent": 0.5}
             self.last_msg_ts = time.time()
             self._adapter_connected = True
-            control_mode = "band_features"
-            command_linear_x = 0.0
-            command_angular_z = 0.0
-            if tcp_control_mode == "feature" and has_feature:
-                control_mode = "feature"
-                twist = feature_to_twist(
-                    float(feature_value),
-                    max_forward_speed=self.max_forward_speed,
-                    turn_angular_speed=self.turn_angular_speed,
-                    steer_deadzone=self.steer_deadzone,
-                    last_twist=self.last_twist,
-                )
-                command_linear_x = float(twist.linear.x)
-                command_angular_z = float(twist.angular.z)
-                self.pub.publish(twist)
-                self.last_mode = "feature"
-                self.last_twist = twist
-                analysis = {
-                    "ts": frame.ts,
-                    "source": frame.source,
-                    "metrics": frame.metrics,
-                    "features": features,
-                    "intents": self.last_intents,
-                    "control_mode": control_mode,
-                    "command_linear_x": command_linear_x,
-                    "command_angular_z": command_angular_z,
-                }
-                self.analysis_pub.publish(String(data=json.dumps(analysis, ensure_ascii=False)))
-                if self.analysis_verbose:
-                    self.get_logger().info(json.dumps(analysis, ensure_ascii=False))
-                if self._csv_writer is not None:
-                    row = {
-                        "ts": frame.ts,
-                        "source": frame.source,
-                        "control_mode": control_mode,
-                        "packet_no": frame.metrics.get("packet_no", 0.0),
-                        "feature_count": frame.metrics.get("feature_count", 0.0),
-                        "movement": frame.metrics.get("movement", 0.0),
-                        "artifact": frame.metrics.get("artifact", 0.0),
-                        "current_y_unused": frame.metrics.get("current_y_unused", -1.0),
-                        "metrics_json": json.dumps(frame.metrics, ensure_ascii=False, sort_keys=True),
-                        "command_linear_x": command_linear_x,
-                        "command_angular_z": command_angular_z,
-                        "speed_intent": self.last_intents.get("speed_intent", 0.5),
-                        "steer_intent": self.last_intents.get("steer_intent", 0.5),
-                    }
-                    self._csv_writer.writerow(row)
-                    self._csv_flush_counter += 1
-                    if self._csv_flush_counter >= self._csv_flush_every_n:
-                        self._csv_file.flush()
-                        self._csv_flush_counter = 0
-                if self.verbose:
-                    self.get_logger().info(
-                        (
-                            "src=%s mode=%s packet_no=%.0f feature_count=%.0f movement=%.3f artifact=%.3f "
-                            "cmd_x=%.3f cmd_z=%.3f"
-                        )
-                        % (
-                            frame.source,
-                            control_mode,
-                            frame.metrics.get("packet_no", 0.0),
-                            frame.metrics.get("feature_count", 0.0),
-                            frame.metrics.get("movement", 0.0),
-                            frame.metrics.get("artifact", 0.0),
-                            command_linear_x,
-                            command_angular_z,
-                        )
-                    )
-                return
-            if has_movement:
-                control_mode = "movement"
-                movement = float(movement_value)
-                twist = Twist()
-                if 0.0 < movement < 0.5:
-                    twist.linear.x = self.max_forward_speed
-                elif 0.5 < movement < 1.0:
-                    twist.linear.x = self.reverse_speed
-                elif movement == 1.0:
-                    twist.angular.z = self.turn_angular_speed
-                elif movement < 0.0:
-                    pass
-                else:
-                    pass
-                command_linear_x = float(twist.linear.x)
-                command_angular_z = float(twist.angular.z)
-                self.pub.publish(twist)
-                self.last_mode = "movement"
-                self.last_twist = twist
-                self.last_intents = {"speed_intent": 0.5, "steer_intent": 0.5}
-                analysis = {
-                    "ts": frame.ts,
-                    "source": frame.source,
-                    "metrics": frame.metrics,
-                    "features": features,
-                    "intents": self.last_intents,
-                    "control_mode": control_mode,
-                    "command_linear_x": command_linear_x,
-                    "command_angular_z": command_angular_z,
-                }
-                self.analysis_pub.publish(String(data=json.dumps(analysis, ensure_ascii=False)))
-                if self.analysis_verbose:
-                    self.get_logger().info(json.dumps(analysis, ensure_ascii=False))
-                if self._csv_writer is not None:
-                    row = {
-                        "ts": frame.ts,
-                        "source": frame.source,
-                        "control_mode": control_mode,
-                        "packet_no": frame.metrics.get("packet_no", 0.0),
-                        "feature_count": frame.metrics.get("feature_count", 0.0),
-                        "movement": frame.metrics.get("movement", 0.0),
-                        "artifact": frame.metrics.get("artifact", 0.0),
-                        "current_y_unused": frame.metrics.get("current_y_unused", -1.0),
-                        "metrics_json": json.dumps(frame.metrics, ensure_ascii=False, sort_keys=True),
-                        "command_linear_x": command_linear_x,
-                        "command_angular_z": command_angular_z,
-                        "speed_intent": self.last_intents.get("speed_intent", 0.5),
-                        "steer_intent": self.last_intents.get("steer_intent", 0.5),
-                    }
-                    self._csv_writer.writerow(row)
-                    self._csv_flush_counter += 1
-                    if self._csv_flush_counter >= self._csv_flush_every_n:
-                        self._csv_file.flush()
-                        self._csv_flush_counter = 0
-                if self.verbose:
-                    self.get_logger().info(
-                        (
-                            "src=%s mode=%s packet_no=%.0f feature_count=%.0f movement=%.3f artifact=%.3f "
-                            "cmd_x=%.3f cmd_z=%.3f"
-                        )
-                        % (
-                            frame.source,
-                            control_mode,
-                            frame.metrics.get("packet_no", 0.0),
-                            frame.metrics.get("feature_count", 0.0),
-                            frame.metrics.get("movement", 0.0),
-                            frame.metrics.get("artifact", 0.0),
-                            command_linear_x,
-                            command_angular_z,
-                        )
-                    )
-                return
 
             analysis = {
                 "ts": frame.ts,
@@ -459,27 +281,21 @@ class EegControlNode(Node):
                 "metrics": frame.metrics,
                 "features": features,
                 "intents": self.last_intents,
-                "control_mode": control_mode,
-                "command_linear_x": command_linear_x,
-                "command_angular_z": command_angular_z,
+                "control_mode": "band_features",
+                "command_linear_x": 0.0,
+                "command_angular_z": 0.0,
             }
-            self.last_mode = "intents"
             self.analysis_pub.publish(String(data=json.dumps(analysis, ensure_ascii=False)))
             if self.analysis_verbose:
                 self.get_logger().info(json.dumps(analysis, ensure_ascii=False))
+
             if self._csv_writer is not None:
                 row = {
                     "ts": frame.ts,
                     "source": frame.source,
-                    "control_mode": control_mode,
-                    "packet_no": frame.metrics.get("packet_no", 0.0),
-                    "feature_count": frame.metrics.get("feature_count", 0.0),
-                    "movement": frame.metrics.get("movement", 0.0),
-                    "artifact": frame.metrics.get("artifact", 0.0),
-                    "current_y_unused": frame.metrics.get("current_y_unused", -1.0),
                     "metrics_json": json.dumps(frame.metrics, ensure_ascii=False, sort_keys=True),
-                    "command_linear_x": command_linear_x,
-                    "command_angular_z": command_angular_z,
+                    "command_linear_x": 0.0,
+                    "command_angular_z": 0.0,
                     "speed_intent": self.last_intents.get("speed_intent", 0.5),
                     "steer_intent": self.last_intents.get("steer_intent", 0.5),
                 }
@@ -488,23 +304,12 @@ class EegControlNode(Node):
                 if self._csv_flush_counter >= self._csv_flush_every_n:
                     self._csv_file.flush()
                     self._csv_flush_counter = 0
-            if not has_band_features:
-                self.pub.publish(Twist())
-                return
-            if not self._calibrate:
-                    self.pub.publish(self._intents_to_twist(self.last_intents))
+
             if self.verbose:
                 self.get_logger().info(
-                    (
-                        "src=%s packet_no=%.0f feature_count=%.0f movement=%.3f artifact=%.3f "
-                        "speed_intent=%.3f steer_intent=%.3f"
-                    )
+                    "src=%s speed_intent=%.3f steer_intent=%.3f"
                     % (
                         frame.source,
-                        frame.metrics.get("packet_no", 0.0),
-                        frame.metrics.get("feature_count", 0.0),
-                        frame.metrics.get("movement", 0.0),
-                        frame.metrics.get("artifact", 0.0),
                         self.last_intents.get("speed_intent", 0.5),
                         self.last_intents.get("steer_intent", 0.5),
                     )
@@ -518,11 +323,8 @@ class EegControlNode(Node):
             return
 
         if not self._calibrate:
-            if self.last_mode in ("movement", "feature"):
-                self.pub.publish(self.last_twist)
-            else:
-                twist = self._intents_to_twist(self.last_intents)
-                self.pub.publish(twist)
+            twist = self._intents_to_twist(self.last_intents)
+            self.pub.publish(twist)
 
     def _intents_to_twist(self, intents) -> Twist:
         speed_intent = clip01(float(intents.get("speed_intent", 0.0)))

@@ -45,9 +45,7 @@ POLICIES: Dict[str, type] = {
 def build_adapter(args: Any):
     """Instantiate the appropriate adapter based on ``args.input``.
 
-    Supports the same ``input`` choices as the legacy pipeline:
-    ``mock``, ``keyboard``, ``tcp_client``, ``tcp_file``, ``lsl``,
-    plus the new ``lsl`` mode that applies on-device DSP.
+    Supported modes: ``mock``, ``keyboard``, ``lsl``.
 
     Parameters
     ----------
@@ -59,8 +57,6 @@ def build_adapter(args: Any):
     RuntimeError
         For unsupported input modes or missing configuration.
     """
-    from thymio_control.adapters.base import BaseAdapter
-
     mode = str(getattr(args, "input", "mock")).strip()
 
     if mode == "mock":
@@ -70,24 +66,6 @@ def build_adapter(args: Any):
     if mode == "keyboard":
         from thymio_control.adapters.mock import KeyboardAdapter
         return KeyboardAdapter()
-
-    if mode == "tcp_client":
-        from thymio_control.adapters.tcp_client import TcpClientAdapter
-        return TcpClientAdapter(args.tcp_host, args.tcp_port)
-
-    if mode == "tcp_file":
-        file_path = getattr(args, "file_path", "")
-        if not file_path:
-            raise RuntimeError("tcp_file mode requires --file-path")
-        from thymio_control.adapters.tcp_file import TcpFileAdapter
-        return TcpFileAdapter(file_path)
-
-    if mode == "file":
-        file_path = getattr(args, "file_path", "")
-        if not file_path:
-            raise RuntimeError("file mode requires --file-path")
-        from thymio_control.adapters.edf_file import EdfFileAdapter
-        return EdfFileAdapter(file_path, realtime=True)
 
     if mode == "lsl":
         # Raw EEG → on-board DSP via Welch PSD (RawLslAdapter)

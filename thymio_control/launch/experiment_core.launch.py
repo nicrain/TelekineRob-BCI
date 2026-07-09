@@ -5,7 +5,6 @@ from ament_index_python.packages import PackageNotFoundError, get_package_share_
 from launch import LaunchDescription
 from launch.actions import (
     DeclareLaunchArgument,
-    ExecuteProcess,
     IncludeLaunchDescription,
     LogInfo,
     SetEnvironmentVariable,
@@ -41,16 +40,9 @@ def generate_launch_description():
     use_gui = LaunchConfiguration("use_gui")
     use_teleop = LaunchConfiguration("use_teleop")
     run_eeg = LaunchConfiguration("run_eeg")
-    run_gaze = LaunchConfiguration("run_gaze")
     run_rviz = LaunchConfiguration("run_rviz")
     eeg_config_file = LaunchConfiguration("eeg_config_file")
-    gaze_config_file = LaunchConfiguration("gaze_config_file")
-    file_path = LaunchConfiguration("file_path")
     eeg_input = LaunchConfiguration("input")
-    use_tobii_bridge = LaunchConfiguration("use_tobii_bridge")
-    use_enobio_bridge = LaunchConfiguration("use_enobio_bridge")
-    tobii_udp_port = LaunchConfiguration("tobii_udp_port")
-    enobio_udp_port = LaunchConfiguration("enobio_udp_port")
     device = LaunchConfiguration("device")
 
     decls = [
@@ -58,12 +50,7 @@ def generate_launch_description():
         DeclareLaunchArgument("use_gui", default_value=_str(defaults.get("use_gui", True))),
         DeclareLaunchArgument("use_teleop", default_value=_str(defaults.get("use_teleop", False))),
         DeclareLaunchArgument("run_eeg", default_value=_str(defaults.get("run_eeg", True))),
-        DeclareLaunchArgument("run_gaze", default_value=_str(defaults.get("run_gaze", False))),
         DeclareLaunchArgument("run_rviz", default_value=_str(defaults.get("run_rviz", False))),
-        DeclareLaunchArgument("use_tobii_bridge", default_value=_str(defaults.get("use_tobii_bridge", False))),
-        DeclareLaunchArgument("use_enobio_bridge", default_value=_str(defaults.get("use_enobio_bridge", False))),
-        DeclareLaunchArgument("tobii_udp_port", default_value=str(defaults.get("tobii_udp_port", 5005))),
-        DeclareLaunchArgument("enobio_udp_port", default_value=str(defaults.get("enobio_udp_port", 5006))),
         DeclareLaunchArgument(
             "eeg_config_file",
             default_value=os.path.join(
@@ -72,15 +59,6 @@ def generate_launch_description():
                 defaults.get("eeg_config_file", "eeg_control_node.params.yaml"),
             ),
         ),
-        DeclareLaunchArgument(
-            "gaze_config_file",
-            default_value=os.path.join(
-                get_package_share_directory("thymio_control"),
-                "config",
-                defaults.get("gaze_config_file", "gaze_control_node.params.yaml"),
-            ),
-        ),
-        DeclareLaunchArgument("file_path", default_value=""),
         DeclareLaunchArgument("input", default_value=""),
         DeclareLaunchArgument("device", default_value=""),
     ]
@@ -149,29 +127,9 @@ def generate_launch_description():
     eeg_node = Node(
         package="thymio_control",
         executable="eeg_control_node.py",
-        parameters=[eeg_config_file, {"cmd_topic": cmd_topic, "file_path": file_path, "input": eeg_input}],
+        parameters=[eeg_config_file, {"cmd_topic": cmd_topic, "input": eeg_input}],
         output="log",
         condition=IfCondition(PythonExpression(["'", run_eeg, "' == 'true' and '", use_teleop, "' == 'false'"])),
-    )
-
-    gaze_node = Node(
-        package="thymio_control",
-        executable="gaze_control_node.py",
-        parameters=[gaze_config_file, {"cmd_topic": cmd_topic}],
-        output="log",
-        condition=IfCondition(PythonExpression(["'", run_gaze, "' == 'true' and '", use_teleop, "' == 'false'"])),
-    )
-
-    tobii_bridge = ExecuteProcess(
-        cmd=["python3", PathJoinSubstitution([get_package_share_directory("thymio_control"), "tools", "bridges", "wsl_tobii_bridge.py"]), "--port", tobii_udp_port],
-        output="screen",
-        condition=IfCondition(use_tobii_bridge),
-    )
-
-    enobio_bridge = ExecuteProcess(
-        cmd=["python3", PathJoinSubstitution([get_package_share_directory("thymio_control"), "tools", "bridges", "wsl_enobio_bridge.py"]), "--port", enobio_udp_port],
-        output="screen",
-        condition=IfCondition(use_enobio_bridge),
     )
 
     teleop_node = Node(
@@ -199,7 +157,7 @@ def generate_launch_description():
             set_gz_resource_path,
             SetEnvironmentVariable("GZ_PARTITION", gz_partition),
             LogInfo(msg=["GZ_PARTITION=", gz_partition]),
-            LogInfo(msg=["Launch: sim=", use_sim, " eeg=", run_eeg, " gaze=", run_gaze, " teleop=", use_teleop, " rviz=", run_rviz]),
+            LogInfo(msg=["Launch: sim=", use_sim, " eeg=", run_eeg, " teleop=", use_teleop, " rviz=", run_rviz]),
             gz_sim_gui,
             gz_sim_headless,
             sim_model_publisher,
@@ -207,9 +165,6 @@ def generate_launch_description():
             gz_bridge,
             real_robot_driver,
             eeg_node,
-            gaze_node,
-            tobii_bridge,
-            enobio_bridge,
             teleop_node,
             rviz_node,
         ]

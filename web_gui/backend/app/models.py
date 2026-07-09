@@ -9,23 +9,16 @@ class LaunchConfig(BaseModel):
     use_sim: bool = True
     use_gui: bool = True
     run_eeg: bool = False
-    run_gaze: bool = False
     run_rviz: bool = False
-    use_tobii_bridge: bool = False
-    use_enobio_bridge: bool = False
     device: str = ""
 
 
 class EegConfig(BaseModel):
-    input: Literal["mock", "tcp_client", "tcp_file", "lsl", "file"] = "mock"
+    input: Literal["mock", "lsl"] = "mock"
     policy: Literal["ei", "tbr", "alpha"] = "tbr"
     calibrate: bool = False
     calib_offset: float = 0.0
     calib_scale: float = 1.0
-    tcp_control_mode: Literal["feature", "movement"] = "feature"
-    tcp_host: str = "127.0.0.1"
-    tcp_port: int = 6001
-    file_path: str = ""
     lsl_stream_type: str = "EEG"
     lsl_timeout: float = 8.0
     lsl_source_id: str = ""

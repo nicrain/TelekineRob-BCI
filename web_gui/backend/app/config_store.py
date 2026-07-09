@@ -34,10 +34,7 @@ def _load_defaults() -> AppConfig:
     cfg.launch.use_sim = bool(launch_cfg.get("use_sim", cfg.launch.use_sim))
     cfg.launch.use_gui = bool(launch_cfg.get("use_gui", cfg.launch.use_gui))
     cfg.launch.run_eeg = bool(launch_cfg.get("run_eeg", cfg.launch.run_eeg))
-    cfg.launch.run_gaze = bool(launch_cfg.get("run_gaze", cfg.launch.run_gaze))
     cfg.launch.run_rviz = bool(launch_cfg.get("run_rviz", cfg.launch.run_rviz))
-    cfg.launch.use_tobii_bridge = bool(launch_cfg.get("use_tobii_bridge", cfg.launch.use_tobii_bridge))
-    cfg.launch.use_enobio_bridge = bool(launch_cfg.get("use_enobio_bridge", cfg.launch.use_enobio_bridge))
 
     eeg_root = _safe_load(_EEG_YAML)
     ros_params = eeg_root.get("/**", {}).get("ros__parameters", {})
@@ -46,10 +43,6 @@ def _load_defaults() -> AppConfig:
     cfg.eeg.calibrate = bool(ros_params.get("calibrate", cfg.eeg.calibrate))
     cfg.eeg.calib_offset = float(ros_params.get("calib_offset", cfg.eeg.calib_offset))
     cfg.eeg.calib_scale = float(ros_params.get("calib_scale", cfg.eeg.calib_scale))
-    cfg.eeg.tcp_control_mode = str(ros_params.get("tcp_control_mode", cfg.eeg.tcp_control_mode))
-    cfg.eeg.tcp_host = str(ros_params.get("tcp_host", cfg.eeg.tcp_host))
-    cfg.eeg.tcp_port = int(ros_params.get("tcp_port", cfg.eeg.tcp_port))
-    cfg.eeg.file_path = str(ros_params.get("file_path", cfg.eeg.file_path))
     cfg.eeg.lsl_stream_type = str(ros_params.get("lsl_stream_type", cfg.eeg.lsl_stream_type))
     cfg.eeg.lsl_timeout = float(ros_params.get("lsl_timeout", cfg.eeg.lsl_timeout))
     cfg.eeg.lsl_source_id = str(ros_params.get("lsl_source_id", cfg.eeg.lsl_source_id))
@@ -70,14 +63,8 @@ def _persist_config(cfg: AppConfig) -> None:
         "use_sim": bool(cfg.launch.use_sim),
         "use_gui": bool(cfg.launch.use_gui),
         "run_eeg": bool(cfg.launch.run_eeg),
-        "run_gaze": bool(cfg.launch.run_gaze),
         "run_rviz": bool(cfg.launch.run_rviz),
-        "use_tobii_bridge": bool(cfg.launch.use_tobii_bridge),
-        "use_enobio_bridge": bool(cfg.launch.use_enobio_bridge),
-        "tobii_udp_port": 5005,
-        "enobio_udp_port": 5006,
         "eeg_config_file": "eeg_control_node.params.yaml",
-        "gaze_config_file": "gaze_control_node.params.yaml",
     }
     if _LAUNCH_YAML.exists():
         launch_payload = _deep_merge(_safe_load(_LAUNCH_YAML), launch_payload)
@@ -91,10 +78,6 @@ def _persist_config(cfg: AppConfig) -> None:
             "calibrate": bool(cfg.eeg.calibrate),
             "calib_offset": float(cfg.eeg.calib_offset),
             "calib_scale": float(cfg.eeg.calib_scale),
-            "tcp_control_mode": str(cfg.eeg.tcp_control_mode),
-            "tcp_host": str(cfg.eeg.tcp_host),
-            "tcp_port": int(cfg.eeg.tcp_port),
-            "file_path": str(cfg.eeg.file_path),
             "lsl_stream_type": str(cfg.eeg.lsl_stream_type),
             "lsl_timeout": float(cfg.eeg.lsl_timeout),
             "lsl_source_id": str(cfg.eeg.lsl_source_id),

@@ -26,14 +26,8 @@ def _build_launch_command(cfg: AppConfig) -> list[str]:
         f"use_sim:={_bool_str(launch.use_sim)}",
         f"use_gui:={_bool_str(launch.use_gui)}",
         f"run_eeg:={_bool_str(launch.run_eeg)}",
-        f"run_gaze:={_bool_str(launch.run_gaze)}",
         f"use_teleop:=false",
-        f"use_tobii_bridge:={_bool_str(launch.use_tobii_bridge)}",
-        f"use_enobio_bridge:={_bool_str(launch.use_enobio_bridge)}",
     ]
-    if cfg.eeg.input in ("tcp_file", "file") and cfg.eeg.file_path:
-        resolved_file = _resolve_tcp_file_path(cfg.eeg.file_path)
-        cmd.append(f"file_path:={resolved_file}")
     if cfg.eeg.input:
         cmd.append(f"input:={cfg.eeg.input}")
     if launch.device and not launch.use_sim:
@@ -43,29 +37,6 @@ def _build_launch_command(cfg: AppConfig) -> list[str]:
 
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[3]
-
-
-def _resolve_tcp_file_path(file_path: str) -> str:
-    """Resolve tcp replay file path; support absolute and repo-relative inputs."""
-    raw = str(file_path).strip()
-    if not raw:
-        return raw
-
-    p = Path(raw).expanduser()
-    if p.is_absolute():
-        return str(p)
-
-    repo_root = _repo_root()
-    candidate_repo = (repo_root / p).resolve()
-    if candidate_repo.exists():
-        return str(candidate_repo)
-
-    candidate_recode = (repo_root / "records" / p).resolve()
-    if candidate_recode.exists():
-        return str(candidate_recode)
-
-    # Fallback to absolute path under repo root for predictable behavior.
-    return str(candidate_repo)
 
 
 def _source_prefix() -> str:
@@ -164,7 +135,6 @@ def start_system(cfg: AppConfig, dry_run: bool = True) -> CommandResult:
 _KILL_PATTERNS = [
     "ros2 launch thymio_control",
     "eeg_control_node",
-    "gaze_control_node",
     "gz sim",
     "gz server",
     "gz client",

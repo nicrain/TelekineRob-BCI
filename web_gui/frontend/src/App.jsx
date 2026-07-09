@@ -6,10 +6,6 @@ import { api, getWsUrl } from './api';
 const MAX_POINTS = 140;
 
 const CHANNEL_PRESETS = {
-  enobio: [
-    'Fp1', 'Fp2', 'F3', 'F4', 'C3', 'C4', 'P3', 'P4', 'O1', 'O2',
-    'F7', 'F8', 'T7', 'T8', 'P7', 'P8', 'Fz', 'Cz', 'Pz', 'Oz',
-  ],
   gtec_hybrid: ['Fz', 'C3', 'Cz', 'C4', 'Pz', 'PO7', 'Oz', 'PO8'],
   gtec_headband: ['F8', 'Fp2', 'Fp1', 'F7'],
 };
@@ -416,7 +412,7 @@ export default function App() {
   const [teleopConnected, setTeleopConnected] = useState(false);
 
   /* ── Derived ────────────────────────────────────────── */
-  const isControlMode = inputMode === 'teleop' || inputMode === 'tobii';
+  const isControlMode = inputMode === 'teleop';
 
   /* ── Load config ────────────────────────────────────── */
   useEffect(() => {
@@ -428,20 +424,7 @@ export default function App() {
         // Sync backend config → local UI state
         if (cfg.eeg) {
           const inp = cfg.eeg.input || 'mock';
-          if (inp === 'mock') {
-            setInputMode('eeg');
-          } else if (inp === 'tcp_file') {
-            setInputMode('eeg');
-          } else if (inp === 'file') {
-            setInputMode('eeg');
-            setEegProtocol('file');
-          } else if (inp === 'lsl') {
-            setInputMode('eeg');
-            setEegProtocol('lsl');
-          } else {
-            setInputMode('eeg');
-          }
-          if (cfg.eeg.file_path) setFilePath(cfg.eeg.file_path);
+          setInputMode(inp === 'mock' ? 'mock' : 'eeg');
           if (cfg.eeg.calib_offset != null) setCalibOffset(Number(cfg.eeg.calib_offset));
           if (cfg.eeg.calib_scale != null) setCalibScale(Number(cfg.eeg.calib_scale));
         }
@@ -538,13 +521,6 @@ export default function App() {
   }, [inputMode]);
 
   /* ── Fetch record files when source is file-based ──── */
-  const isFileSource = eegProtocol === 'tcp_file' || eegProtocol === 'lsl_file';
-  useEffect(() => {
-    if (!isFileSource) { setRecordFiles([]); return; }
-    api.get('/api/files/records')
-      .then((r) => setRecordFiles(r.data.files || []))
-      .catch(() => setRecordFiles([]));
-  }, [isFileSource]);
 
   /* ── ECharts options (adapt to theme) ────────────────── */
   const isDarkCharts = theme === 'light';
@@ -613,34 +589,22 @@ export default function App() {
 
   /* ── Build patch ─────────────────────────────────────── */
   function buildPatch() {
-    const inputMap = {
-      eeg:     eegProtocol === 'tcp' ? 'tcp_client' : eegProtocol === 'tcp_file' ? 'tcp_file' : eegProtocol === 'lsl' ? 'lsl' : 'file',
-      tobii:   'lsl',
-      teleop:  'tcp_client',
-    };
     const isSim = outputMode === 'thymio_simu';
     const patch = {
       eeg: {
-        input:           inputMap[inputMode] || 'mock',
+        input:           inputMode === 'mock' ? 'mock' : 'lsl',
         policy:          metric,
         calibrate:       false,
-        tcp_control_mode: 'feature',
-        tcp_host:        '127.0.0.1',
-        tcp_port:        1234,
-        file_path:       filePath,
         lsl_stream_type: 'EEG',
         lsl_timeout:     8.0,
         lsl_source_id:   eegBrand === 'gtec_headband' ? 'gtec_bci_core4' : eegBrand === 'gtec_hybrid' ? 'gtec_hybrid_black' : '',
         brand:           eegBrand,
       },
       launch: {
-        use_sim:           isSim,
-        use_gui:           false,
-        run_eeg:           inputMode === 'eeg' || inputMode === 'mock',
-        run_gaze:          inputMode === 'tobii',
-        use_tobii_bridge:  inputMode === 'tobii',
-        use_enobio_bridge: false,
-        device:            outputMode === 'thymio' ? thymioDevice : '',
+        use_sim:  isSim,
+        use_gui:  false,
+        run_eeg:  inputMode === 'eeg' || inputMode === 'mock',
+        device:   outputMode === 'thymio' ? thymioDevice : '',
       },
     };
     return patch;
@@ -769,7 +733,6 @@ export default function App() {
                 options={[
                   { value: 'eeg',    label: 'EEG' },
                   { value: 'mock',   label: 'Mock' },
-                  { value: 'tobii',  label: 'Tobii' },
                   { value: 'teleop', label: 'Keyboard' },
                 ]}
               />
@@ -782,12 +745,10 @@ export default function App() {
                     onChange={(v) => {
                       setEegBrand(v);
                       setSelectedChannels([0, 1, 2]);
-                      if (v === 'gtec_headband' || v === 'gtec_hybrid') { setEegProtocol('lsl'); setFilePath(''); }
-                      else if (v === 'enobio') { setEegProtocol('tcp'); setFilePath(''); }
+                      setEegProtocol('lsl');
                     }}
                     disabled={running}
                     options={[
-                      { value: 'enobio',         label: 'Enobio' },
                       { value: 'gtec_hybrid',    label: 'g.tec Hybrid Black' },
                       { value: 'gtec_headband',  label: 'g.tec Headband' },
                     ]}
@@ -796,38 +757,10 @@ export default function App() {
                   <CascadeSelect
                     label="Source"
                     value={eegProtocol}
-                    onChange={(v) => { setEegProtocol(v); setFilePath(''); }}
+                    onChange={(v) => { setEegProtocol(v); }}
                     disabled={running}
-                    options={(
-                      eegBrand === 'gtec_headband' || eegBrand === 'gtec_hybrid'
-                        ? [{ value: 'lsl', label: 'LSL Stream' }]
-                        : eegBrand === 'enobio'
-                          ? [
-                              { value: 'tcp',      label: 'TCP Stream' },
-                              { value: 'tcp_file', label: 'TCP File' },
-                              { value: 'lsl_file', label: 'EDF File' },
-                            ]
-                          : [
-                              { value: 'tcp',      label: 'TCP Stream' },
-                              { value: 'lsl',  label: 'LSL Stream' },
-                              { value: 'tcp_file', label: 'TCP File' },
-                              { value: 'lsl_file', label: 'EDF File' },
-                            ]
-                    )}
+                    options={[{ value: 'lsl', label: 'LSL Stream' }]}
                   />
-
-                  {isFileSource && (
-                    <CascadeSelect
-                      label="File"
-                      value={filePath}
-                      onChange={setFilePath}
-                      disabled={running}
-                      options={[
-                        { value: '', label: '— select file —' },
-                        ...recordFiles.map((f) => ({ value: f, label: f })),
-                      ]}
-                    />
-                  )}
 
                   <ChannelPicker
                     channels={CHANNEL_PRESETS[eegBrand]}

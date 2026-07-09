@@ -21,9 +21,6 @@ def test_patch_config_persists_to_yaml(monkeypatch, tmp_path: Path):
             "use_sim": True,
             "use_gui": True,
             "run_eeg": False,
-            "run_gaze": False,
-            "use_tobii_bridge": False,
-            "use_enobio_bridge": False,
         },
     )
     _write_yaml(
@@ -33,9 +30,6 @@ def test_patch_config_persists_to_yaml(monkeypatch, tmp_path: Path):
                 "ros__parameters": {
                     "input": "mock",
                     "policy": "tbr",
-                    "tcp_control_mode": "feature",
-                    "tcp_host": "127.0.0.1",
-                    "tcp_port": 6001,
                     "lsl_stream_type": "EEG",
                     "lsl_timeout": 8.0,
                     "max_forward_speed": 0.2,
@@ -57,7 +51,7 @@ def test_patch_config_persists_to_yaml(monkeypatch, tmp_path: Path):
     config_store.patch_config(
         {
             "launch": {"run_eeg": True},
-            "eeg": {"tcp_host": "172.27.96.1", "tcp_port": 1234},
+            "eeg": {"lsl_source_id": "gtec_bci_core4"},
         }
     )
 
@@ -65,5 +59,4 @@ def test_patch_config_persists_to_yaml(monkeypatch, tmp_path: Path):
     eeg_loaded = yaml.safe_load(eeg_path.read_text(encoding="utf-8"))
 
     assert launch_loaded["run_eeg"] is True
-    assert eeg_loaded["/**"]["ros__parameters"]["tcp_host"] == "172.27.96.1"
-    assert eeg_loaded["/**"]["ros__parameters"]["tcp_port"] == 1234
+    assert eeg_loaded["/**"]["ros__parameters"]["lsl_source_id"] == "gtec_bci_core4"

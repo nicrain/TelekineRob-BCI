@@ -7,9 +7,9 @@ Usage
 -----
     from thymio_control.device_profiles import get_device_config
 
-    cfg = get_device_config("enobio-20")
-    n_ch = cfg["n_channels"]   # 20
-    sr   = cfg["sample_rate"]  # 500
+    cfg = get_device_config("bci-core-4")
+    n_ch = cfg["n_channels"]   # 4
+    sr   = cfg["sample_rate"]  # 250
 
 Adding a new device
 -------------------
@@ -26,23 +26,6 @@ from typing import Any, Dict
 
 
 EEG_DEVICE_CONFIGS: Dict[str, Dict[str, Any]] = {
-    "enobio-20": {
-        "label": "Enobio 20",
-        "n_channels": 20,
-        "sample_rate": 500,
-        "channel_labels": [
-            "Fp1", "Fp2", "F3", "F4", "C3", "C4", "P3", "P4",
-            "O1", "O2", "F7", "F8", "T7", "T8", "P7", "P8",
-            "Fz", "Cz", "Pz", "Oz",
-        ],
-        "default_lsl_channel_map": {
-            "Fp1": 0,  "Fp2": 1,  "F3": 2,   "F4": 3,
-            "C3":  4,  "C4":  5,  "P3": 6,   "P4": 7,
-            "O1":  8,  "O2":  9,  "F7": 10,  "F8": 11,
-            "T7":  12, "T8":  13, "P7": 14,  "P8": 15,
-            "Fz":  16, "Cz":  17, "Pz": 18,  "Oz": 19,
-        },
-    },
     "hybrid-black": {
         "label": "Unicorn Hybrid Black",
         "n_channels": 8,
@@ -71,7 +54,7 @@ def get_device_config(device_key: str) -> Dict[str, Any]:
     Parameters
     ----------
     device_key : str
-        Case-insensitive device identifier, e.g. ``"enobio-20"``.
+        Case-insensitive device identifier, e.g. ``"bci-core-4"``.
 
     Raises
     ------

@@ -39,8 +39,8 @@ def test_get_device_config_valid():
 
 
 def test_get_device_config_case_insensitive():
-    cfg1 = get_device_config("ENOBIO-20")
-    cfg2 = get_device_config("enobio-20")
+    cfg1 = get_device_config("BCI-CORE-4")
+    cfg2 = get_device_config("bci-core-4")
     assert cfg1 is cfg2
 
 
@@ -49,19 +49,13 @@ def test_get_device_config_invalid():
         get_device_config("nonexistent-device")
 
 
-def test_enobio_20_has_20_channels():
-    cfg = get_device_config("enobio-20")
-    assert cfg["n_channels"] == 20
-    assert cfg["sample_rate"] == 500
-
-
-def test_unicorn_8_has_8_channels():
+def test_hybrid_black_has_8_channels():
     cfg = get_device_config("hybrid-black")
     assert cfg["n_channels"] == 8
     assert cfg["sample_rate"] == 250
 
 
-def test_unicorn_4_has_4_channels():
+def test_bci_core_4_has_4_channels():
     cfg = get_device_config("bci-core-4")
     assert cfg["n_channels"] == 4
     assert cfg["sample_rate"] == 250

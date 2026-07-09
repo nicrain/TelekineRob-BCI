@@ -1,7 +1,5 @@
 adapter:
   input: mock
-  tcp_host: 0.0.0.0
-  tcp_port: 1234
   lsl_stream_type: EEG
   lsl_timeout: 8.0
   lsl_source_id: ""
