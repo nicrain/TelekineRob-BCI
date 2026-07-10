@@ -1,103 +1,96 @@
-# ROS Thymio 项目整体架构与工程化改进需求说明书
+# TelekineRob-BCI 项目架构说明书
 
 ## 1. 文档信息
-- 文档名称: ROS Thymio 项目整体架构与工程化改进需求说明书
-- 项目: ROS2 Thymio EEG/Gaze/Web 控制平台
-- 版本: v2.5
-- 日期: 2026-05-19
-- 状态: ThetaBetaPolicy 已校准 + AlphaOnlyPolicy 已添加（待校准）+ 转向已禁用
-- 适用对象:
-  - 架构负责人、算法工程师、ROS 工程师、前后端工程师、测试工程师
-  - AI Agent（代码改造、测试补齐、回归验证、文档维护）
+- 项目: g.tec EEG 驱动的 Thymio 机器人控制平台
+- 版本: v3.0
+- 日期: 2026-07-10
+- 状态: gtec-only 精简架构，BCI Core-4 + Hybrid Black 双设备支持
+- 分支: `feature/gtec-only`
 
 ---
 
-## 2. 目标与背景
+## 2. 架构概览
 
-本项目的主要目标不是单点优化某一条链路，而是系统性完善整个代码库，确保:
-1. 架构边界清晰，模块职责单一，便于长期演进。
-2. 多输入源（EEG LSL、EDF 回放、TCP/UDP、Mock、Gaze）可统一接入和治理。
-3. 关键控制链路具备可验证的实时性、稳定性和可回滚能力。
-4. 代码质量、测试体系、配置治理和发布流程可持续运作。
+```
+Windows 主机:
+  gtec_bridge/gpype_lsl_bridge.py        (BCI Core-4, gpype → LSL)
+  gtec_bridge/unicornpy_lsl_bridge.py    (Hybrid Black, UnicornPy → LSL)
+        ↓ LSL (250Hz, raw EEG)
 
-本规范将原 EEG LSL/EDF 低延迟重构需求升级为项目级工程规范，EEG LSL/EDF 属于其中一个重点专题。
-
----
-
-## 3. 现状问题总览（项目级）
-
-## 3.1 架构层面
-1. 输入设备判断、输入方式判断、协议处理、数据处理和控制策略在部分路径中耦合。
-2. 实验代码与生产代码边界不够明确，存在“可运行但不可治理”的风险。
-3. 统一的内部数据契约（raw frame / feature frame / control intent）尚未全面落地。
-
-## 3.2 代码层面
-1. 部分节点承担过多职责（采集、处理、控制、日志、持久化混在一个周期内）。
-2. 不同输入源采用不同语义，导致策略复用和行为一致性较差。
-3. 关键路径缺乏标准化埋点，性能瓶颈难以客观定位。
-
-## 3.3 工程层面
-1. 配置项分散，命名不统一，默认值来源不透明。
-2. 测试覆盖结构不完整，尤其是跨模块集成与性能回归。
-3. 文档与实现存在时序差，容易导致协作理解偏差。
-
-## 3.4 现状模块成熟度评估（v2.1 新增）
-
-> 基于 2026-04-24 代码审查结果。
-
-| 模块 | 位置 | 行数 | 成熟度 | 关键发现 |
-|------|------|------|--------|----------|
-| EEG Pipeline | `eeg_control_pipeline.py` | 865 | 可用但臃肿 | 单文件巨石，6 种职责混杂，违反分层约束 |
-| EEG Node | `eeg_control_node.py` | 487 | 可用但复杂 | `_tick()` 约 220 行，3 个控制分支大量重复 |
-| Gaze Node | `gaze_control_node.py` | 202 | 较稳定 | 独立且职责清晰 |
-| EDF Reader | `lsl_test/edf_reader.py` | 145 | 质量好 | API 清晰，有上下文管理器 |
-| EDF-LSL Bridge | `lsl_test/edf_to_lsl.py` | 132 | 基本完成 | 缺少 chunk push 优化 |
-| EEG Processor | `lsl_test/eeg_processor.py` | 173 | 核心价值 | 主链完全缺失的重计算层 |
-| Tests (主链) | `thymio_control/test/` | 10 文件 | 覆盖基础场景 | 34 个测试，无性能回归 |
-| Tests (实验区) | `lsl_test/test_*.py` | 4 文件 | 较完善 | 约 21 个测试 |
-
-### 核心发现
-
-1. 主链 LslAdapter 是薄壳 -- 只做 `pull_sample` 到 dict 映射，完全缺少从 raw EEG 到频域特征的 DSP 处理。而 `lsl_test/eeg_processor.py` 已经实现了这一层。
-2. 数据契约未落地 -- RawSampleFrame / FeatureFrame / ControlFrame 仅存在于规范中，代码中只有 `EegFrame(ts, source, metrics: Dict[str, float])`。
-3. 现有优势 -- Adapter 工厂模式 + Policy 策略模式 + YAML 配置分层 + 测试基础均已可用。
+WSL2/Ubuntu:
+  RawLslAdapter → Welch PSD → enrich_features → Policy → /cmd_vel
+                                                      ↓
+  web_gui (React + FastAPI) ←──WebSocket──→ RosBridge (rclpy)
+```
 
 ---
 
-## 4. 总体改造原则
+## 3. 分层设计
 
-1. 分层优先
-- 先建立稳定边界，再做功能扩展。
-
-2. 契约优先
-- 先冻结输入输出数据契约，再优化算法细节。
-
-3. 可测优先
-- 每次重构都必须可通过自动化测试验证。
-
-4. 可回滚优先
-- 任何主链改动必须具备 feature flag 与回滚路径。
-
-5. 渐进迁移
-- 实验区持续迭代，主链仅吸收“最小稳定内核”。
+| 层 | 文件 | 职责 |
+|---|---|---|
+| 数据接入 | `gtec_bridge/*.py` (Windows) | 设备 → LSL |
+| 适配器 | `adapters/lsl_raw.py`, `mock.py` | LSL/模拟 → `EegFrame` |
+| DSP | `processors/band_power.py` | Welch PSD 频带功率 |
+| 特征 | `processors/enrich.py` | theta_beta, alpha_asym 等 |
+| 策略 | `policies/ei.py`, `tbr.py`, `alpha.py` | 频带特征 → speed_intent/steer_intent |
+| 控制 | `scripts/eeg_control_node.py` | intent → Twist → /cmd_vel |
+| 编排 | `launch/experiment_core.launch.py` | ROS2 进程管理 |
+| Web | `web_gui/` | FastAPI + React 控制面板 |
 
 ---
 
-## 5. 目标架构（项目级）
+## 4. 数据契约
 
-## 5.1 六层架构模型
+### `EegFrame`
+```python
+@dataclass
+class EegFrame:
+    ts: float              # Unix 时间戳
+    source: str            # “lsl_raw”, “mock”, “keyboard”
+    metrics: Dict[str, float]  # alpha, beta, theta, alpha_Fz, ...
+```
 
-1. Device Profile Layer
-- 作用: 描述设备能力与静态信息。
-- 典型字段: device_type、channel_labels、sample_rate、schema、clock_source。
+### `BandPowers`
+```python
+@dataclass(frozen=True)
+class BandPowers:
+    delta: float; theta: float; alpha: float; beta: float; gamma: float
+```
 
-2. Input Mode Layer
-- 作用: 定义数据来源方式。
-- 模式: live_device、replay_file、mock。
+---
 
-3. Transport Layer
-- 作用: 处理协议接入与连接生命周期。
-- 协议: lsl、tcp、udp、file_reader。
+## 5. 设备
+
+| key | 设备 | 通道 | API |
+|---|---|---|---|
+| `bci-core-4` | BCI Core-4 Headband | 4 (F8, Fp2, Fp1, F7) | gpype |
+| `hybrid-black` | Unicorn Hybrid Black | 8 (Fz, C3, Cz, C4, Pz, PO7, Oz, PO8) | gpype / UnicornPy |
+
+---
+
+## 6. 校准系统
+
+- `calibrate=true` → 30 秒采集 → p5/p95 → 写入 YAML → 重建 policy
+- 支持三个 policy (ei/tbr/alpha) 各自的 metric 校准
+- Web GUI 图表显示校准上下限虚线
+
+---
+
+## 7. 测试
+
+```bash
+pytest thymio_control/test/ -v   # 23 tests
+```
+
+---
+
+## 8. 设计原则
+
+1. **设备无关**：`RawLslAdapter` 从 LSL StreamInfo 自动读取通道数和采样率
+2. **Config-driven**：YAML 配置驱动所有参数，不硬编码
+3. **策略模式**：`POLICIES` dict + `build_adapter()` factory
+4. **只前进**：`_intents_to_twist` 仅映射到正向速度，无后退逻辑
 
 4. Decode/Normalize Layer
 - 作用: 统一数据形态与字段。
