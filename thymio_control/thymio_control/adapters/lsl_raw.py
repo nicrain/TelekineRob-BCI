@@ -106,7 +106,7 @@ class RawLslAdapter(BaseAdapter):
             logging.getLogger(__name__).warning(
                 "RawLslAdapter: source_unit not found in LSL stream description "
                 "and no explicit config provided. Defaulting to '%s'. "
-                "If your device outputs nV (e.g. Enobio), set DSPConfig(source_unit='nV') "
+                "If your device outputs nV, set DSPConfig(source_unit='nV') "
                 "to avoid a 10\u2076× scaling error.",
                 self._cfg.source_unit,
             )

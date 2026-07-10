@@ -334,5 +334,5 @@ This section records how the first implementation maps this design system to the
 - Web teleop publishes Twist directly through rclpy for zero-latency robot control.
 - Start/Stop buttons with full ROS2 + Gazebo lifecycle management and auto-cleanup.
 - Config persistence to YAML files, with UI controls locked during runtime.
-- Input devices: EEG (TCP/LSL/file), Mock (simulated band data), Tobii, Keyboard teleop.
+- Input devices: g.tec EEG via LSL, Mock, Keyboard teleop.
 

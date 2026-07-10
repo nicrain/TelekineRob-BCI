@@ -263,8 +263,7 @@ def band_power_to_metrics(
     bp : BandPowers
         Band powers in source_unit².
     source_unit : str
-        Amplitude unit of the source signal (e.g. ``"nV"`` for Enobio,
-        ``"µV"`` for most other devices).
+        Amplitude unit of the source signal (``"µV"`` for g.tec devices).
     """
     return {
         "alpha": convert_power_to_uv2(bp.alpha, source_unit),
@@ -313,7 +312,7 @@ class StreamingBandPowerExtractor:
     Parameters
     ----------
     sample_rate : int
-        Sampling rate in Hz (e.g. 250 for Unicorn, 500 for Enobio).
+        Sampling rate in Hz (250 for g.tec devices).
     n_channels : int
         Number of EEG channels.
     config : DSPConfig, optional

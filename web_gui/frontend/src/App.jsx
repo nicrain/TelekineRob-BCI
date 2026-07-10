@@ -379,8 +379,6 @@ export default function App() {
   const [filePath, setFilePath]           = useState('');
   const [selectedChannels, setSelectedChannels] = useState([0, 1, 2]);
   const [metric, setMetric]               = useState('tbr');
-  const [recordFiles, setRecordFiles]     = useState([]);
-
   const [outputMode, setOutputMode]         = useState('thymio_simu');
   const [thymioDevice, setThymioDevice]     = useState('ser:device=/dev/ttyACM0');
   const [showWaveform, setShowWaveform]     = useState(true);

@@ -14,7 +14,7 @@ Parameters are **placeholder values** estimated from the alpha range
 observed in ``20260408111446_Patient01.edf`` (~0.5–7.5 µV²).
 NOT yet calibrated via p5/p95 statistics like EiPolicy and
 TbrPolicy.  TODO: run formal calibration against the
-reference EDF before production use.
+calibrated data before production use.
 """
 from __future__ import annotations
 

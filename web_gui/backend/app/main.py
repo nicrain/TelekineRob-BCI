@@ -123,38 +123,6 @@ def api_start(req: CommandRequest) -> dict[str, Any]:
     return start_system(cfg, dry_run=req.dry_run).model_dump()
 
 
-@app.get("/api/files/tcp")
-async def list_tcp_files() -> dict[str, Any]:
-    """Return list of available TCP data files for playback."""
-    from pathlib import Path
-    repo_root = Path(__file__).resolve().parents[3]
-    tcp_dir = repo_root / "records"
-    if not tcp_dir.exists():
-        return {"files": []}
-    txt_files = sorted([
-        f.name for f in tcp_dir.iterdir()
-        if f.is_file() and f.suffix == ".txt"
-    ])
-    return {"files": txt_files}
-
-
-DATA_EXTENSIONS = {".easy", ".edf", ".txt", ".csv"}
-
-
-@app.get("/api/files/records")
-async def list_record_files() -> dict[str, Any]:
-    """Return list of all data files in records/ directory."""
-    from pathlib import Path
-    repo_root = Path(__file__).resolve().parents[3]
-    records_dir = repo_root / "records"
-    if not records_dir.exists():
-        return {"files": []}
-    files = sorted([
-        f.name for f in records_dir.iterdir()
-        if f.is_file() and f.suffix.lower() in DATA_EXTENSIONS
-    ])
-    return {"files": files}
-
 
 @app.post("/api/system/stop")
 def api_stop(req: CommandRequest) -> dict[str, Any]:
