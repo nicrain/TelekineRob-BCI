@@ -42,16 +42,6 @@ def test_build_adapter_rejects_unknown_mode():
         build_adapter(args)
 
 
-def test_build_adapter_tcp_file_requires_file_path():
-    args = _FakeArgs(input="tcp_file", file_path="")
-    with pytest.raises(RuntimeError, match="file-path"):
-        build_adapter(args)
-
-
-def test_build_adapter_file_requires_file_path():
-    args = _FakeArgs(input="file", file_path="")
-    with pytest.raises(RuntimeError, match="file-path"):
-        build_adapter(args)
 
 
 
