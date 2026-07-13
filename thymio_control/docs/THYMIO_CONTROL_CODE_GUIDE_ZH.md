@@ -10,7 +10,7 @@
 Launcher:   launch/experiment_core.launch.py
 Node:       scripts/eeg_control_node.py
 Pipeline:   thymio_control/pipeline.py (adapter + processor + policy)
-Modules:    adapters/        (数据输入：lsl_raw, mock, keyboard)
+Modules:    adapters/        (数据输入：lsl_raw, keyboard)
             processors/      (信号处理：Welch PSD, enrich)
             policies/        (控制策略：Ei, Tbr, Alpha)
 Contracts:  contracts.py     (EegFrame)
@@ -29,7 +29,7 @@ LSL 流 (Windows bridge)
   → _intents_to_twist → Twist → /cmd_vel
 ```
 
-输入模式：`mock`（模拟数据）、`keyboard`（键盘）、`lsl`（实时 LSL raw EEG）。
+输入模式：`keyboard`（键盘）、`lsl`（实时 LSL raw EEG）。
 
 ---
 
@@ -55,7 +55,7 @@ LSL 流 (Windows bridge)
 
 仿真启动示例：
 ```bash
-ros2 launch thymio_control experiment_core.launch.py use_sim:=true run_eeg:=true use_teleop:=false input:=mock
+ros2 launch thymio_control experiment_core.launch.py use_sim:=true run_eeg:=true use_teleop:=false input:=lsl
 ```
 
 实机（g.tec）启动示例：
@@ -78,12 +78,12 @@ EEG 主控制节点。`_tick` 流程：
 
 模块化入口。核心 exports：
 - `POLICIES` — `{“ei”: EiPolicy, “tbr”: TbrPolicy, “alpha”: AlphaPolicy}`
-- `build_adapter(args)` — 支持 `mock`、`keyboard`、`lsl`
+- `build_adapter(args)` — 支持 `keyboard` 和 `lsl`
 - `build_pipeline(args)` → `(adapter, processor, policy)`
 
 ### 4.4 子包
 
-**adapters/**：`RawLslAdapter`（LSL raw EEG + Welch PSD）、`MockAdapter`、`KeyboardAdapter`
+**adapters/**：`RawLslAdapter`（LSL raw EEG + Welch PSD）、`KeyboardAdapter`
 
 **processors/**：`band_power.py`（`StreamingBandPowerExtractor`，Welch PSD 五个频段）、`enrich.py`（特征工程）
 
@@ -95,7 +95,7 @@ EEG 主控制节点。`_tick` 流程：
 
 ### `eeg_control_node.params.yaml`
 ```yaml
-input: mock
+input: lsl
 policy: tbr
 calibrate: false
 calib_offset: 0.0
@@ -112,7 +112,7 @@ run_eeg: false
 use_teleop: true
 ```
 
-调试时先设置 `input: mock`，Web GUI 通过 `/api/config` 管理配置。
+调试时先设置 `input: lsl`，Web GUI 通过 `/api/config` 管理配置。
 
 ---
 

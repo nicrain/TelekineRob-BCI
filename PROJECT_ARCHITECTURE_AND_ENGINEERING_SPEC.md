@@ -30,7 +30,7 @@ WSL2/Ubuntu:
 | 层 | 文件 | 职责 |
 |---|---|---|
 | 数据接入 | `gtec_bridge/*.py` (Windows) | 设备 → LSL |
-| 适配器 | `adapters/lsl_raw.py`, `mock.py` | LSL/模拟 → `EegFrame` |
+| 适配器 | `adapters/lsl_raw.py` | LSL → `EegFrame` |
 | DSP | `processors/band_power.py` | Welch PSD 频带功率 |
 | 特征 | `processors/enrich.py` | theta_beta, alpha_asym 等 |
 | 策略 | `policies/ei.py`, `tbr.py`, `alpha.py` | 频带特征 → speed_intent/steer_intent |
@@ -47,7 +47,7 @@ WSL2/Ubuntu:
 @dataclass
 class EegFrame:
     ts: float              # Unix 时间戳
-    source: str            # “lsl_raw”, “mock”, “keyboard”
+    source: str            # “lsl_raw”, “keyboard”
     metrics: Dict[str, float]  # alpha, beta, theta, alpha_Fz, ...
 ```
 
