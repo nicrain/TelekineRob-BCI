@@ -64,6 +64,7 @@ def _persist_config(cfg: AppConfig) -> None:
         "use_gui": bool(cfg.launch.use_gui),
         "run_eeg": bool(cfg.launch.run_eeg),
         "run_rviz": bool(cfg.launch.run_rviz),
+        "device": str(cfg.launch.device),
         "eeg_config_file": "eeg_control_node.params.yaml",
     }
     if _LAUNCH_YAML.exists():
