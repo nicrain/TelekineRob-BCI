@@ -1,6 +1,6 @@
 /**:
   ros__parameters:
-    input: mock
+    input: lsl
     policy: tbr
     eeg_device: bci-core-4
     lsl_stream_type: EEG

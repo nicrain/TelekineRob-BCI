@@ -59,7 +59,7 @@ def generate_launch_description():
                 defaults.get("eeg_config_file", "eeg_control_node.params.yaml"),
             ),
         ),
-        DeclareLaunchArgument("input", default_value=""),
+        DeclareLaunchArgument("input", default_value="lsl"),
         DeclareLaunchArgument("device", default_value=""),
     ]
 

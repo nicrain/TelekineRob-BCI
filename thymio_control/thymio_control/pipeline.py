@@ -45,7 +45,7 @@ POLICIES: Dict[str, type] = {
 def build_adapter(args: Any):
     """Instantiate the appropriate adapter based on ``args.input``.
 
-    Supported modes: ``mock``, ``keyboard``, ``lsl``.
+    Supported modes: ``keyboard``, ``lsl``.
 
     Parameters
     ----------

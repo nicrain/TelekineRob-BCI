@@ -49,7 +49,7 @@ class EegControlNode(Node):
         super().__init__("eeg_control_node")
 
         # Input and policy parameters
-        self.declare_parameter("input", "mock")
+        self.declare_parameter("input", "lsl")
         self.declare_parameter("policy", "tbr")
         self.declare_parameter("calibrate", False)
         self.declare_parameter("calib_offset", 0.0)
