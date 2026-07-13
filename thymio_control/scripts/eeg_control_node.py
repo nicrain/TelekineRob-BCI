@@ -305,6 +305,9 @@ class EegControlNode(Node):
                     self._csv_file.flush()
                     self._csv_flush_counter = 0
 
+            if not self._calibrate:
+                self.pub.publish(self._intents_to_twist(self.last_intents))
+
             if self.verbose:
                 self.get_logger().info(
                     "src=%s speed_intent=%.3f steer_intent=%.3f"
@@ -322,9 +325,7 @@ class EegControlNode(Node):
                 self.pub.publish(Twist())
             return
 
-        if not self._calibrate:
-            twist = self._intents_to_twist(self.last_intents)
-            self.pub.publish(twist)
+        self.pub.publish(self._intents_to_twist(self.last_intents))
 
     def _intents_to_twist(self, intents) -> Twist:
         speed_intent = clip01(float(intents.get("speed_intent", 0.0)))

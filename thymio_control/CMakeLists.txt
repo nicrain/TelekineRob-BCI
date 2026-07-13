@@ -18,8 +18,6 @@ install(DIRECTORY docs/
 
 install(PROGRAMS
   scripts/eeg_control_node.py
-  scripts/gaze_control_node.py
-  scripts/thymio_ros.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
