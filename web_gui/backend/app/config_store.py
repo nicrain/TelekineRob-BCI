@@ -35,6 +35,7 @@ def _load_defaults() -> AppConfig:
     cfg.launch.use_gui = bool(launch_cfg.get("use_gui", cfg.launch.use_gui))
     cfg.launch.run_eeg = bool(launch_cfg.get("run_eeg", cfg.launch.run_eeg))
     cfg.launch.run_rviz = bool(launch_cfg.get("run_rviz", cfg.launch.run_rviz))
+    cfg.launch.device = str(launch_cfg.get("device", cfg.launch.device))
 
     eeg_root = _safe_load(_EEG_YAML)
     ros_params = eeg_root.get("/**", {}).get("ros__parameters", {})
