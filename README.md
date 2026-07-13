@@ -51,7 +51,7 @@ source install/setup.bash
 ### 仿真
 
 ```bash
-ros2 launch thymio_control experiment_core.launch.py use_sim:=true run_eeg:=true use_teleop:=false input:=mock
+ros2 launch thymio_control experiment_core.launch.py use_sim:=true run_eeg:=true use_teleop:=false input:=lsl
 ```
 
 ### 真设备（g.tec）

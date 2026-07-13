@@ -69,7 +69,7 @@ Windows ↔ WSL2 bridge: g.tec EEG devices stream via LSL from Windows host; WSL
 - `gtec_bridge/` — Windows-side LSL bridge scripts
 
 ### Data Flow
-1. Adapter (LSL/Mock/Keyboard) → reads EEG data → `EegFrame` with metrics
+1. Adapter (LSL/Keyboard) → reads EEG data → `EegFrame` with metrics
 2. `enrich_features()` computes derived features (theta/beta, alpha asymmetry, etc.)
 3. `Policy.compute_intents()` maps features → `speed_intent` / `steer_intent`
 4. `_intents_to_twist()` converts intents → `geometry_msgs/Twist` → `/cmd_vel`
@@ -85,7 +85,7 @@ Windows ↔ WSL2 bridge: g.tec EEG devices stream via LSL from Windows host; WSL
 
 1. **Config-driven**: All device ports, channel mappings, algorithms are YAML-injected, never hardcoded
 2. **Strategy Pattern**: `POLICIES` dict in `pipeline.py` for swappable control algorithms (Ei/Tbr/Alpha)
-3. **Adapter Pattern**: `build_adapter()` factory supports `mock`, `keyboard`, `lsl` modes
+3. **Adapter Pattern**: `build_adapter()` factory supports `keyboard` and `lsl` modes
 4. **Watchdog (0.5s)**: If no EEG data received, reuse last known Twist — NOT default to full speed
 5. **Fail-fast**: Missing fields or out-of-bounds channel indices must raise explicit exceptions, not silently default
 
