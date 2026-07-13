@@ -13,21 +13,6 @@ class _FakeArgs:
             setattr(self, k, v)
 
 
-# ---------------------------------------------------------------------------
-# Dispatch tests — only test modes that don't require external connections
-# (mock, keyboard) or config validation (missing file-path, unknown mode).
-# LSL / TCP modes need pylsl / network and can't be instantiated here.
-# ---------------------------------------------------------------------------
-
-
-def test_build_adapter_mock_mode():
-    args = _FakeArgs(input="mock")
-    adapter = build_adapter(args)
-    from thymio_control.adapters.mock import MockAdapter
-
-    assert isinstance(adapter, MockAdapter)
-
-
 def test_build_adapter_keyboard_mode():
     args = _FakeArgs(input="keyboard")
     adapter = build_adapter(args)

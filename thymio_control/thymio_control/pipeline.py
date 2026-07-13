@@ -57,11 +57,7 @@ def build_adapter(args: Any):
     RuntimeError
         For unsupported input modes or missing configuration.
     """
-    mode = str(getattr(args, "input", "mock")).strip()
-
-    if mode == "mock":
-        from thymio_control.adapters.mock import MockAdapter
-        return MockAdapter()
+    mode = str(getattr(args, "input", "lsl")).strip()
 
     if mode == "keyboard":
         from thymio_control.adapters.mock import KeyboardAdapter

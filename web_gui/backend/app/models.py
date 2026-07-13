@@ -14,7 +14,7 @@ class LaunchConfig(BaseModel):
 
 
 class EegConfig(BaseModel):
-    input: Literal["mock", "lsl"] = "mock"
+    input: Literal["lsl"] = "lsl"
     policy: Literal["ei", "tbr", "alpha"] = "tbr"
     calibrate: bool = False
     calib_offset: float = 0.0

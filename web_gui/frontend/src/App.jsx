@@ -421,8 +421,7 @@ export default function App() {
         setFeedback('Config loaded.');
         // Sync backend config → local UI state
         if (cfg.eeg) {
-          const inp = cfg.eeg.input || 'mock';
-          setInputMode(inp === 'mock' ? 'mock' : 'eeg');
+          if (cfg.eeg.input) setInputMode('eeg');
           if (cfg.eeg.calib_offset != null) setCalibOffset(Number(cfg.eeg.calib_offset));
           if (cfg.eeg.calib_scale != null) setCalibScale(Number(cfg.eeg.calib_scale));
         }
@@ -590,7 +589,7 @@ export default function App() {
     const isSim = outputMode === 'thymio_simu';
     const patch = {
       eeg: {
-        input:           inputMode === 'mock' ? 'mock' : 'lsl',
+        input:           'lsl',
         policy:          metric,
         calibrate:       false,
         lsl_stream_type: 'EEG',
@@ -601,7 +600,7 @@ export default function App() {
       launch: {
         use_sim:  isSim,
         use_gui:  false,
-        run_eeg:  inputMode === 'eeg' || inputMode === 'mock',
+        run_eeg:  inputMode === 'eeg',
         device:   outputMode === 'thymio' ? thymioDevice : '',
       },
     };
@@ -701,7 +700,7 @@ export default function App() {
           <button className="btn btn-cta" disabled={running} onClick={() => startSystem()}>
             {running ? (calibPhase === 'preparing' ? 'Preparing...' : calibPhase === 'counting' ? `Calibrating... ${calibCountdown}s` : 'Running...') : 'Start'}
           </button>
-          {(eegBrand === 'gtec_headband' || eegBrand === 'gtec_hybrid') && (
+          {inputMode === 'eeg' && (
             <button className="btn btn-ghost" disabled={running} onClick={async () => {
               const patch = buildPatch();
               patch.eeg.calibrate = true;
@@ -730,7 +729,6 @@ export default function App() {
                 disabled={running}
                 options={[
                   { value: 'eeg',    label: 'EEG' },
-                  { value: 'mock',   label: 'Mock' },
                   { value: 'teleop', label: 'Keyboard' },
                 ]}
               />
@@ -769,7 +767,7 @@ export default function App() {
                 </>
               )}
 
-              {(inputMode === 'eeg' || inputMode === 'mock') && (
+              {inputMode === 'eeg' && (
                 <CascadeSelect
                   label="Metric"
                   value={metric}
@@ -903,7 +901,7 @@ export default function App() {
               <h3>Raw Wave &mdash; alpha / theta / beta</h3>
               <ReactECharts option={waveOption} style={{ height: 220 }} />
             </div>
-            <div className={`chart-card${inputMode !== 'eeg' && inputMode !== 'mock' ? ' dimmed-card' : ''}`}>
+            <div className={`chart-card${inputMode !== 'eeg' ? ' dimmed-card' : ''}`}>
               <h3>{metricLabels[metric]}</h3>
               <ReactECharts option={featureOption} style={{ height: 220 }} />
             </div>
