@@ -94,8 +94,15 @@ Windows ↔ WSL2 bridge: g.tec EEG devices stream via LSL from Windows host; WSL
 Given the difficulty of physical robot testing, the project uses **test-driven development with pytest**:
 - All tests live in `thymio_control/test/` as `test_*.py` files
 - Each new feature requires a unit test in the same directory
-- Tests use mock data to verify logic correctness
+- Tests use test data to verify logic correctness
 - Run tests: `pytest thymio_control/test/test_<name>.py -v`
+
+## Workflow
+
+- Every session: read `TASKS.md` first to understand current task status.
+- When a task is completed: update `TASKS.md`, marking it ✅ with date.
+- Before session ends: append any newly discovered TODOs to `TASKS.md`.
+- Also keep system `/tasks` in sync via TaskCreate/TaskUpdate when relevant.
 
 ## Development Guidelines
 
