@@ -110,7 +110,6 @@ Before committing code changes (except documentation-only changes):
 - Every session: read `TASKS.md` first to understand current task status.
 - When a task is completed: update `TASKS.md`, marking it ✅ with date.
 - Before session ends: append any newly discovered TODOs to `TASKS.md`.
-- Also keep system `/tasks` in sync via TaskCreate/TaskUpdate when relevant.
 
 ## Development Guidelines
 
