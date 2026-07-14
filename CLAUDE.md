@@ -97,6 +97,14 @@ Given the difficulty of physical robot testing, the project uses **test-driven d
 - Tests use test data to verify logic correctness
 - Run tests: `pytest thymio_control/test/test_<name>.py -v`
 
+## Pre-commit Rules
+
+Before committing code changes (except documentation-only changes):
+
+1. Run the full test suite and confirm all pass: `pytest thymio_control/test/ -q`
+2. If the change is not covered by existing tests, add a test for it first
+3. Only commit after tests pass
+
 ## Workflow
 
 - Every session: read `TASKS.md` first to understand current task status.
