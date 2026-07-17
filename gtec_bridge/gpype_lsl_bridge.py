@@ -41,6 +41,9 @@ if __name__ == "__main__":
     # ------------------------------------------------------------------
     # Source
     # ------------------------------------------------------------------
+    # BCICore8(channel_count=4): the headset uses 4 of the 8 channels
+    # available on the BCI Core-8 hardware (class name reflects hardware,
+    # channel_count reflects actual headset configuration).
     try:
         source = gp.BCICore8(channel_count=4)
     except Exception as exc:
@@ -78,18 +81,20 @@ if __name__ == "__main__":
 
     try:
         p.start()
-        print("[OK] Pipeline started. Streaming to LSL... Press Ctrl+C to stop.\n")
-        # Block until Ctrl+C (signal.pause() is Unix-only)
-        while True:
-            time.sleep(0.5)
-    except KeyboardInterrupt:
-        pass
     except Exception as exc:
         print(f"[ERROR] Pipeline failed to start: {exc}")
         print("        Check that:")
         print("        1. The BCI Core-4 headset is turned ON and in range")
         print("        2. No other application is using the device")
         sys.exit(1)
+
+    print("[OK] Pipeline started. Streaming to LSL... Press Ctrl+C to stop.\n")
+    # Block until Ctrl+C (signal.pause() is Unix-only)
+    try:
+        while True:
+            time.sleep(0.5)
+    except KeyboardInterrupt:
+        pass
     finally:
         _cleanup(p)
 

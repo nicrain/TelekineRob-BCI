@@ -9,7 +9,6 @@ settled region.
 """
 
 import numpy as np
-import pytest
 
 from thymio_control.processors.band_power import StreamingPreFilter
 
@@ -141,7 +140,7 @@ def test_multi_channel():
     assert _rms(chunk[0, skip:]) < 1.0
     # Channel 1 alpha should survive
     att_ch1 = _attenuation_db(1.0 / np.sqrt(2), _rms(chunk[1, skip:]))
-    assert att_ch1 < 1.5, f"ch1 10 Hz attenuated by {att_ch1:.2f} dB"
+    assert att_ch1 < 1.0, f"ch1 10 Hz attenuated by {att_ch1:.2f} dB"
 
 
 def test_reset_clears_state():

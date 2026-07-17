@@ -84,6 +84,11 @@ if __name__ == "__main__":
     # via lsl_source_id="gtec_hybrid_black" (matching buildPatch() and gpype
     # convention where LSLSender uses stream_name as source_id).
     # Device serial (logged above) uniquely identifies the physical unit.
+    #
+    # TODO(multi-device): when supporting multiple Hybrid Blacks
+    # simultaneously, source_id must be unique per-device (e.g. the
+    # serial_number).  WSL2 would then need per-device lsl_source_id
+    # config entries rather than a single fixed string.
     info = StreamInfo(
         STREAM_NAME,
         "EEG",

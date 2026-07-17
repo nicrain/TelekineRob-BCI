@@ -31,10 +31,10 @@ import numpy as np
 # ---------------------------------------------------------------------------
 
 try:
-    from scipy.signal import butter, lfilter, lfilter_zi  # type: ignore
+    from scipy.signal import butter, sosfilt, sosfilt_zi  # type: ignore
     _HAS_SCIPY_FILTER = True
 except ImportError:
-    butter = lfilter = lfilter_zi = None  # type: ignore[assignment]
+    butter = sosfilt = sosfilt_zi = None  # type: ignore[assignment]
     _HAS_SCIPY_FILTER = False
 
 
@@ -495,12 +495,13 @@ class StreamingPreFilter:
     Matches the gpype filter chain applied on Windows for BCI Core-4:
     ``Bandpass(0.5-45 Hz) → Bandstop(48-52 Hz)``.
 
-    Uses ``scipy.signal.lfilter`` with ``zi`` state to maintain continuous
-    filter response across arbitrary chunk boundaries — no step-response
-    transients at chunk edges.
+    Uses second-order sections (SOS) via ``scipy.signal.sosfilt`` for
+    numerical stability — the 0.5 Hz high-pass cutoff corresponds to a
+    normalised frequency of 0.004 at 250 Hz, making SOS preferable to
+    the traditional ba (transfer-function) form.
 
-    Requires scipy (``scipy.signal.butter``, ``scipy.signal.lfilter``,
-    ``scipy.signal.lfilter_zi``).  Instantiation raises ``RuntimeError``
+    Requires scipy (``scipy.signal.butter``, ``scipy.signal.sosfilt``,
+    ``scipy.signal.sosfilt_zi``).  Instantiation raises ``RuntimeError``
     if scipy is not installed.
 
     Parameters
@@ -533,23 +534,23 @@ class StreamingPreFilter:
         self._n_channels = n_channels
         nyq = sample_rate / 2.0
 
-        # 4-th order Butterworth bandpass [0.5, 45] Hz
-        self._b_bp, self._a_bp = butter(
-            order, [0.5 / nyq, 45.0 / nyq], btype="band"
+        # 4-th order Butterworth bandpass [0.5, 45] Hz (SOS form)
+        self._sos_bp = butter(
+            order, [0.5 / nyq, 45.0 / nyq], btype="band", output="sos",
         )
-        # 4-th order Butterworth bandstop [48, 52] Hz (notch)
-        self._b_bs, self._a_bs = butter(
-            order, [48.0 / nyq, 52.0 / nyq], btype="bandstop"
+        # 4-th order Butterworth bandstop [48, 52] Hz (SOS form)
+        self._sos_bs = butter(
+            order, [48.0 / nyq, 52.0 / nyq], btype="bandstop", output="sos",
         )
 
-        # Per-channel filter delay-line state: (n_channels, order)
-        # lfilter_zi returns unit-step steady-state conditions.  On the
+        # Per-section initial conditions: (n_channels, n_sections, 2)
+        # sosfilt_zi returns unit-step steady-state conditions.  On the
         # first apply() call they are scaled by each channel's x[0],
         # eliminating the step-response transient when the signal starts
         # away from zero (e.g. DC offsets).  When x[0] ≈ 0 this gives
         # zero initial conditions; the transient fades in ~1 s.
-        self._zi0_bp = np.tile(lfilter_zi(self._b_bp, self._a_bp), (n_channels, 1))
-        self._zi0_bs = np.tile(lfilter_zi(self._b_bs, self._a_bs), (n_channels, 1))
+        self._zi0_bp = np.tile(sosfilt_zi(self._sos_bp), (n_channels, 1, 1))
+        self._zi0_bs = np.tile(sosfilt_zi(self._sos_bs), (n_channels, 1, 1))
         self._zi_bp: Optional[np.ndarray] = None
         self._zi_bs: Optional[np.ndarray] = None
 
@@ -564,22 +565,36 @@ class StreamingPreFilter:
         ----------
         chunk : np.ndarray
             Shape ``(n_channels, n_samples)``.  Modified in-place.
+
+        Raises
+        ------
+        ValueError
+            If ``chunk.shape[0]`` does not match the configured channel count.
         """
+        if chunk.ndim == 1:
+            chunk = chunk.reshape(1, -1)
+
+        n_ch = chunk.shape[0]
+        if n_ch != self._n_channels:
+            raise ValueError(
+                f"chunk has {n_ch} channels, expected {self._n_channels}"
+            )
+
         # Initialise delay-line state on first call.  Scaling the
         # unit-step zi by x[0] assumes the signal was at a constant
         # x[0] before t=0 — correct for DC offsets, approximate for
         # slowly-varying EEG.  When x[0] ≈ 0 this gives zero initial
         # conditions; the transient is small and fades in ~1 s.
         if self._zi_bp is None:
-            self._zi_bp = self._zi0_bp * chunk[:, 0:1]    # (n_ch, order)
-            self._zi_bs = self._zi0_bs * chunk[:, 0:1]
+            self._zi_bp = self._zi0_bp * chunk[:, 0:1, None]
+            self._zi_bs = self._zi0_bs * chunk[:, 0:1, None]
 
         for ch in range(self._n_channels):
-            chunk[ch], self._zi_bp[ch] = lfilter(
-                self._b_bp, self._a_bp, chunk[ch], zi=self._zi_bp[ch],
+            chunk[ch], self._zi_bp[ch] = sosfilt(
+                self._sos_bp, chunk[ch], zi=self._zi_bp[ch],
             )
-            chunk[ch], self._zi_bs[ch] = lfilter(
-                self._b_bs, self._a_bs, chunk[ch], zi=self._zi_bs[ch],
+            chunk[ch], self._zi_bs[ch] = sosfilt(
+                self._sos_bs, chunk[ch], zi=self._zi_bs[ch],
             )
 
     def reset(self) -> None:

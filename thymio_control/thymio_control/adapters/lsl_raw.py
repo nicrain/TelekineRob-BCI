@@ -120,8 +120,9 @@ class RawLslAdapter(BaseAdapter):
 
         # Pre-filter: only Hybrid Black (UnicornPy) needs it;
         # headband data from gpype arrives already filtered.
+        _DEVICES_NEEDING_PRE_FILTER = {"gtec_hybrid_black"}
         self._pre_filter: Optional[StreamingPreFilter] = None
-        if self._stream_name == "gtec_hybrid_black":
+        if self._stream_name in _DEVICES_NEEDING_PRE_FILTER:
             self._pre_filter = StreamingPreFilter(
                 sample_rate=self._sample_rate,
                 n_channels=self._n_channels,
