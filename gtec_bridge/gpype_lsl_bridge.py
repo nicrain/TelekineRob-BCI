@@ -41,8 +41,16 @@ if __name__ == "__main__":
     # ------------------------------------------------------------------
     # Source
     # ------------------------------------------------------------------
-    source = gp.BCICore8(channel_count=4)
-    print("[OK] BCICore8(channel_count=4)")
+    try:
+        source = gp.BCICore8(channel_count=4)
+    except Exception as exc:
+        print(f"[ERROR] Failed to create BCICore8 source: {exc}")
+        print("        Check that:")
+        print("        1. The BCI Core-4 headset is turned ON")
+        print("        2. The Bluetooth dongle is plugged in")
+        print("        3. g.pype SDK is installed: pip install gpype")
+        sys.exit(1)
+    print("[OK] BCICore8 source configured (channel_count=4)")
 
     # ------------------------------------------------------------------
     # Minimal pre-filter: remove DC drift + mains hum only.
@@ -64,17 +72,24 @@ if __name__ == "__main__":
     p.connect(notch, lsl)
 
     print("[INFO] LSL stream: gtec_bci_core4")
-    print("[INFO] Streaming to LSL... Press Ctrl+C to stop.\n")
+    print("[INFO] Starting pipeline — connecting to device...\n")
 
     signal.signal(signal.SIGINT, lambda sig, frame: (_cleanup(p), sys.exit(0)))
 
     try:
         p.start()
+        print("[OK] Pipeline started. Streaming to LSL... Press Ctrl+C to stop.\n")
         # Block until Ctrl+C (signal.pause() is Unix-only)
         while True:
             time.sleep(0.5)
     except KeyboardInterrupt:
         pass
+    except Exception as exc:
+        print(f"[ERROR] Pipeline failed to start: {exc}")
+        print("        Check that:")
+        print("        1. The BCI Core-4 headset is turned ON and in range")
+        print("        2. No other application is using the device")
+        sys.exit(1)
     finally:
         _cleanup(p)
 

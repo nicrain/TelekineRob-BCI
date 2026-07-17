@@ -52,12 +52,25 @@ if __name__ == "__main__":
     devices = UnicornPy.GetAvailableDevices(True)
     if not devices:
         print("[ERROR] No paired Unicorn Hybrid Black found.")
+        print("        Check that:")
+        print("        1. The headset has been paired via Bluetooth at least once")
+        print("        2. The Bluetooth adapter (CSR8510 A10) is plugged in")
         sys.exit(1)
 
     serial = devices[0]
-    print(f"[OK] Found device: {serial}")
+    print(f"[INFO] Paired device found in Bluetooth cache: {serial}")
+    print("[INFO] Attempting to connect...")
 
-    device = UnicornPy.Unicorn(serial)
+    try:
+        device = UnicornPy.Unicorn(serial)
+    except Exception as exc:
+        print(f"[ERROR] Failed to connect to {serial}: {exc}")
+        print("        Check that:")
+        print("        1. The headset is turned ON (switch on the back)")
+        print("        2. The headset is within Bluetooth range")
+        print("        3. No other application is using the device")
+        sys.exit(1)
+
     serial_number = device.GetDeviceInformation().Serial
     n_channels = device.GetNumberOfAcquiredChannels()
     print(f"[OK] Connected. Serial={serial_number}, channels={n_channels}")
