@@ -36,6 +36,7 @@ from thymio_control.processors.band_power import (
     BandPowers,
     DSPConfig,
     StreamingBandPowerExtractor,
+    StreamingPreFilter,
     band_power_to_metrics,
     per_channel_metrics,
 )
@@ -117,6 +118,15 @@ class RawLslAdapter(BaseAdapter):
             config=self._cfg,
         )
 
+        # Pre-filter: only Hybrid Black (UnicornPy) needs it;
+        # headband data from gpype arrives already filtered.
+        self._pre_filter: Optional[StreamingPreFilter] = None
+        if self._stream_name == "gtec_hybrid_black":
+            self._pre_filter = StreamingPreFilter(
+                sample_rate=self._sample_rate,
+                n_channels=self._n_channels,
+            )
+
     # ------------------------------------------------------------------
     # Properties
     # ------------------------------------------------------------------
@@ -148,6 +158,8 @@ class RawLslAdapter(BaseAdapter):
 
         # pull_chunk returns (n_samples, n_channels) — transpose to (n_ch, n_s)
         chunk = np.array(samples, dtype=np.float64).T
+        if self._pre_filter is not None:
+            self._pre_filter.apply(chunk)
         results = self._extractor.feed_chunk(chunk)
         if not results:
             return None
@@ -193,8 +205,10 @@ class RawLslAdapter(BaseAdapter):
         return self._extractor.flush()
 
     def reset(self) -> None:
-        """Reset the internal DSP buffer."""
+        """Reset the internal DSP buffer and pre-filter state."""
         self._extractor.reset()
+        if self._pre_filter is not None:
+            self._pre_filter.reset()
 
     # ------------------------------------------------------------------
     # Private

@@ -26,6 +26,17 @@ from typing import Dict, List, Optional
 
 import numpy as np
 
+# ---------------------------------------------------------------------------
+# scipy imports — optional; pure-NumPy fallbacks provided where feasible
+# ---------------------------------------------------------------------------
+
+try:
+    from scipy.signal import butter, lfilter, lfilter_zi  # type: ignore
+    _HAS_SCIPY_FILTER = True
+except ImportError:
+    butter = lfilter = lfilter_zi = None  # type: ignore[assignment]
+    _HAS_SCIPY_FILTER = False
+
 
 # ---------------------------------------------------------------------------
 # Band definitions
@@ -472,6 +483,114 @@ class StreamingBandPowerExtractor:
             self._buf[:, :keep] = self._buf[:, self._hop_samples: self._window_samples]
         self._buf_len   = keep
         self._since_hop = 0
+
+
+# ---------------------------------------------------------------------------
+# Streaming pre-filter — applied before Welch PSD
+# ---------------------------------------------------------------------------
+
+class StreamingPreFilter:
+    """Streaming IIR pre-filter: bandpass + notch for raw EEG chunks.
+
+    Matches the gpype filter chain applied on Windows for BCI Core-4:
+    ``Bandpass(0.5-45 Hz) → Bandstop(48-52 Hz)``.
+
+    Uses ``scipy.signal.lfilter`` with ``zi`` state to maintain continuous
+    filter response across arbitrary chunk boundaries — no step-response
+    transients at chunk edges.
+
+    Requires scipy (``scipy.signal.butter``, ``scipy.signal.lfilter``,
+    ``scipy.signal.lfilter_zi``).  Instantiation raises ``RuntimeError``
+    if scipy is not installed.
+
+    Parameters
+    ----------
+    sample_rate : int
+        Sampling rate in Hz (250 for g.tec devices).
+    n_channels : int
+        Number of EEG channels.
+    order : int
+        Butterworth filter order (default 4).  Applied identically to
+        both the bandpass and bandstop stages.
+    """
+
+    def __init__(
+        self,
+        sample_rate: int,
+        n_channels: int,
+        order: int = 4,
+    ) -> None:
+        if not _HAS_SCIPY_FILTER:
+            raise RuntimeError(
+                "StreamingPreFilter requires scipy (>=1.12). "
+                "Install with: pip install scipy"
+            )
+        if sample_rate <= 0:
+            raise ValueError(f"sample_rate must be positive, got {sample_rate}")
+        if n_channels <= 0:
+            raise ValueError(f"n_channels must be positive, got {n_channels}")
+
+        self._n_channels = n_channels
+        nyq = sample_rate / 2.0
+
+        # 4-th order Butterworth bandpass [0.5, 45] Hz
+        self._b_bp, self._a_bp = butter(
+            order, [0.5 / nyq, 45.0 / nyq], btype="band"
+        )
+        # 4-th order Butterworth bandstop [48, 52] Hz (notch)
+        self._b_bs, self._a_bs = butter(
+            order, [48.0 / nyq, 52.0 / nyq], btype="bandstop"
+        )
+
+        # Per-channel filter delay-line state: (n_channels, order)
+        # lfilter_zi returns unit-step steady-state conditions.  On the
+        # first apply() call they are scaled by each channel's x[0],
+        # eliminating the step-response transient when the signal starts
+        # away from zero (e.g. DC offsets).  When x[0] ≈ 0 this gives
+        # zero initial conditions; the transient fades in ~1 s.
+        self._zi0_bp = np.tile(lfilter_zi(self._b_bp, self._a_bp), (n_channels, 1))
+        self._zi0_bs = np.tile(lfilter_zi(self._b_bs, self._a_bs), (n_channels, 1))
+        self._zi_bp: Optional[np.ndarray] = None
+        self._zi_bs: Optional[np.ndarray] = None
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    def apply(self, chunk: np.ndarray) -> None:
+        """Apply bandpass + notch cascade to *chunk* **in-place**.
+
+        Parameters
+        ----------
+        chunk : np.ndarray
+            Shape ``(n_channels, n_samples)``.  Modified in-place.
+        """
+        # Initialise delay-line state on first call.  Scaling the
+        # unit-step zi by x[0] assumes the signal was at a constant
+        # x[0] before t=0 — correct for DC offsets, approximate for
+        # slowly-varying EEG.  When x[0] ≈ 0 this gives zero initial
+        # conditions; the transient is small and fades in ~1 s.
+        if self._zi_bp is None:
+            self._zi_bp = self._zi0_bp * chunk[:, 0:1]    # (n_ch, order)
+            self._zi_bs = self._zi0_bs * chunk[:, 0:1]
+
+        for ch in range(self._n_channels):
+            chunk[ch], self._zi_bp[ch] = lfilter(
+                self._b_bp, self._a_bp, chunk[ch], zi=self._zi_bp[ch],
+            )
+            chunk[ch], self._zi_bs[ch] = lfilter(
+                self._b_bs, self._a_bs, chunk[ch], zi=self._zi_bs[ch],
+            )
+
+    def reset(self) -> None:
+        """Reset filter state — next apply() will re-initialise from x[0].
+
+        Call when the streaming session is interrupted (e.g. device
+        disconnect / reconnect) to avoid carrying stale state into
+        the next segment.
+        """
+        self._zi_bp = None
+        self._zi_bs = None
 
 
 # ---------------------------------------------------------------------------
