@@ -42,6 +42,12 @@ from thymio_control.processors.band_power import (
 )
 
 
+# Devices whose raw data needs pre-filtering before Welch PSD.
+# headband (BCI Core-4): gpype applies bandpass + notch on Windows.
+# Hybrid Black (UnicornPy): no built-in DSP — we compensate here.
+_DEVICES_NEEDING_PRE_FILTER: set[str] = {"gtec_hybrid_black"}
+
+
 class RawLslAdapter(BaseAdapter):
     """Pull raw EEG from an LSL stream, compute band powers, return EegFrame.
 
@@ -120,7 +126,6 @@ class RawLslAdapter(BaseAdapter):
 
         # Pre-filter: only Hybrid Black (UnicornPy) needs it;
         # headband data from gpype arrives already filtered.
-        _DEVICES_NEEDING_PRE_FILTER = {"gtec_hybrid_black"}
         self._pre_filter: Optional[StreamingPreFilter] = None
         if self._stream_name in _DEVICES_NEEDING_PRE_FILTER:
             self._pre_filter = StreamingPreFilter(
