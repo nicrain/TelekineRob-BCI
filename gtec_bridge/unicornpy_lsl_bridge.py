@@ -80,13 +80,17 @@ if __name__ == "__main__":
     buf = bytearray(FrameLength * n_channels * 4)  # scans × channels × sizeof(float32)
 
     # --- LSL outlet (EEG channels only, ch0-7) ---
+    # Use STREAM_NAME as source_id so the WSL2 side can resolve this stream
+    # via lsl_source_id="gtec_hybrid_black" (matching buildPatch() and gpype
+    # convention where LSLSender uses stream_name as source_id).
+    # Device serial (logged above) uniquely identifies the physical unit.
     info = StreamInfo(
         STREAM_NAME,
         "EEG",
         channel_count=UnicornPy.EEGChannelsCount,
         nominal_srate=SAMPLING_RATE,
         channel_format="float32",
-        source_id=serial_number,
+        source_id=STREAM_NAME,
     )
     outlet = StreamOutlet(info)
     print(
