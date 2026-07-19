@@ -19,7 +19,7 @@
 | # | Task | Status |
 |---|---|---|
 | P1.1 | headband + tbr → forward | ✅ 2026-07-17 |
-| P1.2 | hybrid black + tbr → forward | TODO |
+| P1.2 | hybrid black + tbr → forward | ✅ 2026-07-18 |
 | P1.3 | headband + alpha → forward | TODO |
 | P1.4 | hybrid black + alpha → forward | TODO |
 

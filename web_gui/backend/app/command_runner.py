@@ -21,16 +21,22 @@ def _bool_str(v: bool) -> str:
 
 def _build_launch_command(cfg: AppConfig) -> list[str]:
     launch = cfg.launch
+    run_eeg = bool(launch.run_eeg)
+    use_sim = bool(launch.use_sim)
     cmd = [
         "ros2", "launch", "thymio_control", "experiment_core.launch.py",
-        f"use_sim:={_bool_str(launch.use_sim)}",
+        f"use_sim:={_bool_str(use_sim)}",
         f"use_gui:={_bool_str(launch.use_gui)}",
-        f"run_eeg:={_bool_str(launch.run_eeg)}",
+        f"run_eeg:={_bool_str(run_eeg)}",
+        # Web GUI teleop uses /ws/teleop (WebSocket → RosBridge → /cmd_vel),
+        # not ros2 teleop_twist_keyboard.  The launch-level teleop node is
+        # never needed from the web GUI.
         f"use_teleop:=false",
     ]
-    if cfg.eeg.input:
+    # input= is only meaningful when the EEG node actually runs.
+    if run_eeg and cfg.eeg.input:
         cmd.append(f"input:={cfg.eeg.input}")
-    if launch.device and not launch.use_sim:
+    if not use_sim:
         cmd.append(f"device:={launch.device}")
     return cmd
 
@@ -124,11 +130,21 @@ def start_system(cfg: AppConfig, dry_run: bool = True) -> CommandResult:
         _runtime_processes.append(_spawn_ros_command(ros_command))
 
     set_runtime_state(True, None)
+    use_sim = bool(cfg.launch.use_sim)
+    run_eeg = bool(cfg.launch.run_eeg)
+    if use_sim:
+        detail = "Gazebo simulation started"
+    else:
+        detail = "Real Thymio system started"
+    if run_eeg:
+        detail += f" (input={cfg.eeg.input})"
+    else:
+        detail += " (manual teleop)"
     return CommandResult(
         accepted=True,
         dry_run=False,
         command=cmd_str,
-        detail="Real Thymio simulation and camera bridge started.",
+        detail=detail + ".",
     )
 
 
