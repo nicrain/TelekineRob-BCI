@@ -23,6 +23,28 @@ function pushPoint(arr, value) {
   return out;
 }
 
+/** ~95th percentile of positive values — used as y-axis max to suppress outlier spikes */
+function p95Max(...arrays) {
+  const all = [];
+  for (const arr of arrays) {
+    for (const v of arr) {
+      if (v != null && isFinite(v) && v > 0) all.push(v);
+    }
+  }
+  if (all.length < 10) return null;
+  all.sort((a, b) => a - b);
+  return all[Math.floor(all.length * 0.95)];
+}
+
+/** Abbreviate large axis labels: 1,234,567 → "1.2M", 1,234 → "1.2k" */
+function fmtAxis(val) {
+  const abs = Math.abs(val);
+  if (abs >= 1e6) return (val / 1e6).toFixed(1) + 'M';
+  if (abs >= 1e3) return (val / 1e3).toFixed(1) + 'k';
+  if (abs >= 1) return val.toFixed(1);
+  return val.toFixed(3);
+}
+
 /* ── Hero: Thymio robot icon ─────────────────────────────── */
 function HeroEmblem() {
   return (
@@ -525,9 +547,13 @@ export default function App() {
     backgroundColor: 'transparent',
     tooltip: { trigger: 'axis', backgroundColor: isDarkCharts ? '#fff' : '#2a2a2a', borderColor: isDarkCharts ? '#ddd' : '#444', textStyle: { color: isDarkCharts ? '#333' : '#ddd' } },
     legend: { textStyle: { color: isDarkCharts ? '#555' : '#aaa' }, top: 2 },
-    grid: { left: 28, right: 16, top: 36, bottom: 24 },
+    grid: { left: 65, right: 16, top: 36, bottom: 24 },
     xAxis: { type: 'category', data: series.t, axisLabel: { color: isDarkCharts ? '#999' : '#888', fontSize: 10 } },
-    yAxis: { type: 'value', axisLabel: { color: isDarkCharts ? '#999' : '#888', fontSize: 10 } },
+    yAxis: {
+      type: 'value',
+      max: p95Max(series.alpha, series.theta, series.beta),
+      axisLabel: { color: isDarkCharts ? '#999' : '#888', fontSize: 10, formatter: fmtAxis },
+    },
     series: [
       { name: 'alpha', type: 'line', smooth: true, showSymbol: false, data: series.alpha },
       { name: 'theta', type: 'line', smooth: true, showSymbol: false, data: series.theta },
@@ -546,9 +572,13 @@ export default function App() {
       backgroundColor: 'transparent',
       tooltip: { trigger: 'axis', backgroundColor: isDarkCharts ? '#fff' : '#2a2a2a', borderColor: isDarkCharts ? '#ddd' : '#444', textStyle: { color: isDarkCharts ? '#333' : '#ddd' } },
       legend: { textStyle: { color: isDarkCharts ? '#555' : '#aaa' }, top: 2 },
-      grid: { left: 28, right: 16, top: 36, bottom: 24 },
+      grid: { left: 65, right: 16, top: 36, bottom: 24 },
       xAxis: { type: 'category', data: series.t, axisLabel: { color: isDarkCharts ? '#999' : '#888', fontSize: 10 } },
-      yAxis: { type: 'value', axisLabel: { color: isDarkCharts ? '#999' : '#888', fontSize: 10 } },
+      yAxis: {
+        type: 'value',
+        max: p95Max(series[metricDataKey[metric]]),
+        axisLabel: { color: isDarkCharts ? '#999' : '#888', fontSize: 10, formatter: fmtAxis },
+      },
       series: [
         {
           name: metricLabels[metric], type: 'line', smooth: true, showSymbol: false,
