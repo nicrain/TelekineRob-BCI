@@ -748,43 +748,43 @@ export default function App() {
           >
             {theme === 'dark' ? '☀' : '☾'}
           </button>
-          {inputMode === 'eeg' && (
-            <button className="btn btn-ghost" disabled={running} onClick={async () => {
-              const patch = buildPatch();
-              patch.eeg.calibrate = true;
-              await api.put('/api/config', { patch });
-              startCountdown();
-              await startSystem(true);  // skip saveConfig — already saved with calibrate=true
-            }}>Calibrate</button>
-          )}
-          {inputMode === 'eeg' && (
-            <span className="calib-edit-group">
-              <span className="calib-edit-row">
-                <label className="calib-edit-label">min</label>
-                <input
-                  type="number" step="any"
-                  className="calib-edit-input"
-                  value={calibOffset}
-                  onChange={(e) => updateCalibMin(e.target.value)}
-                  disabled={running}
-                />
-              </span>
-              <span className="calib-edit-row">
-                <label className="calib-edit-label">max</label>
-                <input
-                  type="number" step="any"
-                  className="calib-edit-input"
-                  value={calibOffset + calibScale}
-                  onChange={(e) => updateCalibMax(e.target.value)}
-                  disabled={running}
-                />
-              </span>
-            </span>
-          )}
           <button className="btn btn-cta" disabled={running} onClick={() => startSystem()}>
             {running ? (calibPhase === 'preparing' ? 'Preparing...' : calibPhase === 'counting' ? `Calibrating... ${calibCountdown}s` : 'Running...') : 'Start'}
           </button>
           <button className="btn btn-ghost" disabled={!running} onClick={() => stopSystem()}>Stop</button>
+          {inputMode === 'eeg' && (
+            <span className="calib-right-group">
+              <button className="btn btn-ghost calib-btn" disabled={running} onClick={async () => {
+                const patch = buildPatch();
+                patch.eeg.calibrate = true;
+                await api.put('/api/config', { patch });
+                startCountdown();
+                await startSystem(true);  // skip saveConfig — already saved with calibrate=true
+              }}>Calibrate</button>
+              <span className="calib-edit-group">
+                <span className="calib-edit-row">
+                  <label className="calib-edit-label">min</label>
+                  <input
+                    type="number" step="any"
+                    className="calib-edit-input"
+                    value={calibOffset}
+                    onChange={(e) => updateCalibMin(e.target.value)}
+                    disabled={running}
+                  />
+                </span>
+                <span className="calib-edit-row">
+                  <label className="calib-edit-label">max</label>
+                  <input
+                    type="number" step="any"
+                    className="calib-edit-input"
+                    value={calibOffset + calibScale}
+                    onChange={(e) => updateCalibMax(e.target.value)}
+                    disabled={running}
+                  />
+                </span>
+              </span>
+            </span>
+          )}
         </div>
       </header>
 

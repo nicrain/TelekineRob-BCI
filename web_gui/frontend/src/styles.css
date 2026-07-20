@@ -693,11 +693,23 @@ body {
 }
 
 /* ── Calibration manual edit inputs (topbar) ──────────────── */
+.calib-right-group {
+  margin-left: auto;
+  display: flex;
+  align-items: stretch;
+  gap: var(--sp6);
+}
+
+.calib-btn {
+  /* stretch to match calib-edit-group height */
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
 .calib-edit-group {
   display: flex;
   flex-direction: column;
   gap: var(--sp4);
-  padding: 0 var(--sp4);
 }
 
 .calib-edit-row {
