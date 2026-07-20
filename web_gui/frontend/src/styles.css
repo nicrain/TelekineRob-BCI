@@ -698,12 +698,31 @@ body {
   display: flex;
   align-items: stretch;
   gap: var(--sp6);
+  border-left: 1px solid var(--f-border-strong);
+  padding-left: var(--sp16);
 }
 
 .calib-btn {
   /* stretch to match calib-edit-group height */
   padding-top: 0;
   padding-bottom: 0;
+  padding-left: var(--sp10);
+  padding-right: var(--sp10);
+  min-width: 48px;
+  background: rgba(246, 229, 0, 0.08);
+  border-color: var(--f-modena-yellow);
+  color: var(--f-modena-yellow);
+}
+
+.calib-btn:hover {
+  background: rgba(246, 229, 0, 0.15);
+  border-color: var(--f-modena-yellow);
+}
+
+.calib-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 .calib-edit-group {
