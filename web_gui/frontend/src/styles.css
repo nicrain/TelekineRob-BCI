@@ -692,6 +692,50 @@ body {
   border-color: var(--f-hover-border);
 }
 
+/* ── Calibration manual edit inputs (topbar) ──────────────── */
+.calib-edit-group {
+  display: flex;
+  align-items: center;
+  gap: var(--sp4);
+  padding: 0 var(--sp4);
+}
+
+.calib-edit-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--f-silver);
+}
+
+.calib-edit-input {
+  width: 72px;
+  border: 1px solid var(--f-input-border);
+  border-radius: var(--radius);
+  padding: var(--sp6) var(--sp8);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--f-text-primary);
+  background: var(--f-input-bg);
+  text-align: right;
+  transition: border-color 0.15s;
+}
+
+.calib-edit-input:hover {
+  border-color: var(--f-hover-border);
+}
+
+.calib-edit-input:focus {
+  outline: none;
+  border-color: var(--f-red);
+}
+
+.calib-edit-input:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
 /* ─────────────────────────────────────────────────────────
    SECTION 3 — White editorial panel (waveforms)
    This is the "white page" in the chiaroscuro rhythm

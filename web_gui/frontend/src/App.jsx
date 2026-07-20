@@ -409,6 +409,8 @@ export default function App() {
   const [calibPhase, setCalibPhase]          = useState(null);  // 'preparing' | 'counting'
   const [calibCountdown, setCalibCountdown]  = useState(30);
   const [calibOffset, setCalibOffset]        = useState(0);
+  const calibOffsetRef                        = useRef(0);
+  calibOffsetRef.current = calibOffset;
   const [calibScale, setCalibScale]          = useState(1);
   const [theme, setTheme]                   = useState(() => localStorage.getItem('theme') || 'dark');
   const calibTimerRef                        = useRef(null);
@@ -589,8 +591,8 @@ export default function App() {
               lineStyle: { type: 'dashed', color: isDarkCharts ? '#888' : '#aaa', width: 1 },
               label: { show: true, position: 'start', formatter: '{b}', color: isDarkCharts ? '#888' : '#999', fontSize: 10 },
               data: [
-                { yAxis: calibOffset, name: `p5=${calibOffset.toFixed(1)}` },
-                { yAxis: calibHigh,  name: `p95=${(calibOffset+calibScale).toFixed(1)}` },
+                { yAxis: calibOffset, name: `min=${calibOffset.toFixed(1)}` },
+                { yAxis: calibHigh,  name: `max=${(calibOffset+calibScale).toFixed(1)}` },
               ],
             },
           } : {}),
@@ -604,7 +606,7 @@ export default function App() {
             type: 'text',
             left: 35, top: 6,
             style: {
-              text: `p5=${calibOffset.toFixed(1)}  p95=${(calibOffset + calibScale).toFixed(1)}`,
+              text: `min=${calibOffset.toFixed(1)}  max=${(calibOffset + calibScale).toFixed(1)}`,
               fill: isDarkCharts ? '#aaa' : '#666',
               fontSize: 11,
             },
@@ -683,6 +685,25 @@ export default function App() {
     setCalibCountdown(30);
   }
 
+  async function updateCalibMin(raw) {
+    const v = Number(raw);
+    if (isNaN(v)) return;
+    setCalibOffset(v);
+    try {
+      await api.put('/api/config', { patch: { eeg: { calib_offset: v } } });
+    } catch (err) { setFeedback(`Save offset failed: ${err.message}`); }
+  }
+
+  async function updateCalibMax(raw) {
+    const v = Number(raw);
+    if (isNaN(v)) return;
+    const scale = Math.max(0.001, v - calibOffsetRef.current);
+    setCalibScale(scale);
+    try {
+      await api.put('/api/config', { patch: { eeg: { calib_scale: scale } } });
+    } catch (err) { setFeedback(`Save scale failed: ${err.message}`); }
+  }
+
   async function stopSystem() {
     try {
       clearInterval(calibTimerRef.current);
@@ -738,6 +759,26 @@ export default function App() {
               startCountdown();
               await startSystem(true);  // skip saveConfig — already saved with calibrate=true
             }}>Calibrate</button>
+          )}
+          {inputMode === 'eeg' && (
+            <span className="calib-edit-group">
+              <label className="calib-edit-label">min</label>
+              <input
+                type="number" step="any"
+                className="calib-edit-input"
+                value={calibOffset}
+                onChange={(e) => updateCalibMin(e.target.value)}
+                disabled={running}
+              />
+              <label className="calib-edit-label">max</label>
+              <input
+                type="number" step="any"
+                className="calib-edit-input"
+                value={calibOffset + calibScale}
+                onChange={(e) => updateCalibMax(e.target.value)}
+                disabled={running}
+              />
+            </span>
           )}
           <button className="btn btn-ghost" disabled={!running} onClick={() => stopSystem()}>Stop</button>
         </div>
