@@ -49,7 +49,7 @@
 
 | # | Task | Status |
 |---|---|---|
-| O1 | Calib UX: rename p5/p95 + manual edit input | TODO |
+| O1 | Calib UX: rename p5/p95 + manual edit input | ✅ 2026-07-20 |
 | O2 | Device connect integration + Log panel | TODO |
 | O3 | 17-channel support: full Unicorn data + selective DSP | TODO |
 | O4 | Docs: keep all .md files in sync with code | ONGOING |
