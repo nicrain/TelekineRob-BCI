@@ -970,6 +970,8 @@ export default function App() {
 
           </div>
 
+          </div>
+
           {/* RIGHT — Output Target */}
           <div>
             <span className="section-label">02 — Output Target</span>
