@@ -401,6 +401,13 @@ export default function App() {
   const [filePath, setFilePath]           = useState('');
   const [selectedChannels, setSelectedChannels] = useState([0, 1, 2]);
   const [metric, setMetric]               = useState('tbr');
+  const [role1, setRole1]                 = useState('speed');
+  const [dualDevice, setDualDevice]       = useState(false);
+  const [device2, setDevice2]             = useState('eeg');
+  const [eegBrand2, setEegBrand2]         = useState('gtec_headband');
+  const [eegProtocol2, setEegProtocol2]   = useState('lsl');
+  const [selectedChannels2, setSelectedChannels2] = useState([0, 1, 2]);
+  const [metric2, setMetric2]             = useState('tbr');
   const [outputMode, setOutputMode]         = useState('thymio_simu');
   const [thymioDevice, setThymioDevice]     = useState('ser:device=/dev/ttyACM0');
   const [showWaveform, setShowWaveform]     = useState(true);
@@ -617,11 +624,14 @@ export default function App() {
   }, [series, metric, isDarkCharts, calibOffset, calibScale, calibrating]);
 
   /* ── Build patch ─────────────────────────────────────── */
+  const role2 = role1 === 'speed' ? 'steering' : 'speed';
+
   function buildPatch() {
     const isSim = outputMode === 'thymio_simu';
     const patch = {
       eeg: {
         input:           'lsl',
+        role:            role1,
         policy:          metric,
         calibrate:       false,
         lsl_stream_type: 'EEG',
@@ -629,6 +639,15 @@ export default function App() {
         lsl_source_id:   eegBrand === 'gtec_headband' ? 'gtec_bci_core4' : eegBrand === 'gtec_hybrid' ? 'gtec_hybrid_black' : '',
         brand:           eegBrand,
       },
+      eeg2: dualDevice ? {
+        input:           'lsl',
+        role:            role2,
+        policy:          metric2,
+        lsl_stream_type: 'EEG',
+        lsl_timeout:     8.0,
+        lsl_source_id:   eegBrand2 === 'gtec_headband' ? 'gtec_bci_core4' : eegBrand2 === 'gtec_hybrid' ? 'gtec_hybrid_black' : '',
+        brand:           eegBrand2,
+      } : null,
       launch: {
         use_sim:  isSim,
         use_gui:  false,
@@ -796,7 +815,18 @@ export default function App() {
           <div>
             <span className="section-label">01 — Input Source</span>
 
-            <div className="cascade-row">
+            {/* ── Row 1 ──────────────────────────────── */}
+            <div className="cascade-row" style={{ marginBottom: 12 }}>
+              <CascadeSelect
+                label="Role"
+                value={role1}
+                onChange={setRole1}
+                disabled={running}
+                options={[
+                  { value: 'speed',    label: 'Speed' },
+                  { value: 'steering', label: 'Steering' },
+                ]}
+              />
               <CascadeSelect
                 label="Device"
                 value={inputMode}
@@ -824,7 +854,6 @@ export default function App() {
                       { value: 'gtec_headband',  label: 'g.tec Headband' },
                     ]}
                   />
-
                   <CascadeSelect
                     label="Source"
                     value={eegProtocol}
@@ -832,7 +861,6 @@ export default function App() {
                     disabled={running}
                     options={[{ value: 'lsl', label: 'LSL Stream' }]}
                   />
-
                   <ChannelPicker
                     channels={CHANNEL_PRESETS[eegBrand]}
                     selected={selectedChannels}
@@ -855,6 +883,81 @@ export default function App() {
                 />
               )}
             </div>
+
+            {/* ── Row 2 ──────────────────────────────── */}
+            <fieldset disabled={!dualDevice} className="cascade-row" style={{ border: 'none', padding: 0, margin: 0 }}>
+              <label className="cascade-group" style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 40 }}>
+                <input
+                  type="checkbox"
+                  checked={dualDevice}
+                  onChange={(e) => setDualDevice(e.target.checked)}
+                  disabled={running}
+                />
+              </label>
+              <CascadeSelect
+                label="Role"
+                value={role2}
+                disabled={true}
+                options={[
+                  { value: role2, label: role2 === 'speed' ? 'Speed' : 'Steering' },
+                ]}
+              />
+              <CascadeSelect
+                label="Device"
+                value={device2}
+                onChange={setDevice2}
+                disabled={running || !dualDevice}
+                options={[
+                  { value: 'eeg',    label: 'EEG' },
+                  { value: 'teleop', label: 'Keyboard' },
+                ]}
+              />
+
+              {device2 === 'eeg' && (
+                <>
+                  <CascadeSelect
+                    label="Brand"
+                    value={eegBrand2}
+                    onChange={(v) => {
+                      setEegBrand2(v);
+                      setSelectedChannels2([0, 1, 2]);
+                      setEegProtocol2('lsl');
+                    }}
+                    disabled={running || !dualDevice}
+                    options={[
+                      { value: 'gtec_hybrid',    label: 'g.tec Hybrid Black' },
+                      { value: 'gtec_headband',  label: 'g.tec Headband' },
+                    ]}
+                  />
+                  <CascadeSelect
+                    label="Source"
+                    value={eegProtocol2}
+                    onChange={(v) => { setEegProtocol2(v); }}
+                    disabled={running || !dualDevice}
+                    options={[{ value: 'lsl', label: 'LSL Stream' }]}
+                  />
+                  <ChannelPicker
+                    channels={CHANNEL_PRESETS[eegBrand2]}
+                    selected={selectedChannels2}
+                    onChange={setSelectedChannels2}
+                    disabled={running || !dualDevice}
+                  />
+                </>
+              )}
+
+              {device2 === 'eeg' && (
+                <CascadeSelect
+                  label="Metric"
+                  value={metric2}
+                  onChange={setMetric2}
+                  disabled={running || !dualDevice}
+                  options={METRIC_OPTIONS.map((m) => ({
+                    value: m.value,
+                    label: `${m.label} (${m.formula})`,
+                  }))}
+                />
+              )}
+            </fieldset>
 
           </div>
 

@@ -14,11 +14,21 @@ class LaunchConfig(BaseModel):
 
 
 class EegConfig(BaseModel):
-    input: Literal["lsl"] = "lsl"
+    input: str = "lsl"
+    role: Literal["speed", "steering"] = "speed"
     policy: Literal["ei", "tbr", "alpha"] = "tbr"
     calibrate: bool = False
     calib_offset: float = 0.0
     calib_scale: float = 1.0
+    lsl_stream_type: str = "EEG"
+    lsl_timeout: float = 8.0
+    lsl_source_id: str = ""
+
+
+class EegConfig2(BaseModel):
+    input: str = "lsl"
+    role: Literal["speed", "steering"] = "steering"
+    policy: Literal["ei", "tbr", "alpha"] = "tbr"
     lsl_stream_type: str = "EEG"
     lsl_timeout: float = 8.0
     lsl_source_id: str = ""
@@ -46,6 +56,7 @@ class MotionConfig(BaseModel):
 class AppConfig(BaseModel):
     launch: LaunchConfig = Field(default_factory=LaunchConfig)
     eeg: EegConfig = Field(default_factory=EegConfig)
+    eeg2: EegConfig2 | None = None
     filter: FilterConfig = Field(default_factory=FilterConfig)
     motion: MotionConfig = Field(default_factory=MotionConfig)
 

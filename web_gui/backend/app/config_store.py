@@ -47,6 +47,20 @@ def _load_defaults() -> AppConfig:
     cfg.eeg.lsl_stream_type = str(ros_params.get("lsl_stream_type", cfg.eeg.lsl_stream_type))
     cfg.eeg.lsl_timeout = float(ros_params.get("lsl_timeout", cfg.eeg.lsl_timeout))
     cfg.eeg.lsl_source_id = str(ros_params.get("lsl_source_id", cfg.eeg.lsl_source_id))
+    cfg.eeg.role = str(ros_params.get("role", cfg.eeg.role))
+
+    # Load optional second EEG device config from launch_args
+    eeg2_cfg = launch_cfg.get("eeg2")
+    if eeg2_cfg and isinstance(eeg2_cfg, dict):
+        from .models import EegConfig2
+        cfg.eeg2 = EegConfig2(
+            input=str(eeg2_cfg.get("input", "lsl")),
+            role=str(eeg2_cfg.get("role", "steering")),
+            policy=str(eeg2_cfg.get("policy", "tbr")),
+            lsl_stream_type=str(eeg2_cfg.get("lsl_stream_type", "EEG")),
+            lsl_timeout=float(eeg2_cfg.get("lsl_timeout", 8.0)),
+            lsl_source_id=str(eeg2_cfg.get("lsl_source_id", "")),
+        )
 
     cfg.motion.max_forward_speed = float(ros_params.get("max_forward_speed", cfg.motion.max_forward_speed))
     cfg.motion.reverse_speed = float(ros_params.get("reverse_speed", cfg.motion.reverse_speed))
@@ -67,6 +81,7 @@ def _persist_config(cfg: AppConfig) -> None:
         "run_rviz": bool(cfg.launch.run_rviz),
         "device": str(cfg.launch.device),
         "eeg_config_file": "eeg_control_node.params.yaml",
+        "eeg2": cfg.eeg2.model_dump() if cfg.eeg2 else None,
     }
     if _LAUNCH_YAML.exists():
         launch_payload = _deep_merge(_safe_load(_LAUNCH_YAML), launch_payload)
@@ -83,6 +98,7 @@ def _persist_config(cfg: AppConfig) -> None:
             "lsl_stream_type": str(cfg.eeg.lsl_stream_type),
             "lsl_timeout": float(cfg.eeg.lsl_timeout),
             "lsl_source_id": str(cfg.eeg.lsl_source_id),
+            "role": str(cfg.eeg.role),
             "max_forward_speed": float(cfg.motion.max_forward_speed),
             "reverse_speed": float(cfg.motion.reverse_speed),
             "turn_forward_speed": float(cfg.motion.turn_forward_speed),
