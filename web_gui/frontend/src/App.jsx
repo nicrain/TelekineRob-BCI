@@ -893,7 +893,7 @@ export default function App() {
             </div>
 
             {/* ── Row 2 ──────────────────────────────── */}
-            <fieldset disabled={!dualDevice} className="cascade-row" style={{ border: 'none', padding: 0, margin: 0 }}>
+            <div className="cascade-row" style={{ marginBottom: 0 }}>
               <label className="cascade-group" style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 40 }}>
                 <input
                   type="checkbox"
@@ -902,15 +902,16 @@ export default function App() {
                   disabled={running}
                 />
               </label>
-              <CascadeSelect
-                label="Role"
-                value={role2}
-                disabled={true}
-                options={[
-                  { value: role2, label: role2 === 'speed' ? 'Speed' : 'Steering' },
-                ]}
-              />
-              <CascadeSelect
+              <fieldset disabled={!dualDevice} style={{ border: 'none', padding: 0, margin: 0, display: 'contents' }}>
+                <CascadeSelect
+                  label="Role"
+                  value={role2}
+                  disabled={true}
+                  options={[
+                    { value: role2, label: role2 === 'speed' ? 'Speed' : 'Steering' },
+                  ]}
+                />
+                <CascadeSelect
                 label="Device"
                 value={device2}
                 onChange={setDevice2}
