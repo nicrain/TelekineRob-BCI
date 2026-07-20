@@ -16,7 +16,7 @@ def test_focus_policy_clips_speed_and_steer_bounds():
 
     assert low["speed_intent"] == pytest.approx(0.0)
     assert high["speed_intent"] == pytest.approx(1.0)
-    # steer is still steerable in EiPolicy (only TbrPolicy disables it)
+    # steer is active in all three policies (Ei, Tbr, Alpha)
     assert 0.0 <= low["steer_intent"] <= 1.0
     assert 0.0 <= high["steer_intent"] <= 1.0
 
@@ -42,15 +42,15 @@ def test_theta_beta_policy_ratio_controls_speed_inversely():
     assert 0.0 <= high_ratio["speed_intent"] <= 1.0
 
 
-def test_theta_beta_policy_steer_is_disabled():
-    """TbrPolicy disables steering — steer_intent is always 0.5."""
+def test_theta_beta_policy_steer_responds_to_asymmetry():
+    """TbrPolicy steer_intent follows alpha_asym (same mapping as EiPolicy)."""
     policy = TbrPolicy()
 
-    for asym in (-100.0, -0.5, 0.0, 0.5, 100.0):
-        result = policy.compute_intents({"theta_beta": 1.0, "alpha_asym": asym})
-        assert result["steer_intent"] == pytest.approx(0.5), (
-            f"Expected steer_intent=0.5 for alpha_asym={asym}, got {result['steer_intent']}"
-        )
+    left_bias = policy.compute_intents({"theta_beta": 1.0, "alpha_asym": -0.1})
+    right_bias = policy.compute_intents({"theta_beta": 1.0, "alpha_asym": 0.1})
+
+    assert left_bias["steer_intent"] < 0.5
+    assert right_bias["steer_intent"] > 0.5
 
 
 def test_alpha_only_policy_clips_bounds():
@@ -76,8 +76,12 @@ def test_alpha_only_policy_speed_inversely_proportional():
     assert 0.0 <= high_alpha["speed_intent"] <= 1.0
 
 
-def test_alpha_only_policy_steer_is_disabled():
+def test_alpha_only_policy_steer_responds_to_asymmetry():
+    """AlphaPolicy steer_intent follows alpha_asym (same mapping as EiPolicy)."""
     policy = AlphaPolicy()
 
-    result = policy.compute_intents({"alpha": 3.0})
-    assert result["steer_intent"] == pytest.approx(0.5)
+    left_bias = policy.compute_intents({"alpha": 3.0, "alpha_asym": -0.1})
+    right_bias = policy.compute_intents({"alpha": 3.0, "alpha_asym": 0.1})
+
+    assert left_bias["steer_intent"] < 0.5
+    assert right_bias["steer_intent"] > 0.5

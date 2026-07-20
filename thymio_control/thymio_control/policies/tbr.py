@@ -53,6 +53,7 @@ class TbrPolicy(Policy):
         tbr_norm = clip01((self._tbr_smooth - self.tbr_offset) / self.tbr_scale)
         speed_intent = clip01(1.0 - tbr_norm)
 
-        steer_intent = 0.5  # steering disabled (speed-only policy)
+        asym = features.get("alpha_asym", 0.0)
+        steer_intent = clip01(0.5 + self.steer_gain * asym)
 
         return {"speed_intent": speed_intent, "steer_intent": steer_intent}

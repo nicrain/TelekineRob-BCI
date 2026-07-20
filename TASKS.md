@@ -20,8 +20,8 @@
 |---|---|---|
 | P1.1 | headband + tbr → forward | ✅ 2026-07-17 |
 | P1.2 | hybrid black + tbr → forward | ✅ 2026-07-18 |
-| P1.3 | headband + alpha → forward | TODO |
-| P1.4 | hybrid black + alpha → forward | TODO |
+| P1.3 | headband + alpha → forward | ✅ 2026-07-20 |
+| P1.4 | hybrid black + alpha → forward | ✅ 2026-07-20 |
 
 ---
 
@@ -31,7 +31,7 @@
 |---|---|---|---|
 | P2.1 | UI improvements for steering | — | TODO |
 | P2.2 | Blink detection: active vs passive | — | TODO |
-| P2.3a | Restore steer_intent in TbrPolicy + AlphaPolicy | P1.1–4 | TODO |
+| P2.3a | Restore steer_intent in TbrPolicy + AlphaPolicy | P1.1–4 | ✅ 2026-07-20 |
 | P2.3b | Blink steer: turn direction state machine + LED | P2.3a | TODO |
 
 ---
