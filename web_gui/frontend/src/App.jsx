@@ -604,7 +604,7 @@ export default function App() {
         graphic: [
           {
             type: 'text',
-            left: 35, top: 6,
+            right: 10, top: 6,
             style: {
               text: `min=${calibOffset.toFixed(1)}  max=${(calibOffset + calibScale).toFixed(1)}`,
               fill: isDarkCharts ? '#aaa' : '#666',
