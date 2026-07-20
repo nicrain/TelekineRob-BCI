@@ -725,6 +725,17 @@ body {
   pointer-events: none;
 }
 
+[data-theme="light"] .calib-btn {
+  background: rgba(139, 105, 20, 0.06);
+  border-color: #8B6914;
+  color: #8B6914;
+}
+
+[data-theme="light"] .calib-btn:hover {
+  background: rgba(139, 105, 20, 0.12);
+  border-color: #8B6914;
+}
+
 .calib-edit-group {
   display: flex;
   flex-direction: column;
