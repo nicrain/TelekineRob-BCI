@@ -831,6 +831,7 @@ export default function App() {
 
             {/* ── Row 1 ──────────────────────────────── */}
             <div className="cascade-row" style={{ marginBottom: 12 }}>
+              <img src="/Headband.png" alt="" style={{ width: 28, height: 28, alignSelf: 'center' }} />
               <CascadeSelect
                 label="Role"
                 value={role1}
@@ -900,6 +901,7 @@ export default function App() {
 
             {/* ── Row 2 ──────────────────────────────── */}
             <div className="cascade-row" style={{ marginBottom: 0 }}>
+              <img src="/HybridBlack.png" alt="" style={{ width: 28, height: 28, alignSelf: 'center', opacity: dualDevice ? 1 : 0.35 }} />
               <CascadeSelect
                 label="Role"
                 value={role2}
