@@ -219,7 +219,7 @@ function CascadeSelect({ label, value, onChange, options, disabled }) {
         disabled={disabled}
       >
         {options.map((opt) => (
-          <option key={opt.value} value={opt.value}>
+          <option key={opt.value} value={opt.value} disabled={opt.disabled}>
             {opt.label}
           </option>
         ))}
@@ -402,12 +402,13 @@ export default function App() {
   const [selectedChannels, setSelectedChannels] = useState([0, 1, 2]);
   const [metric, setMetric]               = useState('tbr');
   const [role1, setRole1]                 = useState('speed');
-  const [dualDevice, setDualDevice]       = useState(false);
+  const [role2, setRole2]                 = useState('none');
   const [device2, setDevice2]             = useState('eeg');
   const [eegBrand2, setEegBrand2]         = useState('gtec_headband');
   const [eegProtocol2, setEegProtocol2]   = useState('lsl');
   const [selectedChannels2, setSelectedChannels2] = useState([0, 1, 2]);
   const [metric2, setMetric2]             = useState('tbr');
+  const dualDevice = role2 !== 'none';
   const [outputMode, setOutputMode]         = useState('thymio_simu');
   const [thymioDevice, setThymioDevice]     = useState('ser:device=/dev/ttyACM0');
   const [showWaveform, setShowWaveform]     = useState(true);
@@ -460,7 +461,7 @@ export default function App() {
           if (cfg.eeg.brand) setEegBrand(cfg.eeg.brand);
         }
         if (cfg.eeg2) {
-          setDualDevice(true);
+          setRole2(cfg.eeg2.role || 'steering');
           if (cfg.eeg2.policy) setMetric2(cfg.eeg2.policy);
           if (cfg.eeg2.brand) setEegBrand2(cfg.eeg2.brand);
         }
@@ -470,6 +471,13 @@ export default function App() {
       })
       .catch((err) => setFeedback(`Init failed: ${err.message}`));
   }, []);
+
+  /* ── Enforce role mutual exclusion ───────────────────── */
+  useEffect(() => {
+    if (role1 === role2) {
+      setRole2(role1 === 'speed' ? 'steering' : 'speed');
+    }
+  }, [role1]);  // only react to role1 changes
 
   /* ── Poll system status (ROS2 + Thymio) ─────────────── */
   useEffect(() => {
@@ -632,8 +640,6 @@ export default function App() {
   }, [series, metric, isDarkCharts, calibOffset, calibScale, calibrating]);
 
   /* ── Build patch ─────────────────────────────────────── */
-  const role2 = role1 === 'speed' ? 'steering' : 'speed';
-
   function buildPatch() {
     const isSim = outputMode === 'thymio_simu';
     const patch = {
@@ -894,23 +900,18 @@ export default function App() {
 
             {/* ── Row 2 ──────────────────────────────── */}
             <div className="cascade-row" style={{ marginBottom: 0 }}>
-              <label className="cascade-group" style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 40 }}>
-                <input
-                  type="checkbox"
-                  checked={dualDevice}
-                  onChange={(e) => setDualDevice(e.target.checked)}
-                  disabled={running}
-                />
-              </label>
+              <CascadeSelect
+                label="Role"
+                value={role2}
+                onChange={setRole2}
+                disabled={running}
+                options={[
+                  { value: 'speed',    label: 'Speed',    disabled: role1 === 'speed' },
+                  { value: 'steering', label: 'Steering', disabled: role1 === 'steering' },
+                  { value: 'none',     label: 'None' },
+                ]}
+              />
               <fieldset disabled={!dualDevice} style={{ border: 'none', padding: 0, margin: 0, display: 'contents' }}>
-                <CascadeSelect
-                  label="Role"
-                  value={role2}
-                  disabled={true}
-                  options={[
-                    { value: role2, label: role2 === 'speed' ? 'Speed' : 'Steering' },
-                  ]}
-                />
                 <CascadeSelect
                 label="Device"
                 value={device2}
