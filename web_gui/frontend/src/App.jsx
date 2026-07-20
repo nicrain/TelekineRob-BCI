@@ -455,6 +455,14 @@ export default function App() {
           if (cfg.eeg.input) setInputMode('eeg');
           if (cfg.eeg.calib_offset != null) setCalibOffset(Number(cfg.eeg.calib_offset));
           if (cfg.eeg.calib_scale != null) setCalibScale(Number(cfg.eeg.calib_scale));
+          if (cfg.eeg.role) setRole1(cfg.eeg.role);
+          if (cfg.eeg.policy) setMetric(cfg.eeg.policy);
+          if (cfg.eeg.brand) setEegBrand(cfg.eeg.brand);
+        }
+        if (cfg.eeg2) {
+          setDualDevice(true);
+          if (cfg.eeg2.policy) setMetric2(cfg.eeg2.policy);
+          if (cfg.eeg2.brand) setEegBrand2(cfg.eeg2.brand);
         }
         if (cfg.launch) {
           setOutputMode(cfg.launch.use_sim ? 'thymio_simu' : 'thymio');
@@ -639,7 +647,7 @@ export default function App() {
         lsl_source_id:   eegBrand === 'gtec_headband' ? 'gtec_bci_core4' : eegBrand === 'gtec_hybrid' ? 'gtec_hybrid_black' : '',
         brand:           eegBrand,
       },
-      eeg2: dualDevice ? {
+      eeg2: (dualDevice && device2 === 'eeg') ? {
         input:           'lsl',
         role:            role2,
         policy:          metric2,
