@@ -341,45 +341,68 @@ function BigArrow({ x, y, color, opacity, headRatio }) {
   );
 }
 
-function ControlVector({ speed, steer }) {
+function ControlVector({ speed, steer, role }) {
   // speed: 0..1 (no backward), steer: 0..1 (0.5=center)
   const clampedSpeed = Math.max(0, Math.min(1, speed));
   const steerOffset = steer - 0.5; // -0.5..0.5
 
-  // Forward arrow (up in SVG = -Y)
+  // Forward arrow
   const fwdLen = lerp(MIN_LEN, MAX_LEN, clampedSpeed);
-  const fwdActive = clampedSpeed > 0.05;
 
-  // Left arrow: steerOffset < 0
+  // Left/Right arrows
   const leftMag = Math.abs(Math.min(steerOffset, 0)) * 2; // 0..1
   const leftLen = lerp(MIN_LEN, MAX_LEN, leftMag);
-  const leftActive = steerOffset < -0.05;
-
-  // Right arrow: steerOffset > 0
   const rightMag = Math.abs(Math.max(steerOffset, 0)) * 2; // 0..1
   const rightLen = lerp(MIN_LEN, MAX_LEN, rightMag);
-  const rightActive = steerOffset > 0.05;
 
-  // Resultant: combine forward (Y) and steer (X)
-  const resMag = Math.sqrt(clampedSpeed * clampedSpeed + steerOffset * steerOffset * 4);
-  const resLen = lerp(MIN_LEN, MAX_LEN, Math.min(resMag, 1));
-  const resAngle = Math.atan2(-clampedSpeed, steerOffset * 2);
-  const resX = resLen * Math.cos(resAngle);
-  const resY = resLen * Math.sin(resAngle);
+  const isSpeed = role === 'speed';
 
   return (
     <svg width={SVG_SIZE} height={SVG_SIZE} viewBox={`0 0 ${SVG_SIZE} ${SVG_SIZE}`} className="control-vector-svg">
-      {/* Base arrows — all same color, big style */}
-      {/* Forward (up) */}
-      <BigArrow x={0} y={-fwdLen} color={BASE_COLOR} opacity={fwdActive ? 1 : 0.2} headRatio={0.35} />
-      {/* Left */}
-      <BigArrow x={-leftLen} y={0} color={BASE_COLOR} opacity={leftActive ? 1 : 0.2} headRatio={0.35} />
-      {/* Right */}
-      <BigArrow x={rightLen} y={0} color={BASE_COLOR} opacity={rightActive ? 1 : 0.2} headRatio={0.35} />
-
-      {/* Resultant vector — different color, different style (thinner body, bigger head) */}
-      <BigArrow x={resX} y={resY} color={RESULT_COLOR} opacity={0.85} headRatio={0.4} />
+      {isSpeed ? (
+        <>
+          {/* Speed role: forward arrow only, fill by percentage */}
+          <BigArrow x={0} y={-fwdLen} color={BASE_COLOR} opacity={0.18} headRatio={0.35} />
+          <BigArrow x={0} y={-lerp(MIN_LEN, MAX_LEN, clampedSpeed)} color={RESULT_COLOR} opacity={clampedSpeed > 0.03 ? 0.90 : 0} headRatio={0.35} />
+        </>
+      ) : (
+        <>
+          {/* Steering role: left/right arrows, fill active direction */}
+          <BigArrow x={-MAX_LEN} y={0} color={BASE_COLOR} opacity={0.18} headRatio={0.35} />
+          <BigArrow x={leftLen > 0 ? -leftLen : -MIN_LEN} y={0} color={RESULT_COLOR} opacity={leftMag > 0.03 ? 0.90 : 0} headRatio={0.35} />
+          <BigArrow x={MAX_LEN} y={0} color={BASE_COLOR} opacity={0.18} headRatio={0.35} />
+          <BigArrow x={rightLen > 0 ? rightLen : MIN_LEN} y={0} color={RESULT_COLOR} opacity={rightMag > 0.03 ? 0.90 : 0} headRatio={0.35} />
+        </>
+      )}
     </svg>
+  );
+}
+
+/* ── Chart Column (role-adapted charts for one input) ──── */
+function ChartColumn({ label, role, waveOption, featureOption, metricLabel, speed, steer, dimmed }) {
+  const roleLabel = role === 'speed' ? 'Speed' : 'Steering';
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span className="section-label">{label}</span>
+        <span className="vl-dot" style={{ background: role === 'speed' ? '#4da6ff' : '#ff944d' }} />
+        <span style={{ fontSize: 13, color: '#999' }}>{roleLabel}</span>
+      </div>
+      <div className={`chart-card${dimmed ? ' dimmed-card' : ''}`}>
+        <h3>Raw Wave &mdash; alpha / theta / beta</h3>
+        <ReactECharts option={waveOption} style={{ height: 200 }} />
+      </div>
+      <div className={`chart-card${dimmed ? ' dimmed-card' : ''}`}>
+        <h3>{metricLabel}</h3>
+        <ReactECharts option={featureOption} style={{ height: 200 }} />
+      </div>
+      <div className="chart-card">
+        <h3>Control Vector</h3>
+        <div className="vector-card-body">
+          <ControlVector speed={speed} steer={steer} role={role} />
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1088,28 +1111,29 @@ export default function App() {
             </div>
           </div>
 
-          <div className={`charts-grid${!showWaveform || isControlMode ? ' dimmed' : ''}`}>
-            <div className="chart-card">
-              <h3>Raw Wave &mdash; alpha / theta / beta</h3>
-              <ReactECharts option={waveOption} style={{ height: 220 }} />
-            </div>
-            <div className={`chart-card${inputMode !== 'eeg' ? ' dimmed-card' : ''}`}>
-              <h3>{metricLabels[metric]}</h3>
-              <ReactECharts option={featureOption} style={{ height: 220 }} />
-            </div>
-            <div className="chart-card">
-              <h3>Control Vector</h3>
-              <div className="vector-card-body">
-                <ControlVector
-                  speed={series.speed.length ? series.speed[series.speed.length - 1] : 0}
-                  steer={series.steer.length ? series.steer[series.steer.length - 1] : 0.5}
-                />
-                <div className="vector-legend">
-                  <span className="vl-item"><span className="vl-dot" style={{ background: '#555' }} /> base</span>
-                  <span className="vl-item"><span className="vl-dot" style={{ background: '#DA291C' }} /> résultante</span>
-                </div>
-              </div>
-            </div>
+          <div className={`charts-grid${!showWaveform || isControlMode ? ' dimmed' : ''}`} style={dualDevice ? { gridTemplateColumns: 'repeat(2, 1fr)' } : undefined}>
+            <ChartColumn
+              label={eegBrand === 'gtec_hybrid' ? 'Hybrid Black' : 'Headband'}
+              role={role1}
+              waveOption={waveOption}
+              featureOption={featureOption}
+              metricLabel={metricLabels[metric]}
+              speed={series.speed.length ? series.speed[series.speed.length - 1] : 0}
+              steer={series.steer.length ? series.steer[series.steer.length - 1] : 0.5}
+              dimmed={inputMode !== 'eeg'}
+            />
+            {dualDevice && (
+              <ChartColumn
+                label={eegBrand2 === 'gtec_hybrid' ? 'Hybrid Black' : 'Headband'}
+                role={role2}
+                waveOption={waveOption}
+                featureOption={featureOption}
+                metricLabel={metricLabels[metric2]}
+                speed={series.speed.length ? series.speed[series.speed.length - 1] : 0}
+                steer={series.steer.length ? series.steer[series.steer.length - 1] : 0.5}
+                dimmed={inputMode !== 'eeg'}
+              />
+            )}
           </div>
         </div>
       )}
