@@ -14,7 +14,7 @@ import rclpy
 from geometry_msgs.msg import Twist
 from rclpy.node import Node
 from sensor_msgs.msg import Range
-from std_msgs.msg import String
+from std_msgs.msg import ColorRGBA, String
 
 # --- Modular architecture ---
 from thymio_control.pipeline import POLICIES, build_adapter
@@ -103,6 +103,12 @@ class EegControlNode(Node):
 
         self.pub = self.create_publisher(Twist, self.get_parameter("cmd_topic").value, 10)
         self.analysis_pub = self.create_publisher(String, self.get_parameter("analysis_topic").value, 10)
+
+        # LED publishers for steering direction indication
+        _driver_ns = "/thymio_driver"
+        self._led_left  = self.create_publisher(ColorRGBA, f"{_driver_ns}/led/body/bottom_left", 10)
+        self._led_right = self.create_publisher(ColorRGBA, f"{_driver_ns}/led/body/bottom_right", 10)
+        self._update_leds()  # initial direction: right (steer_direction=1)
 
         self.watchdog_sec = float(self.get_parameter("watchdog_sec").value)
         self.verbose = bool(self.get_parameter("verbose").value)
@@ -274,12 +280,13 @@ class EegControlNode(Node):
             else:
                 self.last_intents = {"speed_intent": 0.5, "steer_intent": 0.5}
 
-            # Active blink → toggle steering direction
+            # Active blink → toggle steering direction + update LEDs
             if frame.metrics.get("blink_active", 0.0) > 0.5:
                 self.steer_direction *= -1
                 self.get_logger().info(
                     f"Blink detected — steer direction: {'RIGHT' if self.steer_direction > 0 else 'LEFT'}"
                 )
+                self._update_leds()
 
             self.last_msg_ts = time.time()
             self._adapter_connected = True
@@ -384,6 +391,17 @@ class EegControlNode(Node):
                 twist.angular.z = -self.steer_direction * self.turn_angular_speed * steer
 
         return twist
+
+    def _update_leds(self) -> None:
+        """Set bottom LEDs to show current steer direction (green = active side)."""
+        green = ColorRGBA(r=0.0, g=1.0, b=0.0, a=1.0)
+        off   = ColorRGBA(r=0.0, g=0.0, b=0.0, a=0.0)
+        if self.steer_direction > 0:
+            self._led_right.publish(green)
+            self._led_left.publish(off)
+        else:
+            self._led_left.publish(green)
+            self._led_right.publish(off)
 
 
 def main(args: Optional[list] = None) -> None:
