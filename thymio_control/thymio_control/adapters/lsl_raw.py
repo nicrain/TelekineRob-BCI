@@ -40,6 +40,7 @@ from thymio_control.processors.band_power import (
     band_power_to_metrics,
     per_channel_metrics,
 )
+from thymio_control.processors.blink import StreamingBlinkDetector
 
 
 # Devices whose raw data needs pre-filtering before Welch PSD.
@@ -133,6 +134,13 @@ class RawLslAdapter(BaseAdapter):
                 n_channels=self._n_channels,
             )
 
+        # Blink detector — watches frontopolar channel for active blinks
+        self._blink_detector = StreamingBlinkDetector(
+            sample_rate=self._sample_rate,
+            channel_idx=0,  # Fp1 for Unicorn, F7 for headband
+        )
+        self._blink_active: bool = False
+
     # ------------------------------------------------------------------
     # Properties
     # ------------------------------------------------------------------
@@ -166,6 +174,9 @@ class RawLslAdapter(BaseAdapter):
         chunk = np.array(samples, dtype=np.float64).T
         if self._pre_filter is not None:
             self._pre_filter.apply(chunk)
+        # Blink detection (runs on pre-filtered or raw signal)
+        blink_events = self._blink_detector.feed_chunk(chunk)
+        self._blink_active = len(blink_events) > 0
         results = self._extractor.feed_chunk(chunk)
         if not results:
             return None
@@ -192,6 +203,7 @@ class RawLslAdapter(BaseAdapter):
             per_channel_metrics(self._channel_labels, latest, self._cfg.source_unit)
         )
 
+        metrics["blink_active"] = 1.0 if self._blink_active else 0.0
         return EegFrame(ts=time.time(), source="lsl_raw", metrics=metrics)
 
     # ------------------------------------------------------------------
@@ -215,6 +227,8 @@ class RawLslAdapter(BaseAdapter):
         self._extractor.reset()
         if self._pre_filter is not None:
             self._pre_filter.reset()
+        self._blink_detector.reset()
+        self._blink_active = False
 
     # ------------------------------------------------------------------
     # Private

@@ -160,6 +160,7 @@ class EegControlNode(Node):
         self._adapter_connected = False
         self.last_intents = {"speed_intent": 0.5, "steer_intent": 0.5}
         self.last_twist = Twist()
+        self.steer_direction = 1   # 1 = right, -1 = left (blink toggles)
 
         hz = float(self.get_parameter("publish_hz").value)
         self.create_timer(1.0 / max(hz, 1e-6), self._tick)
@@ -272,6 +273,14 @@ class EegControlNode(Node):
                 self.last_intents = self.policy.compute_intents(features)
             else:
                 self.last_intents = {"speed_intent": 0.5, "steer_intent": 0.5}
+
+            # Active blink → toggle steering direction
+            if frame.metrics.get("blink_active", 0.0) > 0.5:
+                self.steer_direction *= -1
+                self.get_logger().info(
+                    f"Blink detected — steer direction: {'RIGHT' if self.steer_direction > 0 else 'LEFT'}"
+                )
+
             self.last_msg_ts = time.time()
             self._adapter_connected = True
 
@@ -372,7 +381,7 @@ class EegControlNode(Node):
             twist.linear.x = self.max_forward_speed * speed_intent
             steer = (steer_intent - 0.5) * 2.0
             if abs(steer) >= self.steer_deadzone:
-                twist.angular.z = -self.turn_angular_speed * steer
+                twist.angular.z = -self.steer_direction * self.turn_angular_speed * steer
 
         return twist
 
