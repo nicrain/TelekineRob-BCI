@@ -474,18 +474,25 @@ export default function App() {
         setConfig(cfg);
         setFeedback('Config loaded.');
         // Sync backend config → local UI state
+        let loadedRole1 = role1;
+        let loadedRole2 = role2;
         if (cfg.eeg) {
           if (cfg.eeg.input) setInputMode('eeg');
           if (cfg.eeg.calib_offset != null) setCalibOffset(Number(cfg.eeg.calib_offset));
           if (cfg.eeg.calib_scale != null) setCalibScale(Number(cfg.eeg.calib_scale));
-          if (cfg.eeg.role) setRole1(cfg.eeg.role);
+          if (cfg.eeg.role) { loadedRole1 = cfg.eeg.role; setRole1(cfg.eeg.role); }
           if (cfg.eeg.policy) setMetric(cfg.eeg.policy);
           if (cfg.eeg.brand) setEegBrand(cfg.eeg.brand);
         }
         if (cfg.eeg2) {
-          setRole2(cfg.eeg2.role || 'steering');
+          loadedRole2 = cfg.eeg2.role || 'steering';
+          setRole2(loadedRole2);
           if (cfg.eeg2.policy) setMetric2(cfg.eeg2.policy);
           if (cfg.eeg2.brand) setEegBrand2(cfg.eeg2.brand);
+        }
+        // Guard against YAML hand-edits: if both roles are the same (and not 'none'), fix
+        if (loadedRole1 !== 'none' && loadedRole2 !== 'none' && loadedRole1 === loadedRole2) {
+          setRole2(loadedRole1 === 'speed' ? 'steering' : 'speed');
         }
         if (cfg.launch) {
           setOutputMode(cfg.launch.use_sim ? 'thymio_simu' : 'thymio');

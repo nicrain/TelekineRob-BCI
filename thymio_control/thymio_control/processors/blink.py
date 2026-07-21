@@ -29,6 +29,7 @@ Accuracy (reported in paper): 91.8 ± 3.7 % on 10 subjects.
 
 from __future__ import annotations
 
+from collections import deque
 from typing import Optional
 
 import numpy as np
@@ -71,7 +72,7 @@ class StreamingBlinkDetector:
         self._refractory_len = int(refractory_ms / 1000.0 * sample_rate)
         self._stats_interval = max(1, stats_interval)
 
-        self._buffer: list[float] = []
+        self._buffer: deque[float] = deque(maxlen=self._buffer_max)
         self._state: str = "idle"
         self._peak_val: float = 0.0
         self._refractory_counter: int = 0
@@ -134,10 +135,8 @@ class StreamingBlinkDetector:
     def _feed_sample(self, value: float) -> Optional[dict]:
         self._sample_count += 1
 
-        # --- maintain rolling buffer ---
+        # --- maintain rolling buffer (deque with maxlen auto-evicts oldest) ---
         self._buffer.append(value)
-        if len(self._buffer) > self._buffer_max:
-            self._buffer.pop(0)
 
         # --- refractory lock-out ---
         if self._refractory_counter > 0:
