@@ -29,10 +29,10 @@
 
 | # | Task | Depends on | Status |
 |---|---|---|---|
-| P2.1 | UI improvements for steering | — | TODO |
-| P2.2 | Blink detection: active vs passive | — | TODO |
+| P2.1 | UI improvements for steering | — | ✅ 2026-07-21 |
+| P2.2 | Blink detection: active vs passive | — | ✅ 2026-07-21 |
 | P2.3a | Restore steer_intent in TbrPolicy + AlphaPolicy | P1.1–4 | ✅ 2026-07-20 |
-| P2.3b | Blink steer: turn direction state machine + LED | P2.3a | TODO |
+| P2.3b | Blink steer: turn direction state machine + LED | P2.3a | 🟡 (state machine done, LED pending) |
 
 ---
 
