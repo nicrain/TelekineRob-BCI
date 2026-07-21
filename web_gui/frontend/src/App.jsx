@@ -434,7 +434,6 @@ export default function App() {
   const dualDevice = role2 !== 'none';
   const [outputMode, setOutputMode]         = useState('thymio_simu');
   const [thymioDevice, setThymioDevice]     = useState('ser:device=/dev/ttyACM0');
-  const [showWaveform, setShowWaveform]     = useState(true);
   const [running, setRunning]               = useState(false);
   const [calibrating, setCalibrating]        = useState(false);
   const [calibPhase, setCalibPhase]          = useState(null);  // 'preparing' | 'counting'
@@ -1060,18 +1059,6 @@ export default function App() {
               </div>
             </div>
 
-            <label className={`waveform-toggle${isControlMode ? ' disabled' : ''}`}>
-              <input
-                type="checkbox"
-                checked={showWaveform}
-                disabled={isControlMode}
-                onChange={(e) => setShowWaveform(e.target.checked)}
-              />
-              <span className="waveform-toggle-text">Show Waveforms</span>
-              <span className="waveform-toggle-note">
-                {isControlMode ? '— unavailable for this mode' : 'alpha · theta · beta · features · control'}
-              </span>
-            </label>
           </div>
 
         </div>
@@ -1111,7 +1098,7 @@ export default function App() {
             </div>
           </div>
 
-          <div className={`charts-grid${!showWaveform || isControlMode ? ' dimmed' : ''}`} style={dualDevice ? { gridTemplateColumns: 'repeat(2, 1fr)' } : undefined}>
+          <div className="charts-grid" style={dualDevice ? { gridTemplateColumns: 'repeat(2, 1fr)' } : undefined}>
             <ChartColumn
               label={eegBrand === 'gtec_hybrid' ? 'Hybrid Black' : 'Headband'}
               role={role1}
