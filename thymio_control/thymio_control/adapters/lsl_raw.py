@@ -257,7 +257,7 @@ class RawLslAdapter(BaseAdapter):
         desc = info.desc()
         labels_str = desc.child_value("channel_labels")
         if labels_str:
-            return labels_str.split(",")
+            return [s.strip() for s in labels_str.split(",")]
         return [f"ch{i}" for i in range(info.channel_count())]
 
     def _resolve_blink_channel(self) -> int:
@@ -284,6 +284,9 @@ class RawLslAdapter(BaseAdapter):
         # --- Tier 2: match stream name against device profiles ---
         try:
             from thymio_control.device_profiles import EEG_DEVICE_CONFIGS
+        except ImportError:
+            pass
+        else:
             for _key, cfg in EEG_DEVICE_CONFIGS.items():
                 if cfg.get("lsl_stream_name") == self._stream_name:
                     profile_labels = cfg.get("channel_labels", [])
@@ -293,8 +296,6 @@ class RawLslAdapter(BaseAdapter):
                         except ValueError:
                             continue
                     break  # device matched but no blink label found
-        except Exception:
-            pass
 
         # --- Tier 3: fallback ---
         return 0
