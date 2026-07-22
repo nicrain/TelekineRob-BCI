@@ -294,6 +294,9 @@ class EegControlNode(Node):
             self.last_msg_ts = time.time()
             self._adapter_connected = True
 
+            # Compute twist first so analysis includes actual command values
+            twist = self._intents_to_twist(self.last_intents)
+
             analysis = {
                 "ts": frame.ts,
                 "source": frame.source,
@@ -301,8 +304,9 @@ class EegControlNode(Node):
                 "features": features,
                 "intents": self.last_intents,
                 "control_mode": "band_features",
-                "command_linear_x": 0.0,
-                "command_angular_z": 0.0,
+                "command_linear_x": twist.linear.x,
+                "command_angular_z": twist.angular.z,
+                "steer_direction": self.steer_direction,
             }
             self.analysis_pub.publish(String(data=json.dumps(analysis, ensure_ascii=False)))
             if self.analysis_verbose:
@@ -313,8 +317,8 @@ class EegControlNode(Node):
                     "ts": frame.ts,
                     "source": frame.source,
                     "metrics_json": json.dumps(frame.metrics, ensure_ascii=False, sort_keys=True),
-                    "command_linear_x": 0.0,
-                    "command_angular_z": 0.0,
+                    "command_linear_x": twist.linear.x,
+                    "command_angular_z": twist.angular.z,
                     "speed_intent": self.last_intents.get("speed_intent", 0.5),
                     "steer_intent": self.last_intents.get("steer_intent", 0.5),
                 }
@@ -325,7 +329,7 @@ class EegControlNode(Node):
                     self._csv_flush_counter = 0
 
             if not self._calibrate:
-                self.pub.publish(self._intents_to_twist(self.last_intents))
+                self.pub.publish(twist)
 
             if self.verbose:
                 self.get_logger().info(

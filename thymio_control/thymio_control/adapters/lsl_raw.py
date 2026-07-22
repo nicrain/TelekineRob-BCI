@@ -138,8 +138,8 @@ class RawLslAdapter(BaseAdapter):
         self._blink_detector = StreamingBlinkDetector(
             sample_rate=self._sample_rate,
             channel_idx=0,  # Fp1 for Unicorn, F7 for headband
-            k_mad=8.0,
-            refractory_ms=800.0,
+            k_mad=3.0,
+            refractory_ms=500.0,
         )
         self._blink_active: bool = False
 

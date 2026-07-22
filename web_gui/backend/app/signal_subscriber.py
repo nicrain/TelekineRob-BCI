@@ -207,6 +207,7 @@ class RosBridge:
             "control": {
                 "speed_intent": float(intents.get("speed_intent", 0)),
                 "steer_intent": float(intents.get("steer_intent", 0.5)),
+                "steer_direction": int(data.get("steer_direction", 0)),
             },
             "timestamp": float(data.get("ts", time.time())),
         }

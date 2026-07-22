@@ -341,19 +341,20 @@ function BigArrow({ x, y, color, opacity, headRatio }) {
   );
 }
 
-function ControlVector({ speed, steer, role }) {
+function ControlVector({ speed, steer, role, steerDirection }) {
   // speed: 0..1 (no backward), steer: 0..1 (0.5=center)
   const clampedSpeed = Math.max(0, Math.min(1, speed));
-  const steerOffset = steer - 0.5; // -0.5..0.5
 
   // Forward arrow
   const fwdLen = lerp(MIN_LEN, MAX_LEN, clampedSpeed);
 
-  // Left/Right arrows
-  const leftMag = Math.abs(Math.min(steerOffset, 0)) * 2; // 0..1
-  const leftLen = lerp(MIN_LEN, MAX_LEN, leftMag);
-  const rightMag = Math.abs(Math.max(steerOffset, 0)) * 2; // 0..1
-  const rightLen = lerp(MIN_LEN, MAX_LEN, rightMag);
+  // Steer magnitude from intent (0.5=no turn, 1.0=max turn)
+  const steerMag = Math.abs(steer - 0.5) * 2;  // 0..1
+  const steerLen = lerp(MIN_LEN, MAX_LEN, steerMag);
+
+  // Direction: +1 = right, -1 = left, 0 = no direction (show both dimmed)
+  const showLeft  = steerDirection < 0 && steerMag > 0.03;
+  const showRight = steerDirection > 0 && steerMag > 0.03;
 
   const isSpeed = role === 'speed';
 
@@ -367,11 +368,11 @@ function ControlVector({ speed, steer, role }) {
         </>
       ) : (
         <>
-          {/* Steering role: left/right arrows, fill active direction */}
+          {/* Steering role: direction from steerDirection, magnitude from steer_intent */}
           <BigArrow x={-MAX_LEN} y={0} color={BASE_COLOR} opacity={0.18} headRatio={0.35} />
-          <BigArrow x={leftLen > 0 ? -leftLen : -MIN_LEN} y={0} color={RESULT_COLOR} opacity={leftMag > 0.03 ? 0.90 : 0} headRatio={0.35} />
+          <BigArrow x={showLeft ? -steerLen : -MIN_LEN} y={0} color={RESULT_COLOR} opacity={showLeft ? 0.90 : 0} headRatio={0.35} />
           <BigArrow x={MAX_LEN} y={0} color={BASE_COLOR} opacity={0.18} headRatio={0.35} />
-          <BigArrow x={rightLen > 0 ? rightLen : MIN_LEN} y={0} color={RESULT_COLOR} opacity={rightMag > 0.03 ? 0.90 : 0} headRatio={0.35} />
+          <BigArrow x={showRight ? steerLen : MIN_LEN} y={0} color={RESULT_COLOR} opacity={showRight ? 0.90 : 0} headRatio={0.35} />
         </>
       )}
     </svg>
@@ -379,7 +380,7 @@ function ControlVector({ speed, steer, role }) {
 }
 
 /* ── Chart Column (role-adapted charts for one input) ──── */
-function ChartColumn({ label, role, waveOption, featureOption, metricLabel, speed, steer, dimmed }) {
+function ChartColumn({ label, role, waveOption, featureOption, metricLabel, speed, steer, steerDirection, dimmed }) {
   const roleLabel = role === 'speed' ? 'Speed' : 'Steering';
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -399,7 +400,7 @@ function ChartColumn({ label, role, waveOption, featureOption, metricLabel, spee
       <div className="chart-card">
         <h3>Control Vector</h3>
         <div className="vector-card-body">
-          <ControlVector speed={speed} steer={steer} role={role} />
+          <ControlVector speed={speed} steer={steer} role={role} steerDirection={steerDirection} />
         </div>
       </div>
     </div>
@@ -431,6 +432,7 @@ export default function App() {
   const [eegProtocol2, setEegProtocol2]   = useState('lsl');
   const [selectedChannels2, setSelectedChannels2] = useState([0, 1, 2]);
   const [metric2, setMetric2]             = useState('tbr');
+  const [steerDirection, setSteerDirection] = useState(0);  // +1=right, -1=left, 0=none
   const dualDevice = role2 !== 'none';
   const [outputMode, setOutputMode]         = useState('thymio_simu');
   const [thymioDevice, setThymioDevice]     = useState('ser:device=/dev/ttyACM0');
@@ -561,6 +563,7 @@ export default function App() {
           speed: pushPoint(prev.speed,  data.control?.speed_intent        ?? 0),
           steer: pushPoint(prev.steer,  data.control?.steer_intent        ?? 0),
         }));
+        setSteerDirection(data.control?.steer_direction ?? 0);
       }
     };
     return () => ws.close();
@@ -1114,6 +1117,7 @@ export default function App() {
               metricLabel={metricLabels[metric]}
               speed={series.speed.length ? series.speed[series.speed.length - 1] : 0}
               steer={series.steer.length ? series.steer[series.steer.length - 1] : 0.5}
+              steerDirection={steerDirection}
               dimmed={inputMode !== 'eeg'}
             />
             {dualDevice && (
@@ -1125,6 +1129,7 @@ export default function App() {
                 metricLabel={metricLabels[metric2]}
                 speed={series.speed.length ? series.speed[series.speed.length - 1] : 0}
                 steer={series.steer.length ? series.steer[series.steer.length - 1] : 0.5}
+                steerDirection={steerDirection}
                 dimmed={inputMode !== 'eeg'}
               />
             )}
