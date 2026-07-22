@@ -141,9 +141,9 @@ class RawLslAdapter(BaseAdapter):
         self._blink_detector = StreamingBlinkDetector(
             sample_rate=self._sample_rate,
             channel_idx=_blink_ch,
-            k_mad=3.0,
+            k_mad=6.0,
             refractory_ms=500.0,
-            min_threshold=15.0,
+            min_threshold=40.0,
         )
         self._blink_active: bool = False
         self._blink_pending: bool = False  # latch across dropped frames
