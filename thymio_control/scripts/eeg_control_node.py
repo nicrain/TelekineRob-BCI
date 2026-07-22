@@ -108,8 +108,6 @@ class EegControlNode(Node):
         _driver_ns = "/thymio_driver"
         self._led_left  = self.create_publisher(ColorRGBA, f"{_driver_ns}/led/body/bottom_left", 10)
         self._led_right = self.create_publisher(ColorRGBA, f"{_driver_ns}/led/body/bottom_right", 10)
-        self._update_leds()  # initial direction: right (steer_direction=1)
-
         self.watchdog_sec = float(self.get_parameter("watchdog_sec").value)
         self.verbose = bool(self.get_parameter("verbose").value)
         self.analysis_verbose = bool(self.get_parameter("analysis_verbose").value)
@@ -167,6 +165,7 @@ class EegControlNode(Node):
         self.last_intents = {"speed_intent": 0.5, "steer_intent": 0.5}
         self.last_twist = Twist()
         self.steer_direction = 1   # 1 = right, -1 = left (blink toggles)
+        self._update_leds()  # initial direction: right
 
         hz = float(self.get_parameter("publish_hz").value)
         self.create_timer(1.0 / max(hz, 1e-6), self._tick)
