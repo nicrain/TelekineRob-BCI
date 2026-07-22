@@ -276,18 +276,20 @@ class EegControlNode(Node):
                 if time.time() >= self._calib_deadline:
                     self._finish_calibration()
 
-            if has_band_features:
-                self.last_intents = self.policy.compute_intents(features)
-            else:
-                self.last_intents = {"speed_intent": 0.5, "steer_intent": 0.5}
+            blink_now = self._steer_role and frame.metrics.get("blink_active", 0.0) > 0.5
 
-            # Active blink → toggle steering direction (only when role=steering)
-            if self._steer_role and frame.metrics.get("blink_active", 0.0) > 0.5:
+            if blink_now:
+                # Reuse last intents — blink EOG artifact would otherwise
+                # pollute the metric and cause a spurious steer_mag spike.
                 self.steer_direction *= -1  # toggle left ↔ right
                 self.get_logger().info(
                     f"Blink detected — steer: {'RIGHT' if self.steer_direction > 0 else 'LEFT'}"
                 )
                 self._update_leds()
+            elif has_band_features:
+                self.last_intents = self.policy.compute_intents(features)
+            else:
+                self.last_intents = {"speed_intent": 0.5, "steer_intent": 0.5}
 
             self.last_msg_ts = time.time()
             self._adapter_connected = True

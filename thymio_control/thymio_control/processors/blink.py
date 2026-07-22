@@ -135,19 +135,21 @@ class StreamingBlinkDetector:
     def _feed_sample(self, value: float) -> Optional[dict]:
         self._sample_count += 1
 
-        # --- maintain rolling buffer (deque with maxlen auto-evicts oldest) ---
-        self._buffer.append(value)
-
         # --- refractory lock-out ---
         if self._refractory_counter > 0:
             self._refractory_counter -= 1
             return None
 
-        # --- warm-up ---
+        # --- adaptive threshold (cached, updated every stats_interval samples) ---
+        # Only feed baseline (idle) samples into the statistics buffer so
+        # blink EOG artifacts cannot inflate the MAD and block future
+        # detections.
+        if self._state == "idle":
+            self._buffer.append(value)
+
         if len(self._buffer) < self._warmup:
             return None
 
-        # --- adaptive threshold (cached, updated every stats_interval samples) ---
         if self._stats_age >= self._stats_interval:
             arr = np.array(self._buffer, dtype=np.float64)
             self._cached_med = float(np.median(arr))
