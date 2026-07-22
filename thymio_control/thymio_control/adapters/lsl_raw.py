@@ -21,12 +21,17 @@ Design notes
   (written by ``EdfToLslBridge``).  Falls back to ``config.source_unit``.
 - Real-time first: when multiple windows are ready, only the **latest** result
   is returned to minimise control latency.
+
+Blink detection has been moved out of the adapter.  Active blinks are now
+detected directly from the policy metric (theta_beta / EI / alpha) in
+``eeg_control_node.py``, using calibration p5/p95 as the normal-range
+reference.  See ``_confirm_blink_metric()``.
 """
 from __future__ import annotations
 
 import logging
 import time
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 import numpy as np
 
@@ -40,7 +45,6 @@ from thymio_control.processors.band_power import (
     band_power_to_metrics,
     per_channel_metrics,
 )
-from thymio_control.processors.blink import DualChannelBlinkDetector, StreamingBlinkDetector
 
 
 # Devices whose raw data needs pre-filtering before Welch PSD.
@@ -115,7 +119,7 @@ class RawLslAdapter(BaseAdapter):
                 "RawLslAdapter: source_unit not found in LSL stream description "
                 "and no explicit config provided. Defaulting to '%s'. "
                 "If your device outputs nV, set DSPConfig(source_unit='nV') "
-                "to avoid a 10\u2076× scaling error.",
+                "to avoid a 10⁶× scaling error.",
                 self._cfg.source_unit,
             )
 
@@ -133,24 +137,6 @@ class RawLslAdapter(BaseAdapter):
                 sample_rate=self._sample_rate,
                 n_channels=self._n_channels,
             )
-
-        # Dual-channel blink detector — requires BOTH Fp1 and Fp2 to agree.
-        # Vertical blinks produce symmetrical EOG on both prefrontal channels;
-        # horizontal eye movements and EMG are unilateral.  This is a much
-        # stronger signal than single-channel amplitude alone, so we can
-        # relax the temporal/amplitude thresholds.
-        _blink_chs = self._resolve_blink_channels()
-        self._blink_detector = DualChannelBlinkDetector(
-            sample_rate=self._sample_rate,
-            channel_indices=_blink_chs,
-            k_mad=6.0,
-            refractory_ms=500.0,
-            min_threshold=80.0,
-            confirm_samples=5,
-            min_rising_samples=30,
-        )
-        self._blink_active: bool = False
-        self._blink_pending: bool = False  # latch across dropped frames
 
     # ------------------------------------------------------------------
     # Properties
@@ -185,21 +171,9 @@ class RawLslAdapter(BaseAdapter):
         chunk = np.array(samples, dtype=np.float64).T
         if self._pre_filter is not None:
             self._pre_filter.apply(chunk)
-        # Blink detection (runs on pre-filtered or raw signal).
-        # Latch pattern: band-power windows complete less often than we
-        # pull chunks.  If a blink is detected in a chunk whose window
-        # isn't ready, the flag would be lost.  _blink_pending latches
-        # until the next successfully returned frame.
-        blink_events = self._blink_detector.feed_chunk(chunk)
-        if blink_events:
-            self._blink_pending = True
         results = self._extractor.feed_chunk(chunk)
         if not results:
             return None
-
-        # Frame is being returned — transfer latch to blink_active
-        self._blink_active = self._blink_pending
-        self._blink_pending = False
 
         # Use the latest result to minimise control latency
         latest = results[-1]
@@ -216,14 +190,10 @@ class RawLslAdapter(BaseAdapter):
         metrics = band_power_to_metrics(avg_bp, source_unit=self._cfg.source_unit)
 
         # Per-channel lateralisation metrics
-        # Expose per-channel alpha/theta/beta so EiPolicy can use
-        # left_alpha / right_alpha for lateralisation without discarding
-        # frontal/parietal spatial information.
         metrics.update(
             per_channel_metrics(self._channel_labels, latest, self._cfg.source_unit)
         )
 
-        metrics["blink_active"] = 1.0 if self._blink_active else 0.0
         return EegFrame(ts=time.time(), source="lsl_raw", metrics=metrics)
 
     # ------------------------------------------------------------------
@@ -231,15 +201,7 @@ class RawLslAdapter(BaseAdapter):
     # ------------------------------------------------------------------
 
     def flush(self) -> list:
-        """Flush the internal DSP buffer (discard incomplete window).
-
-        Returns
-        -------
-        list
-            Always returns ``[]`` (no completed windows) — matches the
-            contract of ``StreamingBandPowerExtractor.flush()`` and
-            maintains backward compatibility with the Phase 1 API.
-        """
+        """Flush the internal DSP buffer (discard incomplete window)."""
         return self._extractor.flush()
 
     def reset(self) -> None:
@@ -247,9 +209,6 @@ class RawLslAdapter(BaseAdapter):
         self._extractor.reset()
         if self._pre_filter is not None:
             self._pre_filter.reset()
-        self._blink_detector.reset()
-        self._blink_active = False
-        self._blink_pending = False
 
     # ------------------------------------------------------------------
     # Private
@@ -263,47 +222,3 @@ class RawLslAdapter(BaseAdapter):
         if labels_str:
             return [s.strip() for s in labels_str.split(",")]
         return [f"ch{i}" for i in range(info.channel_count())]
-
-    def _resolve_blink_channels(self) -> list[int]:
-        """Return the best two channel indices for bilateral blink detection.
-
-        Blink EOG is strongest and most symmetric at prefrontal sites
-        Fp1 and Fp2 (directly above the eyes).  Resolution order:
-
-        1. Channel labels parsed from the LSL stream description.
-        2. Device profile lookup by stream name.
-        3. [0, 1] (last resort — suboptimal but functional).
-        """
-        # Priority order for blink-sensitive electrode pairs
-        _BLINK_PAIRS = (("Fp1", "Fp2"), ("Fz", "Cz"),)
-
-        # --- Tier 1: channel labels from LSL stream description ---
-        for a, b in _BLINK_PAIRS:
-            try:
-                idx_a = self._channel_labels.index(a)
-                idx_b = self._channel_labels.index(b)
-                return [idx_a, idx_b]
-            except ValueError:
-                continue
-
-        # --- Tier 2: match stream name against device profiles ---
-        try:
-            from thymio_control.device_profiles import EEG_DEVICE_CONFIGS
-        except ImportError:
-            pass
-        else:
-            for _key, cfg in EEG_DEVICE_CONFIGS.items():
-                if cfg.get("lsl_stream_name") == self._stream_name:
-                    profile_labels = cfg.get("channel_labels", [])
-                    for a, b in _BLINK_PAIRS:
-                        try:
-                            idx_a = profile_labels.index(a)
-                            idx_b = profile_labels.index(b)
-                            return [idx_a, idx_b]
-                        except ValueError:
-                            continue
-                    break  # device matched but no blink pair found
-
-        # --- Tier 3: fallback ---
-        return [0, 1]
-
