@@ -55,8 +55,7 @@ class EiPolicy(Policy):
 
         focus_norm = clip01((self._bat_smooth - self.focus_offset) / self.focus_scale)
 
-        asym = features.get("alpha_asym", 0.0)
-        steer_intent = clip01(0.5 + self.steer_gain * asym)
         speed_intent = clip01(focus_norm)
+        steer_intent = 0.5  # steering is blink-only (not EEG-driven)
 
         return {"speed_intent": speed_intent, "steer_intent": steer_intent}

@@ -58,6 +58,5 @@ class AlphaPolicy(Policy):
         alpha_norm = clip01((self._alpha_smooth - self.alpha_offset) / self.alpha_scale)
         speed_intent = clip01(1.0 - alpha_norm)
 
-        asym = features.get("alpha_asym", 0.0)
-        steer_intent = clip01(0.5 + self.steer_gain * asym)
+        steer_intent = 0.5  # steering is blink-only (not EEG-driven)
         return {"speed_intent": speed_intent, "steer_intent": steer_intent}

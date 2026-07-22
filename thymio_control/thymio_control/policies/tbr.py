@@ -53,7 +53,6 @@ class TbrPolicy(Policy):
         tbr_norm = clip01((self._tbr_smooth - self.tbr_offset) / self.tbr_scale)
         speed_intent = clip01(1.0 - tbr_norm)
 
-        asym = features.get("alpha_asym", 0.0)
-        steer_intent = clip01(0.5 + self.steer_gain * asym)
+        steer_intent = 0.5  # steering is blink-only (not EEG-driven)
 
         return {"speed_intent": speed_intent, "steer_intent": steer_intent}
