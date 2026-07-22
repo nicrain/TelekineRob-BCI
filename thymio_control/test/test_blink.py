@@ -3,7 +3,10 @@
 import numpy as np
 import pytest
 
-from thymio_control.processors.blink import StreamingBlinkDetector
+from thymio_control.processors.blink import (
+    DualChannelBlinkDetector,
+    StreamingBlinkDetector,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -339,3 +342,64 @@ def test_min_rising_samples_zero_raises():
     """min_rising_samples < 1 is rejected at construction."""
     with pytest.raises(ValueError, match="min_rising_samples"):
         StreamingBlinkDetector(sample_rate=250, min_rising_samples=0)
+
+
+# ---------------------------------------------------------------------------
+# Dual-channel detector tests
+# ---------------------------------------------------------------------------
+
+
+def _dual_chunk(
+    ch0: np.ndarray, ch1: np.ndarray,
+) -> np.ndarray:
+    """Stack two 1-D arrays into a (2, N) chunk."""
+    return np.stack([ch0, ch1]).astype(np.float64)
+
+
+def test_dual_channel_detects_both():
+    """Both channels see a synchronized blink → detection."""
+    sr = 250
+    det = DualChannelBlinkDetector(
+        sample_rate=sr, channel_indices=[0, 1],
+        k_mad=6.0, buffer_sec=3.0,
+    )
+    n = int(4 * sr)
+    sig0 = _baseline_signal(n, noise_std=1.0)[0]
+    sig1 = _baseline_signal(n, noise_std=1.0)[0]
+    _insert_blink(sig0.reshape(1, -1), int(2.5 * sr), peak_amplitude=50.0, duration=50)
+    _insert_blink(sig1.reshape(1, -1), int(2.5 * sr), peak_amplitude=50.0, duration=50)
+    chunk = _dual_chunk(sig0, sig1)
+    events = det.feed_chunk(chunk)
+    assert len(events) == 1, f"Dual blink should trigger, got {len(events)}"
+
+
+def test_dual_channel_ignores_unilateral():
+    """Only ch0 has a blink, ch1 is quiet → no detection."""
+    sr = 250
+    det = DualChannelBlinkDetector(
+        sample_rate=sr, channel_indices=[0, 1],
+        k_mad=6.0, buffer_sec=3.0,
+    )
+    n = int(4 * sr)
+    sig0 = _baseline_signal(n, noise_std=1.0)[0]
+    sig1 = _baseline_signal(n, noise_std=1.0)[0]
+    _insert_blink(sig0.reshape(1, -1), int(2.5 * sr), peak_amplitude=50.0, duration=50)
+    # sig1 stays quiet
+    chunk = _dual_chunk(sig0, sig1)
+    events = det.feed_chunk(chunk)
+    assert len(events) == 0, "Unilateral blink should NOT trigger dual-channel"
+
+
+def test_dual_channel_reset():
+    """reset() clears internal state of all detectors."""
+    sr = 250
+    det = DualChannelBlinkDetector(
+        sample_rate=sr, channel_indices=[0, 1],
+    )
+    det.reset()  # should not raise
+
+
+def test_dual_channel_requires_two_indices():
+    """Less than 2 channel_indices raises ValueError."""
+    with pytest.raises(ValueError, match="channel indices"):
+        DualChannelBlinkDetector(sample_rate=250, channel_indices=[0])

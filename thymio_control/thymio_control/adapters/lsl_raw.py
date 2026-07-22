@@ -40,7 +40,7 @@ from thymio_control.processors.band_power import (
     band_power_to_metrics,
     per_channel_metrics,
 )
-from thymio_control.processors.blink import StreamingBlinkDetector
+from thymio_control.processors.blink import DualChannelBlinkDetector, StreamingBlinkDetector
 
 
 # Devices whose raw data needs pre-filtering before Welch PSD.
@@ -134,18 +134,20 @@ class RawLslAdapter(BaseAdapter):
                 n_channels=self._n_channels,
             )
 
-        # Blink detector — auto-select frontopolar channel for active blinks.
-        # blink EOG is strongest at Fp1/Fp2 (vertical eye movement), weak at
-        # lateral channels (F7/F8).  Fall back to ch0 if labels are unavailable.
-        _blink_ch = self._resolve_blink_channel()
-        self._blink_detector = StreamingBlinkDetector(
+        # Dual-channel blink detector — requires BOTH Fp1 and Fp2 to agree.
+        # Vertical blinks produce symmetrical EOG on both prefrontal channels;
+        # horizontal eye movements and EMG are unilateral.  This is a much
+        # stronger signal than single-channel amplitude alone, so we can
+        # relax the temporal/amplitude thresholds.
+        _blink_chs = self._resolve_blink_channels()
+        self._blink_detector = DualChannelBlinkDetector(
             sample_rate=self._sample_rate,
-            channel_idx=_blink_ch,
+            channel_indices=_blink_chs,
             k_mad=6.0,
             refractory_ms=500.0,
-            min_threshold=100.0,
-            confirm_samples=8,
-            min_rising_samples=30,
+            min_threshold=40.0,
+            confirm_samples=3,
+            min_rising_samples=20,
         )
         self._blink_active: bool = False
         self._blink_pending: bool = False  # latch across dropped frames
@@ -262,24 +264,25 @@ class RawLslAdapter(BaseAdapter):
             return [s.strip() for s in labels_str.split(",")]
         return [f"ch{i}" for i in range(info.channel_count())]
 
-    def _resolve_blink_channel(self) -> int:
-        """Return the best channel index for blink (EOG) detection.
+    def _resolve_blink_channels(self) -> list[int]:
+        """Return the best two channel indices for bilateral blink detection.
 
-        Blink artifacts are strongest at prefrontal sites directly above
-        the eyes.  Resolution order:
+        Blink EOG is strongest and most symmetric at prefrontal sites
+        Fp1 and Fp2 (directly above the eyes).  Resolution order:
 
-        1. Channel labels parsed from the LSL stream description (if the
-           bridge script writes them).
-        2. Device profile lookup by stream name (robust fallback).
-        3. Channel 0 (last resort).
+        1. Channel labels parsed from the LSL stream description.
+        2. Device profile lookup by stream name.
+        3. [0, 1] (last resort — suboptimal but functional).
         """
-        # Priority order for blink-sensitive electrodes
-        _BLINK_LABELS = ("Fp1", "Fp2", "Fz")
+        # Priority order for blink-sensitive electrode pairs
+        _BLINK_PAIRS = (("Fp1", "Fp2"), ("Fz", "Cz"),)
 
         # --- Tier 1: channel labels from LSL stream description ---
-        for label in _BLINK_LABELS:
+        for a, b in _BLINK_PAIRS:
             try:
-                return self._channel_labels.index(label)
+                idx_a = self._channel_labels.index(a)
+                idx_b = self._channel_labels.index(b)
+                return [idx_a, idx_b]
             except ValueError:
                 continue
 
@@ -292,13 +295,15 @@ class RawLslAdapter(BaseAdapter):
             for _key, cfg in EEG_DEVICE_CONFIGS.items():
                 if cfg.get("lsl_stream_name") == self._stream_name:
                     profile_labels = cfg.get("channel_labels", [])
-                    for label in _BLINK_LABELS:
+                    for a, b in _BLINK_PAIRS:
                         try:
-                            return profile_labels.index(label)
+                            idx_a = profile_labels.index(a)
+                            idx_b = profile_labels.index(b)
+                            return [idx_a, idx_b]
                         except ValueError:
                             continue
-                    break  # device matched but no blink label found
+                    break  # device matched but no blink pair found
 
         # --- Tier 3: fallback ---
-        return 0
+        return [0, 1]
 

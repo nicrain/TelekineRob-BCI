@@ -76,6 +76,7 @@ class EegControlNode(Node):
         self.declare_parameter("turn_angular_speed", 1.2)
         self.declare_parameter("reverse_threshold", 0.2)
         self.declare_parameter("steer_deadzone", 0.1)
+        self.declare_parameter("blink_holdoff_frames", 10)
 
         # Optional line-following
         self.declare_parameter("line_mode", "")  # '', 'blackline', 'whiteline'
@@ -167,6 +168,8 @@ class EegControlNode(Node):
         self.last_twist = Twist()
         self._steer_role = str(self.get_parameter("role").value) == "steering"
         self.steer_direction = 1   # 1 = right, -1 = left (blink toggles)
+        self._blink_holdoff = 0
+        self._blink_holdoff_frames = int(self.get_parameter("blink_holdoff_frames").value)
         self._update_leds()  # initial direction: right
 
         hz = float(self.get_parameter("publish_hz").value)
@@ -279,13 +282,19 @@ class EegControlNode(Node):
             blink_now = self._steer_role and frame.metrics.get("blink_active", 0.0) > 0.5
 
             if blink_now:
-                # Reuse last intents — blink EOG artifact would otherwise
-                # pollute the metric and cause a spurious steer_mag spike.
                 self.steer_direction *= -1  # toggle left ↔ right
+                self._blink_holdoff = self._blink_holdoff_frames
                 self.get_logger().info(
-                    f"Blink detected — steer: {'RIGHT' if self.steer_direction > 0 else 'LEFT'}"
+                    f"Blink detected — steer: {'RIGHT' if self.steer_direction > 0 else 'LEFT'} "
+                    f"(hold-off {self._blink_holdoff} frames)"
                 )
                 self._update_leds()
+
+            if self._blink_holdoff > 0:
+                # Reuse last intents — blink EOG contaminates the Welch
+                # window for ~2 s after the blink.  Hold-off protects
+                # subsequent frames until the tail subsides.
+                self._blink_holdoff -= 1
             elif has_band_features:
                 self.last_intents = self.policy.compute_intents(features)
             else:

@@ -222,3 +222,55 @@ class StreamingBlinkDetector:
                 return {"sample": self._sample_count, "peak": float(self._peak_val)}
 
         return None
+
+
+# ---------------------------------------------------------------------------
+# Dual-channel wrapper
+# ---------------------------------------------------------------------------
+
+
+class DualChannelBlinkDetector:
+    """Run two ``StreamingBlinkDetector`` instances on different channels
+    and only emit a detection when **both** register a blink within the
+    same chunk.
+
+    Rationale
+    ---------
+    Vertical eye blinks produce a symmetrical EOG: both Fp1 and Fp2
+    see a large positive (or negative) deflection in the same direction
+    at the same time.  Horizontal eye movements and unilateral EMG
+    artifacts are asymmetric — one channel may spike but the other
+    won't, or they'll spike in opposite directions.
+
+    By requiring both channels to agree, we reject:
+
+    - Eye saccades (horizontal: Fp1/Fp2 are anti-phase)
+    - Unilateral EMG / electrode pops
+    - Any artifact that doesn't look like a bilateral blink
+
+    Parameters are forwarded identically to each internal detector.
+    """
+
+    def __init__(
+        self, sample_rate: int, channel_indices: list[int], **kwargs,
+    ) -> None:
+        if len(channel_indices) < 2:
+            raise ValueError(
+                f"DualChannelBlinkDetector requires ≥ 2 channel indices, "
+                f"got {channel_indices}"
+            )
+        self._dets = [
+            StreamingBlinkDetector(sample_rate=sample_rate, channel_idx=ch, **kwargs)
+            for ch in channel_indices
+        ]
+
+    def feed_chunk(self, chunk: "np.ndarray") -> list[dict]:
+        """Process chunk through all detectors; only emit if all agree."""
+        results = [d.feed_chunk(chunk) for d in self._dets]
+        if all(r for r in results):
+            return results[0]  # return first detector's events
+        return []
+
+    def reset(self) -> None:
+        for d in self._dets:
+            d.reset()
