@@ -43,6 +43,7 @@ def generate_launch_description():
     run_rviz = LaunchConfiguration("run_rviz")
     eeg_config_file = LaunchConfiguration("eeg_config_file")
     eeg_input = LaunchConfiguration("input")
+    role = LaunchConfiguration("role")
     device = LaunchConfiguration("device")
 
     decls = [
@@ -60,6 +61,7 @@ def generate_launch_description():
             ),
         ),
         DeclareLaunchArgument("input", default_value="lsl"),
+        DeclareLaunchArgument("role", default_value="speed"),
         DeclareLaunchArgument("device", default_value=""),
     ]
 
@@ -127,7 +129,7 @@ def generate_launch_description():
     eeg_node = Node(
         package="thymio_control",
         executable="eeg_control_node.py",
-        parameters=[eeg_config_file, {"cmd_topic": cmd_topic, "input": eeg_input, "role": LaunchConfiguration("role", default="speed")}],
+        parameters=[eeg_config_file, {"cmd_topic": cmd_topic, "input": eeg_input, "role": role}],
         output="log",
         condition=IfCondition(PythonExpression(["'", run_eeg, "' == 'true' and '", use_teleop, "' == 'false'"])),
     )
