@@ -143,8 +143,8 @@ class RawLslAdapter(BaseAdapter):
             channel_idx=_blink_ch,
             k_mad=6.0,
             refractory_ms=500.0,
-            min_threshold=80.0,
-            confirm_samples=5,
+            min_threshold=100.0,
+            confirm_samples=8,
             min_rising_samples=30,
         )
         self._blink_active: bool = False
