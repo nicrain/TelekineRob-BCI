@@ -196,3 +196,146 @@ def test_min_threshold_zero_allowed():
     """min_threshold=0 is valid (disables the floor)."""
     det = StreamingBlinkDetector(sample_rate=250, min_threshold=0.0)
     assert det._min_threshold == 0.0
+
+
+# ---------------------------------------------------------------------------
+# confirm_samples tests
+# ---------------------------------------------------------------------------
+
+
+def test_confirm_samples_blocks_single_spike():
+    """A single above-threshold sample does NOT trigger when confirm_samples=3.
+
+    This is the key defense against EMG spikes / electrode pops — they
+    last only 1–5 samples while real blinks last 50–100.
+    """
+    sr = 250
+    det = StreamingBlinkDetector(
+        sample_rate=sr, k_mad=6.0, buffer_sec=3.0, confirm_samples=3,
+    )
+    # Deterministic baseline
+    t = np.arange(int(4 * sr)) / sr
+    sig = (0.5 * np.sin(2 * np.pi * 10 * t)).reshape(1, -1).astype(np.float64)
+    # Single-sample spike at 50µV (well above threshold)
+    sig[0, int(2.5 * sr)] = 50.0
+    events = det.feed_chunk(sig)
+    assert len(events) == 0, (
+        f"Single-sample spike should NOT trigger with confirm_samples=3, "
+        f"got {len(events)}"
+    )
+
+
+def test_confirm_samples_allows_sustained_blink():
+    """A sustained blink (≥3 consecutive above-threshold samples) triggers."""
+    sr = 250
+    det = StreamingBlinkDetector(
+        sample_rate=sr, k_mad=6.0, buffer_sec=3.0, confirm_samples=3,
+    )
+    sig = _baseline_signal(int(4 * sr), noise_std=1.0)
+    # A real blink: triangular pulse spanning ~50 samples (200ms)
+    _insert_blink(sig, at_sample=int(2.5 * sr), peak_amplitude=50.0, duration=50)
+    events = det.feed_chunk(sig)
+    assert len(events) == 1, (
+        f"Sustained blink (50 samples) should trigger, got {len(events)}"
+    )
+
+
+def test_confirm_counter_resets_on_dropout():
+    """Confirm counter resets if a sample falls below threshold mid-count."""
+    sr = 250
+    det = StreamingBlinkDetector(
+        sample_rate=sr, k_mad=6.0, buffer_sec=3.0, confirm_samples=3,
+    )
+    sig = _baseline_signal(int(4 * sr), noise_std=1.0)
+    # Two consecutive spikes, then a gap, then more.  The counter
+    # should reset in the gap → no detection from these fragments.
+    sig[0, int(2.5 * sr)]       = 50.0
+    sig[0, int(2.5 * sr) + 1]   = 50.0
+    # sample at +2 stays at baseline (below threshold) → counter resets
+    sig[0, int(2.5 * sr) + 10]  = 50.0
+    sig[0, int(2.5 * sr) + 11]  = 50.0
+    sig[0, int(2.5 * sr) + 12]  = 50.0  # 3 in a row, but far apart from first
+    # The first cluster has only 2 consecutive, second cluster has 3.
+    # But second cluster is a separate "blink" — 3 consecutive should trigger.
+    events = det.feed_chunk(sig)
+    assert len(events) == 1, (
+        f"3 consecutive above-threshold samples should trigger once, "
+        f"got {len(events)}"
+    )
+
+
+def test_confirm_samples_default_is_1():
+    """Default confirm_samples=1 behaves like the old immediate-trigger."""
+    sr = 250
+    det = StreamingBlinkDetector(sample_rate=sr, k_mad=6.0, buffer_sec=3.0)
+    sig = _baseline_signal(int(4 * sr), noise_std=1.0)
+    _insert_blink(sig, at_sample=int(2.5 * sr), peak_amplitude=50.0, duration=5)
+    events = det.feed_chunk(sig)
+    assert len(events) == 1, "Default confirm_samples=1 should trigger immediately"
+
+
+def test_confirm_samples_zero_raises():
+    """confirm_samples < 1 is rejected at construction."""
+    with pytest.raises(ValueError, match="confirm_samples"):
+        StreamingBlinkDetector(sample_rate=250, confirm_samples=0)
+
+
+# ---------------------------------------------------------------------------
+# min_rising_samples tests (passive blink rejection)
+# ---------------------------------------------------------------------------
+
+
+def test_min_rising_samples_blocks_short_peak():
+    """A brief above-threshold excursion (< 30 samples) is discarded.
+
+    Simulates a passive blink (~80 ms = 20 samples above threshold).
+    Passive blinks are 60–80 ms (15–20 samples); active blinks are
+    150–200 ms (37–50 samples).  min_rising_samples=30 sits between them.
+    """
+    sr = 250
+    det = StreamingBlinkDetector(
+        sample_rate=sr, k_mad=6.0, buffer_sec=3.0,
+        confirm_samples=5, min_rising_samples=30,
+    )
+    sig = _baseline_signal(int(4 * sr), noise_std=1.0)
+    # Brief peak: 20-sample duration (~80 ms) = passive blink
+    # This is enough to pass confirm (5), but too short for min_rising
+    _insert_blink(sig, at_sample=int(2.5 * sr), peak_amplitude=60.0, duration=20)
+    events = det.feed_chunk(sig)
+    assert len(events) == 0, (
+        f"Short blink (20 samples) should be blocked by min_rising_samples=30, "
+        f"got {len(events)}"
+    )
+
+
+def test_min_rising_samples_allows_long_blink():
+    """A sustained blink (≥ 30 samples above threshold) is detected."""
+    sr = 250
+    det = StreamingBlinkDetector(
+        sample_rate=sr, k_mad=6.0, buffer_sec=3.0,
+        confirm_samples=5, min_rising_samples=30,
+    )
+    sig = _baseline_signal(int(4 * sr), noise_std=1.0)
+    # Long blink: 50-sample duration (~200 ms) = active blink
+    _insert_blink(sig, at_sample=int(2.5 * sr), peak_amplitude=60.0, duration=50)
+    events = det.feed_chunk(sig)
+    assert len(events) == 1, (
+        f"Long blink (50 samples) should pass min_rising_samples=30, "
+        f"got {len(events)}"
+    )
+
+
+def test_min_rising_samples_default_is_1():
+    """Default min_rising_samples=1 allows any duration through."""
+    sr = 250
+    det = StreamingBlinkDetector(sample_rate=sr, k_mad=6.0, buffer_sec=3.0)
+    sig = _baseline_signal(int(4 * sr), noise_std=1.0)
+    _insert_blink(sig, at_sample=int(2.5 * sr), peak_amplitude=50.0, duration=5)
+    events = det.feed_chunk(sig)
+    assert len(events) == 1, "Default min_rising_samples=1 should allow short peaks"
+
+
+def test_min_rising_samples_zero_raises():
+    """min_rising_samples < 1 is rejected at construction."""
+    with pytest.raises(ValueError, match="min_rising_samples"):
+        StreamingBlinkDetector(sample_rate=250, min_rising_samples=0)

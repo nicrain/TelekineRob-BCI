@@ -20,6 +20,10 @@ inter-subject variability without requiring calibration.
 Implementation
 --------------
 - **State machine**: idle → rising (above threshold) → idle (back to baseline)
+- **Confirm counter**: ``N`` consecutive above-threshold samples required to
+  enter *rising* state (default 3).  Rejects single-sample spikes (EMG,
+  electrode pop) while real blinks (200–400 ms → 50–100 samples) pass
+  through with negligible latency (~12 ms at 250 Hz).
 - **Refractory period**: 500 ms lock-out after each detection
 - **Channel**: single frontopolar channel (default index 0 = Fp1)
 - **Buffer**: rolling window of 5 s at 250 Hz for running statistics
@@ -54,6 +58,17 @@ class StreamingBlinkDetector:
         Absolute floor for the adaptive threshold (µV).  Prevents false
         triggers when the EEG is very quiet (MAD → 0 collapses the
         adaptive term).  Real blinks (50–150 µV) easily exceed this.
+    confirm_samples : int
+        Number of consecutive above-threshold samples before entering
+        the *rising* state (default 1 = immediate).  Setting to 5+
+        rejects single-sample spikes (EMG, electrode pop) while adding
+        only ~20 ms latency at 250 Hz.
+    min_rising_samples : int
+        Minimum number of samples the signal must stay in *rising* state
+        before a detection is emitted (default 1).  Active blinks last
+        150-200 ms (37-50 samples at 250 Hz); passive blinks last only
+        60-80 ms (15-20 samples).  Setting this to ~30 (120 ms) blocks
+        passive blinks while keeping active ones.
     """
 
     def __init__(
@@ -65,6 +80,8 @@ class StreamingBlinkDetector:
         refractory_ms: float = 500.0,
         stats_interval: int = 25,
         min_threshold: float = 15.0,
+        confirm_samples: int = 1,
+        min_rising_samples: int = 1,
     ) -> None:
         if sample_rate <= 0:
             raise ValueError(f"sample_rate must be positive, got {sample_rate}")
@@ -72,6 +89,10 @@ class StreamingBlinkDetector:
             raise ValueError(f"buffer_sec must be positive, got {buffer_sec}")
         if min_threshold < 0:
             raise ValueError(f"min_threshold must be non-negative, got {min_threshold}")
+        if confirm_samples < 1:
+            raise ValueError(f"confirm_samples must be >= 1, got {confirm_samples}")
+        if min_rising_samples < 1:
+            raise ValueError(f"min_rising_samples must be >= 1, got {min_rising_samples}")
 
         self._channel_idx = channel_idx
         self._buffer_max = int(buffer_sec * sample_rate)
@@ -79,12 +100,16 @@ class StreamingBlinkDetector:
         self._refractory_len = int(refractory_ms / 1000.0 * sample_rate)
         self._stats_interval = max(1, stats_interval)
         self._min_threshold = float(min_threshold)
+        self._confirm_samples = int(confirm_samples)
+        self._min_rising_samples = int(min_rising_samples)
 
         self._buffer: deque[float] = deque(maxlen=self._buffer_max)
         self._state: str = "idle"
         self._peak_val: float = 0.0
         self._refractory_counter: int = 0
         self._sample_count: int = 0
+        self._confirm_counter: int = 0
+        self._rising_samples: int = 0
         self._cached_med: float = 0.0
         self._cached_mad: float = 0.0
         self._stats_age: int = self._stats_interval  # force recompute on first sample
@@ -133,6 +158,8 @@ class StreamingBlinkDetector:
         self._state = "idle"
         self._peak_val = 0.0
         self._refractory_counter = 0
+        self._confirm_counter = 0
+        self._rising_samples = 0
         self._sample_count = 0
         self._stats_age = self._stats_interval
 
@@ -172,17 +199,25 @@ class StreamingBlinkDetector:
         # --- state machine ---
         if self._state == "idle":
             if value > threshold:
-                self._state = "rising"
-                self._peak_val = value
+                self._confirm_counter += 1
+                if self._confirm_counter >= self._confirm_samples:
+                    self._state = "rising"
+                    self._peak_val = value
+                    self._rising_samples = 1
+                    self._confirm_counter = 0
+            else:
+                self._confirm_counter = 0
             return None
 
         # self._state == "rising"
+        self._rising_samples += 1
         if value > self._peak_val:
             self._peak_val = value
 
         if value < self._cached_med:   # returned to baseline
             self._state = "idle"
-            if self._peak_val > threshold:
+            if (self._peak_val > threshold
+                    and self._rising_samples >= self._min_rising_samples):
                 self._refractory_counter = self._refractory_len
                 return {"sample": self._sample_count, "peak": float(self._peak_val)}
 
