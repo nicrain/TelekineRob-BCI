@@ -321,19 +321,24 @@ class EegControlNode(Node):
                     self._finish_calibration()
 
             blink_now = self._steer_role and frame.metrics.get("blink_active", 0.0) > 0.5
+            blink_confirmed = False
 
-            if blink_now:
-                # Always hold off — even passive blinks contaminate the
-                # Welch window.  Metric confirmation only gates the
-                # direction toggle, not the contamination protection.
+            if blink_now and has_band_features and self._metric_key:
+                blink_confirmed = self._confirm_blink_metric(features)
+
+            if blink_confirmed:
+                self.steer_direction *= -1  # toggle left ↔ right
                 self._blink_holdoff = self._blink_holdoff_frames
+                self.get_logger().info(
+                    f"Blink confirmed — steer: {'RIGHT' if self.steer_direction > 0 else 'LEFT'}"
+                )
+                self._update_leds()
 
-                if has_band_features and self._metric_key and self._confirm_blink_metric(features):
-                    self.steer_direction *= -1  # toggle left ↔ right
-                    self.get_logger().info(
-                        f"Blink confirmed — steer: {'RIGHT' if self.steer_direction > 0 else 'LEFT'}"
-                    )
-                    self._update_leds()
+            # Also protect metrics on unconfirmed raw blinks:
+            # single-frame skip (hold-off=1) to avoid reading EOG-contaminated
+            # band power, without the risk of perpetual hold-off from false positives.
+            if blink_now and not blink_confirmed and self._blink_holdoff == 0:
+                self._blink_holdoff = 1
 
             if self._blink_holdoff > 0:
                 # Reuse last intents — blink EOG contaminates the Welch
