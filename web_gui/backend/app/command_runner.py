@@ -36,6 +36,8 @@ def _build_launch_command(cfg: AppConfig) -> list[str]:
     # input= is only meaningful when the EEG node actually runs.
     if run_eeg and cfg.eeg.input:
         cmd.append(f"input:={cfg.eeg.input}")
+    if run_eeg and cfg.eeg.role:
+        cmd.append(f"role:={cfg.eeg.role}")
     if not use_sim:
         cmd.append(f"device:={launch.device}")
     return cmd

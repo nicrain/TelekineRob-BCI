@@ -127,7 +127,7 @@ def generate_launch_description():
     eeg_node = Node(
         package="thymio_control",
         executable="eeg_control_node.py",
-        parameters=[eeg_config_file, {"cmd_topic": cmd_topic, "input": eeg_input}],
+        parameters=[eeg_config_file, {"cmd_topic": cmd_topic, "input": eeg_input, "role": LaunchConfiguration("role", default="speed")}],
         output="log",
         condition=IfCondition(PythonExpression(["'", run_eeg, "' == 'true' and '", use_teleop, "' == 'false'"])),
     )

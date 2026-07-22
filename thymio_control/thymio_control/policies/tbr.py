@@ -52,6 +52,7 @@ class TbrPolicy(Policy):
         tbr_norm = clip01((self._tbr_smooth - self.tbr_offset) / self.tbr_scale)
         speed_intent = clip01(1.0 - tbr_norm)
 
-        steer_intent = 0.5  # steering is blink-only (not EEG-driven)
+        # Same metric for steering magnitude (blink controls direction)
+        steer_intent = clip01(0.5 + tbr_norm * 0.5)
 
         return {"speed_intent": speed_intent, "steer_intent": steer_intent}

@@ -57,6 +57,7 @@ class EegControlNode(Node):
         self.declare_parameter("lsl_stream_type", "EEG")
         self.declare_parameter("lsl_timeout", 8.0)
         self.declare_parameter("lsl_source_id", "")
+        self.declare_parameter("role", "speed")
 
         # Output and control parameters
         self.declare_parameter("cmd_topic", "/cmd_vel")
@@ -164,8 +165,9 @@ class EegControlNode(Node):
         self._adapter_connected = False
         self.last_intents = {"speed_intent": 0.5, "steer_intent": 0.5}
         self.last_twist = Twist()
-        self.steer_direction = 0   # 0 = straight, ±1 = turn (blink toggles)
-        self._update_leds()  # both LEDs off (straight)
+        self._steer_role = str(self.get_parameter("role").value) == "steering"
+        self.steer_direction = 1   # 1 = right, -1 = left (blink toggles)
+        self._update_leds()  # initial direction: right
 
         hz = float(self.get_parameter("publish_hz").value)
         self.create_timer(1.0 / max(hz, 1e-6), self._tick)
@@ -279,14 +281,11 @@ class EegControlNode(Node):
             else:
                 self.last_intents = {"speed_intent": 0.5, "steer_intent": 0.5}
 
-            # Active blink → toggle steering direction + update LEDs
-            if frame.metrics.get("blink_active", 0.0) > 0.5:
-                if self.steer_direction == 0:
-                    self.steer_direction = 1   # first blink → right
-                else:
-                    self.steer_direction *= -1  # toggle left ↔ right
+            # Active blink → toggle steering direction (only when role=steering)
+            if self._steer_role and frame.metrics.get("blink_active", 0.0) > 0.5:
+                self.steer_direction *= -1  # toggle left ↔ right
                 self.get_logger().info(
-                    f"Blink detected — steer: {'RIGHT' if self.steer_direction > 0 else 'LEFT' if self.steer_direction < 0 else 'STRAIGHT'}"
+                    f"Blink detected — steer: {'RIGHT' if self.steer_direction > 0 else 'LEFT'}"
                 )
                 self._update_leds()
 
@@ -387,10 +386,15 @@ class EegControlNode(Node):
                 else:
                     twist.angular.z = -w_spin
         else:
-            twist.linear.x = self.max_forward_speed * speed_intent
-            # Steering is blink-only: fixed angular velocity in toggled direction.
-            # Policy steer_intent is always 0.5 (no EEG-based steering).
-            twist.angular.z = -self.steer_direction * self.turn_angular_speed * 0.5
+            if self._steer_role:
+                # Steering role: turn in place, metric controls turn magnitude
+                twist.linear.x = 0.0
+                steer_mag = abs(steer_intent - 0.5) * 2.0  # 0..1
+                if steer_mag >= self.steer_deadzone:
+                    twist.angular.z = -self.steer_direction * self.turn_angular_speed * steer_mag
+            else:
+                twist.linear.x = self.max_forward_speed * speed_intent
+                twist.angular.z = 0.0  # Speed role: no steering
 
         return twist
 
