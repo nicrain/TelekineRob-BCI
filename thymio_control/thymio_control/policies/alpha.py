@@ -32,7 +32,6 @@ class AlphaPolicy(Policy):
     # Alpha range from calibration: ~0.5 to ~7.5 µV²
     alpha_offset: float = 0.5    # p5 of alpha power
     alpha_scale:  float = 7.0    # p95 - p5
-    steer_gain:   float = 1.1
     ema_alpha:    float = 0.35
 
     def __init__(self, offset: float = 0.5, scale: float = 7.0) -> None:

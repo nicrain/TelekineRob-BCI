@@ -388,7 +388,7 @@ class EegControlNode(Node):
             twist.linear.x = self.max_forward_speed * speed_intent
             # Steering is blink-only: fixed angular velocity in toggled direction.
             # Policy steer_intent is always 0.5 (no EEG-based steering).
-            twist.angular.z = self.steer_direction * self.turn_angular_speed * 0.5
+            twist.angular.z = -self.steer_direction * self.turn_angular_speed * 0.5
 
         return twist
 

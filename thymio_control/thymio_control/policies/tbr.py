@@ -27,7 +27,6 @@ class TbrPolicy(Policy):
     # Calibrated to map p5~p95 of theta_beta to [0, 1]
     tbr_offset: float = 0.207    # p5 of theta_beta
     tbr_scale:  float = 2.215    # p95 - p5
-    steer_gain: float = 1.1
     ema_alpha:  float = 0.35
 
     def __init__(self, offset: float = 0.207, scale: float = 2.215) -> None:
