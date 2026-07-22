@@ -145,9 +145,9 @@ class RawLslAdapter(BaseAdapter):
             channel_indices=_blink_chs,
             k_mad=6.0,
             refractory_ms=500.0,
-            min_threshold=40.0,
-            confirm_samples=3,
-            min_rising_samples=20,
+            min_threshold=80.0,
+            confirm_samples=5,
+            min_rising_samples=30,
         )
         self._blink_active: bool = False
         self._blink_pending: bool = False  # latch across dropped frames
