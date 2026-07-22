@@ -264,12 +264,38 @@ class RawLslAdapter(BaseAdapter):
         """Return the best channel index for blink (EOG) detection.
 
         Blink artifacts are strongest at prefrontal sites directly above
-        the eyes.  Priority: Fp1 > Fp2 > Fz > ch0.
+        the eyes.  Resolution order:
+
+        1. Channel labels parsed from the LSL stream description (if the
+           bridge script writes them).
+        2. Device profile lookup by stream name (robust fallback).
+        3. Channel 0 (last resort).
         """
-        for label in ("Fp1", "Fp2", "Fz"):
+        # Priority order for blink-sensitive electrodes
+        _BLINK_LABELS = ("Fp1", "Fp2", "Fz")
+
+        # --- Tier 1: channel labels from LSL stream description ---
+        for label in _BLINK_LABELS:
             try:
                 return self._channel_labels.index(label)
             except ValueError:
                 continue
+
+        # --- Tier 2: match stream name against device profiles ---
+        try:
+            from thymio_control.device_profiles import EEG_DEVICE_CONFIGS
+            for _key, cfg in EEG_DEVICE_CONFIGS.items():
+                if cfg.get("lsl_stream_name") == self._stream_name:
+                    profile_labels = cfg.get("channel_labels", [])
+                    for label in _BLINK_LABELS:
+                        try:
+                            return profile_labels.index(label)
+                        except ValueError:
+                            continue
+                    break  # device matched but no blink label found
+        except Exception:
+            pass
+
+        # --- Tier 3: fallback ---
         return 0
 

@@ -97,6 +97,11 @@ if __name__ == "__main__":
         channel_format="float32",
         source_id=STREAM_NAME,
     )
+    # Write channel labels so RawLslAdapter can resolve the best blink
+    # channel (Fp1/Fp2) without hardcoding device-specific indices.
+    info.desc().append_child_value(
+        "channel_labels", "Fz,C3,Cz,C4,Pz,PO7,Oz,PO8"
+    )
     outlet = StreamOutlet(info)
     print(
         f"[INFO] LSL stream: {STREAM_NAME} "

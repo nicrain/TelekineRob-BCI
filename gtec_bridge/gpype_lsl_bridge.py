@@ -65,6 +65,10 @@ if __name__ == "__main__":
     # ------------------------------------------------------------------
     # LSL sender — discoverable from WSL2
     # ------------------------------------------------------------------
+    # TODO: if gpype LSLSender supports metadata, append channel_labels:
+    #   lsl.desc().append_child_value("channel_labels", "F8,Fp2,Fp1,F7")
+    # In the meantime, RawLslAdapter._resolve_blink_channel() falls back
+    # to device_profiles by stream_name.
     lsl = gp.LSLSender(stream_name="gtec_bci_core4")
 
     # ------------------------------------------------------------------

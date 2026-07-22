@@ -35,6 +35,7 @@ EEG_DEVICE_CONFIGS: Dict[str, Dict[str, Any]] = {
             "Fz": 0, "C3": 1, "Cz": 2, "C4": 3,
             "Pz": 4, "PO7": 5, "Oz": 6, "PO8": 7,
         },
+        "lsl_stream_name": "gtec_hybrid_black",
     },
     "bci-core-4": {
         "label": "Unicorn BCI Core-4 Headband",
@@ -44,6 +45,7 @@ EEG_DEVICE_CONFIGS: Dict[str, Dict[str, Any]] = {
         "default_lsl_channel_map": {
             "F8": 0, "Fp2": 1, "Fp1": 2, "F7": 3,
         },
+        "lsl_stream_name": "gtec_bci_core4",
     },
 }
 

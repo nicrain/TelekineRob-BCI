@@ -166,7 +166,7 @@ class StreamingBlinkDetector:
         self._stats_age += 1
         threshold = max(
             self._cached_med + self._k_mad * self._cached_mad,
-            self._cached_med + self._min_threshold,
+            self._min_threshold,
         )
 
         # --- state machine ---
