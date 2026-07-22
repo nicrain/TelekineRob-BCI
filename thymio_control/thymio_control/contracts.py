@@ -32,7 +32,7 @@ class EegFrame:
         Unix timestamp (seconds) when the frame was produced.
     source : str
         Identifier of the adapter that produced this frame
-        (e.g. ``"lsl_raw"``, ``"mock"``, ``"keyboard"``).
+        (e.g. ``"lsl_raw"``).
     metrics : Dict[str, float]
         Named numeric metrics.  Required keys depend on the active policy;
         adapters should populate at minimum ``alpha``, ``beta``, ``theta``.

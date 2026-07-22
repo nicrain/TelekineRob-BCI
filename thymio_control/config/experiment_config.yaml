@@ -1,5 +1,5 @@
 adapter:
-  input: mock
+  input: lsl
   lsl_stream_type: EEG
   lsl_timeout: 8.0
   lsl_source_id: ""

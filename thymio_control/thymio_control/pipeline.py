@@ -45,7 +45,7 @@ POLICIES: Dict[str, type] = {
 def build_adapter(args: Any):
     """Instantiate the appropriate adapter based on ``args.input``.
 
-    Supported modes: ``keyboard``, ``lsl``.
+    Supported modes: ``lsl``.
 
     Parameters
     ----------
@@ -58,10 +58,6 @@ def build_adapter(args: Any):
         For unsupported input modes or missing configuration.
     """
     mode = str(getattr(args, "input", "lsl")).strip()
-
-    if mode == "keyboard":
-        from thymio_control.adapters.mock import KeyboardAdapter
-        return KeyboardAdapter()
 
     if mode == "lsl":
         # Raw EEG → on-board DSP via Welch PSD (RawLslAdapter)
