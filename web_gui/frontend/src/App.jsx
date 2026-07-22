@@ -620,8 +620,8 @@ export default function App() {
   const metricLabels = { alpha: 'Alpha (α)', tbr: 'TBR (θ/β)', ei: 'EI (β/(α+θ))' };
   const metricDataKey = { alpha: 'alpha', tbr: 'ratio', ei: 'focus' };
   const featureOption = useMemo(() => {
-    const showCalib = calibrating || calibScale > 2;  // scale ≈ 1 when not calibrated
     const calibHigh = calibOffset + calibScale;
+    const showCalib = calibrating || calibScale > 2;  // scale ≈ 1 = default (not calibrated)
     return {
       backgroundColor: 'transparent',
       tooltip: { trigger: 'axis', backgroundColor: isDarkCharts ? '#fff' : '#2a2a2a', borderColor: isDarkCharts ? '#ddd' : '#444', textStyle: { color: isDarkCharts ? '#333' : '#ddd' } },
@@ -630,7 +630,7 @@ export default function App() {
       xAxis: { type: 'category', data: series.t, axisLabel: { color: isDarkCharts ? '#999' : '#888', fontSize: 10 } },
       yAxis: {
         type: 'value',
-        max: p95Max(series[metricDataKey[metric]]),
+        ...(showCalib ? { min: calibOffset, max: calibHigh } : { max: p95Max(series[metricDataKey[metric]]) }),
         axisLabel: { color: isDarkCharts ? '#999' : '#888', fontSize: 10, formatter: fmtAxis },
       },
       series: [
