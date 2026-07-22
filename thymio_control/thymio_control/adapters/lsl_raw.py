@@ -134,14 +134,19 @@ class RawLslAdapter(BaseAdapter):
                 n_channels=self._n_channels,
             )
 
-        # Blink detector — watches frontopolar channel for active blinks
+        # Blink detector — auto-select frontopolar channel for active blinks.
+        # blink EOG is strongest at Fp1/Fp2 (vertical eye movement), weak at
+        # lateral channels (F7/F8).  Fall back to ch0 if labels are unavailable.
+        _blink_ch = self._resolve_blink_channel()
         self._blink_detector = StreamingBlinkDetector(
             sample_rate=self._sample_rate,
-            channel_idx=0,  # Fp1 for Unicorn, F7 for headband
+            channel_idx=_blink_ch,
             k_mad=3.0,
             refractory_ms=500.0,
+            min_threshold=15.0,
         )
         self._blink_active: bool = False
+        self._blink_pending: bool = False  # latch across dropped frames
 
     # ------------------------------------------------------------------
     # Properties
@@ -176,12 +181,21 @@ class RawLslAdapter(BaseAdapter):
         chunk = np.array(samples, dtype=np.float64).T
         if self._pre_filter is not None:
             self._pre_filter.apply(chunk)
-        # Blink detection (runs on pre-filtered or raw signal)
+        # Blink detection (runs on pre-filtered or raw signal).
+        # Latch pattern: band-power windows complete less often than we
+        # pull chunks.  If a blink is detected in a chunk whose window
+        # isn't ready, the flag would be lost.  _blink_pending latches
+        # until the next successfully returned frame.
         blink_events = self._blink_detector.feed_chunk(chunk)
-        self._blink_active = len(blink_events) > 0
+        if blink_events:
+            self._blink_pending = True
         results = self._extractor.feed_chunk(chunk)
         if not results:
             return None
+
+        # Frame is being returned — transfer latch to blink_active
+        self._blink_active = self._blink_pending
+        self._blink_pending = False
 
         # Use the latest result to minimise control latency
         latest = results[-1]
@@ -231,6 +245,7 @@ class RawLslAdapter(BaseAdapter):
             self._pre_filter.reset()
         self._blink_detector.reset()
         self._blink_active = False
+        self._blink_pending = False
 
     # ------------------------------------------------------------------
     # Private
@@ -244,4 +259,17 @@ class RawLslAdapter(BaseAdapter):
         if labels_str:
             return labels_str.split(",")
         return [f"ch{i}" for i in range(info.channel_count())]
+
+    def _resolve_blink_channel(self) -> int:
+        """Return the best channel index for blink (EOG) detection.
+
+        Blink artifacts are strongest at prefrontal sites directly above
+        the eyes.  Priority: Fp1 > Fp2 > Fz > ch0.
+        """
+        for label in ("Fp1", "Fp2", "Fz"):
+            try:
+                return self._channel_labels.index(label)
+            except ValueError:
+                continue
+        return 0
 

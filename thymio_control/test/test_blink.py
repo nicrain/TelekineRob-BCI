@@ -144,3 +144,55 @@ def test_warmup_no_detection():
     _insert_blink(sig, at_sample=40, peak_amplitude=100.0, duration=10)
     events = det.feed_chunk(sig)
     assert len(events) == 0, "Should not detect during warmup (< 100 samples)"
+
+
+# ---------------------------------------------------------------------------
+# min_threshold (absolute floor) tests
+# ---------------------------------------------------------------------------
+
+
+def test_min_threshold_blocks_noise_in_quiet_eeg():
+    """When EEG is very quiet (tiny MAD), min_threshold prevents false triggers.
+
+    Without the floor: threshold ≈ median + k_mad × MAD ≈ 0 + 6×2 = 12 µV.
+    A 10 µV fluctuation would trigger the state machine → false positive.
+    With min_threshold=15: threshold = max(12, 15) = 15 µV → noise rejected.
+    """
+    sr = 250
+    det = StreamingBlinkDetector(
+        sample_rate=sr, k_mad=6.0, buffer_sec=3.0, min_threshold=15.0,
+    )
+    # Very quiet EEG: noise_std=1.0 → MAD ≈ 0.67 → adaptive ≈ 4 µV alone
+    sig = _baseline_signal(int(4 * sr), noise_std=1.0)
+    # Insert a 10 µV "micro-blip" that would trigger without the floor
+    _insert_blink(sig, at_sample=int(2.5 * sr), peak_amplitude=10.0, duration=20)
+    events = det.feed_chunk(sig)
+    assert len(events) == 0, (
+        f"min_threshold=15 should block 10 µV noise in quiet EEG, got {len(events)}"
+    )
+
+
+def test_min_threshold_still_allows_real_blink():
+    """A real blink (50+ µV) crosses the min_threshold floor easily."""
+    sr = 250
+    det = StreamingBlinkDetector(
+        sample_rate=sr, k_mad=6.0, buffer_sec=3.0, min_threshold=15.0,
+    )
+    sig = _baseline_signal(int(4 * sr), noise_std=1.0)
+    _insert_blink(sig, at_sample=int(2.5 * sr), peak_amplitude=50.0, duration=60)
+    events = det.feed_chunk(sig)
+    assert len(events) == 1, (
+        f"Real blink (50 µV) should exceed min_threshold=15, got {len(events)}"
+    )
+
+
+def test_min_threshold_negative_raises():
+    """Negative min_threshold is rejected at construction."""
+    with pytest.raises(ValueError, match="min_threshold"):
+        StreamingBlinkDetector(sample_rate=250, min_threshold=-5.0)
+
+
+def test_min_threshold_zero_allowed():
+    """min_threshold=0 is valid (disables the floor)."""
+    det = StreamingBlinkDetector(sample_rate=250, min_threshold=0.0)
+    assert det._min_threshold == 0.0

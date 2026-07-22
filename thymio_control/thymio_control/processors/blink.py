@@ -43,13 +43,17 @@ class StreamingBlinkDetector:
     sample_rate : int
         Sampling rate in Hz (250 for g.tec devices).
     channel_idx : int
-        Which EEG channel to monitor (default 0 = Fp1).
+        Which EEG channel to monitor (should be Fp1 or equivalent).
     buffer_sec : float
         Seconds of history for running median / MAD computation.
     k_mad : float
         Threshold multiplier.  Higher = fewer false positives.
     refractory_ms : float
         Minimum interval between successive detections.
+    min_threshold : float
+        Absolute floor for the adaptive threshold (µV).  Prevents false
+        triggers when the EEG is very quiet (MAD → 0 collapses the
+        adaptive term).  Real blinks (50–150 µV) easily exceed this.
     """
 
     def __init__(
@@ -60,17 +64,21 @@ class StreamingBlinkDetector:
         k_mad: float = 6.0,
         refractory_ms: float = 500.0,
         stats_interval: int = 25,
+        min_threshold: float = 15.0,
     ) -> None:
         if sample_rate <= 0:
             raise ValueError(f"sample_rate must be positive, got {sample_rate}")
         if buffer_sec <= 0:
             raise ValueError(f"buffer_sec must be positive, got {buffer_sec}")
+        if min_threshold < 0:
+            raise ValueError(f"min_threshold must be non-negative, got {min_threshold}")
 
         self._channel_idx = channel_idx
         self._buffer_max = int(buffer_sec * sample_rate)
         self._k_mad = k_mad
         self._refractory_len = int(refractory_ms / 1000.0 * sample_rate)
         self._stats_interval = max(1, stats_interval)
+        self._min_threshold = float(min_threshold)
 
         self._buffer: deque[float] = deque(maxlen=self._buffer_max)
         self._state: str = "idle"
@@ -156,7 +164,10 @@ class StreamingBlinkDetector:
             self._cached_mad = float(np.median(np.abs(arr - self._cached_med)))
             self._stats_age = 0
         self._stats_age += 1
-        threshold = self._cached_med + self._k_mad * self._cached_mad
+        threshold = max(
+            self._cached_med + self._k_mad * self._cached_mad,
+            self._cached_med + self._min_threshold,
+        )
 
         # --- state machine ---
         if self._state == "idle":
