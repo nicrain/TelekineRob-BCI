@@ -170,6 +170,14 @@ class EegControlNode(Node):
         self.steer_direction = 1   # 1 = right, -1 = left (blink toggles)
         self._blink_holdoff = 0
         self._blink_holdoff_frames = int(self.get_parameter("blink_holdoff_frames").value)
+
+        # Metric-based blink confirmation: raw-signal blink candidates must
+        # also show a corresponding spike/drop in the policy metric.
+        # Uses calibration p5/p95 as the normal-range reference.
+        # EI is inverted (blink → denominator up → EI below p5);
+        # TBR/Alpha spike upward (blink → theta/alpha above p95).
+        self._metric_key = self._CALIB_METRIC.get(policy_name, "")
+        self._metric_inverse = (policy_name == "ei")
         self._update_leds()  # initial direction: right
 
         hz = float(self.get_parameter("publish_hz").value)
@@ -181,6 +189,39 @@ class EegControlNode(Node):
                 f"topic={self.get_parameter('cmd_topic').value} analysis_topic={self.get_parameter('analysis_topic').value}"
             )
         )
+
+    def _confirm_blink_metric(self, features: dict) -> bool:
+        """Check that the policy metric exceeds its calibrated normal range.
+
+        TBR / Alpha: blink EOG inflates theta or alpha → metric spikes
+        above p95.  Check: ``metric > p95 × 2``.
+
+        EI: blink inflates alpha + theta (denominator) → EI drops below
+        p5.  Check: ``metric < p5 / 2``.
+        """
+        val = features.get(self._metric_key, None)
+        if val is None:
+            return False
+        val = float(val)
+
+        offset = float(self.get_parameter("calib_offset").value)
+        scale  = float(self.get_parameter("calib_scale").value)
+        p5  = offset
+        p95 = offset + scale
+
+        if self._metric_inverse:
+            confirmed = val < p5 / 2.0
+            ref = f"p5={p5:.3f} p5/2={p5 / 2:.3f}"
+        else:
+            confirmed = val > p95 * 2.0
+            ref = f"p95={p95:.3f} p95*2={p95 * 2:.3f}"
+
+        if confirmed:
+            self.get_logger().info(
+                f"Blink metric confirmed: {self._metric_key}={val:.3f} "
+                f"({ref})"
+            )
+        return confirmed
 
     def _finish_calibration(self) -> None:
         """Compute p5/p95 from collected samples and update the parameter file."""
@@ -280,12 +321,16 @@ class EegControlNode(Node):
                     self._finish_calibration()
 
             blink_now = self._steer_role and frame.metrics.get("blink_active", 0.0) > 0.5
+            blink_confirmed = False
 
-            if blink_now:
+            if blink_now and has_band_features and self._metric_key:
+                blink_confirmed = self._confirm_blink_metric(features)
+
+            if blink_confirmed:
                 self.steer_direction *= -1  # toggle left ↔ right
                 self._blink_holdoff = self._blink_holdoff_frames
                 self.get_logger().info(
-                    f"Blink detected — steer: {'RIGHT' if self.steer_direction > 0 else 'LEFT'} "
+                    f"Blink confirmed — steer: {'RIGHT' if self.steer_direction > 0 else 'LEFT'} "
                     f"(hold-off {self._blink_holdoff} frames)"
                 )
                 self._update_leds()
