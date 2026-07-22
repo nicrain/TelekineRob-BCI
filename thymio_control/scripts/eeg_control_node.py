@@ -164,8 +164,8 @@ class EegControlNode(Node):
         self._adapter_connected = False
         self.last_intents = {"speed_intent": 0.5, "steer_intent": 0.5}
         self.last_twist = Twist()
-        self.steer_direction = 1   # 1 = right, -1 = left (blink toggles)
-        self._update_leds()  # initial direction: right
+        self.steer_direction = 0   # 0 = straight, ±1 = turn (blink toggles)
+        self._update_leds()  # both LEDs off (straight)
 
         hz = float(self.get_parameter("publish_hz").value)
         self.create_timer(1.0 / max(hz, 1e-6), self._tick)
@@ -281,9 +281,12 @@ class EegControlNode(Node):
 
             # Active blink → toggle steering direction + update LEDs
             if frame.metrics.get("blink_active", 0.0) > 0.5:
-                self.steer_direction *= -1
+                if self.steer_direction == 0:
+                    self.steer_direction = 1   # first blink → right
+                else:
+                    self.steer_direction *= -1  # toggle left ↔ right
                 self.get_logger().info(
-                    f"Blink detected — steer direction: {'RIGHT' if self.steer_direction > 0 else 'LEFT'}"
+                    f"Blink detected — steer: {'RIGHT' if self.steer_direction > 0 else 'LEFT' if self.steer_direction < 0 else 'STRAIGHT'}"
                 )
                 self._update_leds()
 
@@ -398,9 +401,12 @@ class EegControlNode(Node):
         if self.steer_direction > 0:
             self._led_right.publish(green)
             self._led_left.publish(off)
-        else:
+        elif self.steer_direction < 0:
             self._led_left.publish(green)
             self._led_right.publish(off)
+        else:
+            self._led_right.publish(off)
+            self._led_left.publish(off)
 
 
 def main(args: Optional[list] = None) -> None:
