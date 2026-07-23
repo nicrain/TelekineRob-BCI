@@ -76,7 +76,7 @@ class EegControlNode(Node):
         self.declare_parameter("turn_angular_speed", 1.2)
         self.declare_parameter("reverse_threshold", 0.2)
         self.declare_parameter("steer_deadzone", 0.1)
-        self.declare_parameter("blink_holdoff_frames", 10)
+        self.declare_parameter("blink_holdoff_frames", 4)
         self.declare_parameter("blink_confirm_frames", 2)
 
         # Optional line-following
@@ -341,17 +341,17 @@ class EegControlNode(Node):
                 else:
                     self._metric_blink_counter = 0
 
+            # Skip policy during hold-off AND while blink counter is
+            # accumulating — EOG already contaminates the Welch window
+            # before the metric reaches the 2-frame threshold.
+            in_blink = self._blink_holdoff > 0 or self._metric_blink_counter > 0
+
             if self._blink_holdoff > 0:
-                # Reuse last intents — blink EOG contaminates the Welch
-                # window for ~2 s after the blink.  Hold-off protects
-                # subsequent frames until the tail subsides.
                 self._blink_holdoff -= 1
-            elif has_band_features:
+            elif has_band_features and not in_blink:
                 self.last_intents = self.policy.compute_intents(features)
-                # Save clean features for analysis during hold-off
-                if self._metric_blink_counter == 0:
-                    self._last_clean_features = features
-            else:
+                self._last_clean_features = features
+            elif not has_band_features:
                 self.last_intents = {"speed_intent": 0.5, "steer_intent": 0.5}
 
             self.last_msg_ts = time.time()
