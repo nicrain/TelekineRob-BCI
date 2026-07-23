@@ -181,6 +181,7 @@ class EegControlNode(Node):
         self._metric_inverse = (policy_name == "ei")
         self._blink_confirm_frames = int(self.get_parameter("blink_confirm_frames").value)
         self._metric_blink_counter = 0
+        self._last_clean_features: dict = {}
         self._update_leds()  # initial direction: right
 
         hz = float(self.get_parameter("publish_hz").value)
@@ -347,6 +348,9 @@ class EegControlNode(Node):
                 self._blink_holdoff -= 1
             elif has_band_features:
                 self.last_intents = self.policy.compute_intents(features)
+                # Save clean features for analysis during hold-off
+                if self._metric_blink_counter == 0:
+                    self._last_clean_features = features
             else:
                 self.last_intents = {"speed_intent": 0.5, "steer_intent": 0.5}
 
@@ -356,11 +360,17 @@ class EegControlNode(Node):
             # Compute twist first so analysis includes actual command values
             twist = self._intents_to_twist(self.last_intents)
 
+            # Use clean features during hold-off to avoid showing EOG-
+            # contaminated spikes in the web GUI charts.
+            show_features = features
+            if self._blink_holdoff > 0 and self._last_clean_features:
+                show_features = self._last_clean_features
+
             analysis = {
                 "ts": frame.ts,
                 "source": frame.source,
                 "metrics": frame.metrics,
-                "features": features,
+                "features": show_features,
                 "intents": self.last_intents,
                 "control_mode": "band_features",
                 "command_linear_x": twist.linear.x,
