@@ -34,3 +34,5 @@ Thumbs.db
 
 # Ignore generated URDFs
 **/test.urdf
+CLAUDE.md
+AGENTS.md
