@@ -368,10 +368,14 @@ function ControlVector({ speed, steer, role, steerDirection }) {
         </>
       ) : (
         <>
-          {/* Steering role: direction from steerDirection, magnitude from steer_intent */}
-          <BigArrow x={-MAX_LEN} y={0} color={BASE_COLOR} opacity={0.18} headRatio={0.35} />
+          {/* Steering role: background arrow shows current direction only, fill by magnitude */}
+          {steerDirection >= 0 && (
+            <BigArrow x={MAX_LEN} y={0} color={BASE_COLOR} opacity={0.18} headRatio={0.35} />
+          )}
+          {steerDirection <= 0 && (
+            <BigArrow x={-MAX_LEN} y={0} color={BASE_COLOR} opacity={0.18} headRatio={0.35} />
+          )}
           <BigArrow x={showLeft ? -steerLen : -MIN_LEN} y={0} color={RESULT_COLOR} opacity={showLeft ? 0.90 : 0} headRatio={0.35} />
-          <BigArrow x={MAX_LEN} y={0} color={BASE_COLOR} opacity={0.18} headRatio={0.35} />
           <BigArrow x={showRight ? steerLen : MIN_LEN} y={0} color={RESULT_COLOR} opacity={showRight ? 0.90 : 0} headRatio={0.35} />
         </>
       )}
