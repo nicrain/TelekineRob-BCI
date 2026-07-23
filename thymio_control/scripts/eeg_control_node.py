@@ -464,7 +464,7 @@ class EegControlNode(Node):
             if self._steer_role:
                 # Steering role: turn in place, metric controls turn magnitude
                 twist.linear.x = 0.0
-                steer_mag = abs(steer_intent - 0.5) * 2.0  # 0..1
+                steer_mag = abs(steer_intent - 0.5)  # 0..0.25 (half-range mapping)
                 if steer_mag >= self.steer_deadzone:
                     twist.angular.z = -self.steer_direction * self.turn_angular_speed * steer_mag
             else:

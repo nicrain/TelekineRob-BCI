@@ -57,6 +57,7 @@ class AlphaPolicy(Policy):
         alpha_norm = clip01((self._alpha_smooth - self.alpha_offset) / self.alpha_scale)
         speed_intent = clip01(1.0 - alpha_norm)
 
-        # Same metric for steering magnitude (blink controls direction)
-        steer_intent = clip01(1.0 - alpha_norm * 0.5)  # low alpha → stronger steer
+        # Steering only in the focused half (alpha_norm 0→0.5).
+        # Relaxed / high alpha (alpha_norm 0.5→1.0) → no turn.
+        steer_intent = max(0.5, 0.75 - alpha_norm * 0.5)
         return {"speed_intent": speed_intent, "steer_intent": steer_intent}

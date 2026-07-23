@@ -52,7 +52,8 @@ class TbrPolicy(Policy):
         tbr_norm = clip01((self._tbr_smooth - self.tbr_offset) / self.tbr_scale)
         speed_intent = clip01(1.0 - tbr_norm)
 
-        # Same metric for steering magnitude (blink controls direction)
-        steer_intent = clip01(1.0 - tbr_norm * 0.5)  # low TBR → stronger steer
+        # Steering only in the focused half (tbr_norm 0→0.5).
+        # Relaxed / distracted (tbr_norm 0.5→1.0) → no turn.
+        steer_intent = max(0.5, 0.75 - tbr_norm * 0.5)
 
         return {"speed_intent": speed_intent, "steer_intent": steer_intent}
