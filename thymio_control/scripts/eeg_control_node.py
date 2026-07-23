@@ -77,6 +77,7 @@ class EegControlNode(Node):
         self.declare_parameter("reverse_threshold", 0.2)
         self.declare_parameter("steer_deadzone", 0.1)
         self.declare_parameter("blink_holdoff_frames", 10)
+        self.declare_parameter("blink_confirm_frames", 2)
 
         # Optional line-following
         self.declare_parameter("line_mode", "")  # '', 'blackline', 'whiteline'
@@ -178,6 +179,8 @@ class EegControlNode(Node):
         # TBR/Alpha spike upward (blink → theta/alpha above p95).
         self._metric_key = self._CALIB_METRIC.get(policy_name, "")
         self._metric_inverse = (policy_name == "ei")
+        self._blink_confirm_frames = int(self.get_parameter("blink_confirm_frames").value)
+        self._metric_blink_counter = 0
         self._update_leds()  # initial direction: right
 
         hz = float(self.get_parameter("publish_hz").value)
@@ -320,18 +323,22 @@ class EegControlNode(Node):
                 if time.time() >= self._calib_deadline:
                     self._finish_calibration()
 
-            # Metric-based blink detection — no raw-signal detector needed.
-            # Active blinks push the policy metric far outside the calibrated
-            # normal range (p5–p95).  Only check when not already in hold-off
-            # to avoid retriggering on EOG-contaminated frames.
+            # Metric-based blink detection — requires metric to stay outside
+            # the calibrated normal range for N consecutive frames.
+            # Single-frame spikes (noise/artifact) are rejected by the counter.
             if self._steer_role and has_band_features and self._blink_holdoff == 0:
                 if self._confirm_blink_metric(features):
-                    self.steer_direction *= -1  # toggle left ↔ right
-                    self._blink_holdoff = self._blink_holdoff_frames
-                    self.get_logger().info(
-                        f"Blink detected — steer: {'RIGHT' if self.steer_direction > 0 else 'LEFT'}"
-                    )
-                    self._update_leds()
+                    self._metric_blink_counter += 1
+                    if self._metric_blink_counter >= self._blink_confirm_frames:
+                        self.steer_direction *= -1  # toggle left ↔ right
+                        self._blink_holdoff = self._blink_holdoff_frames
+                        self._metric_blink_counter = 0
+                        self.get_logger().info(
+                            f"Blink detected — steer: {'RIGHT' if self.steer_direction > 0 else 'LEFT'}"
+                        )
+                        self._update_leds()
+                else:
+                    self._metric_blink_counter = 0
 
             if self._blink_holdoff > 0:
                 # Reuse last intents — blink EOG contaminates the Welch
