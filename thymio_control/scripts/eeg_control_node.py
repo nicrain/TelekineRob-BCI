@@ -70,7 +70,7 @@ class EegControlNode(Node):
         self.declare_parameter("csv_path", "/tmp/thymio_eeg_log.csv")
 
         # Motion mapping parameters
-        self.declare_parameter("max_forward_speed", 0.2)
+        self.declare_parameter("max_forward_speed", 0.1)
         self.declare_parameter("reverse_speed", -0.15)
         self.declare_parameter("turn_forward_speed", 0.1)
         self.declare_parameter("turn_angular_speed", 0.8)
@@ -242,12 +242,12 @@ class EegControlNode(Node):
                 self.get_logger().error("CALIB: not enough samples — abort")
                 return
             p5 = float(np.percentile(samples, 5))
-            p95 = float(np.percentile(samples, 95))
+            p50 = float(np.percentile(samples, 50))
             offset = round(p5, 4)
-            scale = round(max(p95 - p5, 0.001), 4)
+            scale = round(max(p50 - p5, 0.001), 4)
 
             self.get_logger().info(
-                f"CALIB: p5={p5:.4f} p95={p95:.4f} offset={offset} scale={scale}"
+                f"CALIB: p5={p5:.4f} p50={p50:.4f} offset={offset} scale={scale}"
             )
 
             try:
