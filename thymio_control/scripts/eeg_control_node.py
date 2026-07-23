@@ -73,7 +73,7 @@ class EegControlNode(Node):
         self.declare_parameter("max_forward_speed", 0.2)
         self.declare_parameter("reverse_speed", -0.15)
         self.declare_parameter("turn_forward_speed", 0.1)
-        self.declare_parameter("turn_angular_speed", 1.2)
+        self.declare_parameter("turn_angular_speed", 0.8)
         self.declare_parameter("reverse_threshold", 0.2)
         self.declare_parameter("steer_deadzone", 0.1)
         self.declare_parameter("blink_holdoff_frames", 4)
