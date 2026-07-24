@@ -32,7 +32,10 @@
 | P2.1 | UI improvements for steering | — | ✅ 2026-07-21 |
 | P2.2 | Blink detection: active vs passive | — | ✅ 2026-07-21 |
 | P2.3a | Restore steer_intent in TbrPolicy + AlphaPolicy | P1.1–4 | ✅ 2026-07-20 |
-| P2.3b | Blink steer: turn direction state machine + LED | P2.3a | 🟡 (state machine done, LED pending) |
+| P2.3b | Blink steer: turn direction state machine + circle LED | P2.3a | ✅ 2026-07-24 |
+| P2.4 | Metric-only blink detection (p95×2 threshold + confirm counter) | P2.3b | ✅ 2026-07-24 |
+| P2.5 | Steering: half-range mapping + reduced speed (0.2→0.05 rad/s) | P2.4 | ✅ 2026-07-24 |
+| P2.6 | Calibration p95→p50 (median as upper reference) | P2.5 | ✅ 2026-07-24 |
 
 ---
 
