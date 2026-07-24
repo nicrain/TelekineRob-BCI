@@ -112,10 +112,9 @@ class EegControlNode(Node):
         self.analysis_pub = self.create_publisher(String, self.get_parameter("analysis_topic").value, 10)
 
         # Circle LED publisher for steering direction indication
-        _driver_ns = "/thymio_driver"
         self._led_circle = None
         if ThymioLed is not None:
-            self._led_circle = self.create_publisher(ThymioLed, f"{_driver_ns}/led", 10)
+            self._led_circle = self.create_publisher(ThymioLed, "/led", 10)
         self.watchdog_sec = float(self.get_parameter("watchdog_sec").value)
         self.verbose = bool(self.get_parameter("verbose").value)
         self.analysis_verbose = bool(self.get_parameter("analysis_verbose").value)
