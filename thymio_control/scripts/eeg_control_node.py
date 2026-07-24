@@ -14,7 +14,7 @@ import rclpy
 from geometry_msgs.msg import Twist
 from rclpy.node import Node
 from sensor_msgs.msg import Range
-from std_msgs.msg import String
+from std_msgs.msg import Empty, String
 try:
     from thymio_msgs.msg import Led as ThymioLed  # type: ignore
 except ImportError:
@@ -111,7 +111,10 @@ class EegControlNode(Node):
         self.pub = self.create_publisher(Twist, self.get_parameter("cmd_topic").value, 10)
         self.analysis_pub = self.create_publisher(String, self.get_parameter("analysis_topic").value, 10)
 
-        # Circle LED publisher for steering direction indication
+        # Circle LED publisher for steering direction indication.
+        # /led/off must be sent first to release the built-in behaviour
+        # (e.g. gravity indicator) before individual LEDs can be set.
+        self._led_off = self.create_publisher(Empty, "/led/off", 10)
         self._led_circle = None
         if ThymioLed is not None:
             self._led_circle = self.create_publisher(ThymioLed, "/led", 10)
@@ -484,6 +487,9 @@ class EegControlNode(Node):
     def _update_leds(self) -> None:
         """Light circle LEDs to show current steer direction.
 
+        Sends /led/off first to release the built-in behaviour
+        (e.g. gravity indicator), then sets individual circle LEDs.
+
         Circle LED indices (from Thymio default behaviours source):
               0 (front)
           7       1
@@ -495,6 +501,7 @@ class EegControlNode(Node):
         Left turn  → LEDs 5, 6, 7 (left arc)
         No turn    → all off
         """
+        self._led_off.publish(Empty())
         if self._led_circle is None:
             return
         CIRCLE = 0  # thymio_msgs Led.CIRCLE
