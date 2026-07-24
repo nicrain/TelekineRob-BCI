@@ -14,7 +14,11 @@ import rclpy
 from geometry_msgs.msg import Twist
 from rclpy.node import Node
 from sensor_msgs.msg import Range
-from std_msgs.msg import ColorRGBA, String
+from std_msgs.msg import String
+try:
+    from thymio_msgs.msg import Led as ThymioLed  # type: ignore
+except ImportError:
+    ThymioLed = None  # thymio_msgs not installed (e.g. simulation)
 
 # --- Modular architecture ---
 from thymio_control.pipeline import POLICIES, build_adapter
@@ -107,10 +111,11 @@ class EegControlNode(Node):
         self.pub = self.create_publisher(Twist, self.get_parameter("cmd_topic").value, 10)
         self.analysis_pub = self.create_publisher(String, self.get_parameter("analysis_topic").value, 10)
 
-        # LED publishers for steering direction indication
+        # Circle LED publisher for steering direction indication
         _driver_ns = "/thymio_driver"
-        self._led_left  = self.create_publisher(ColorRGBA, f"{_driver_ns}/led/body/bottom_left", 10)
-        self._led_right = self.create_publisher(ColorRGBA, f"{_driver_ns}/led/body/bottom_right", 10)
+        self._led_circle = None
+        if ThymioLed is not None:
+            self._led_circle = self.create_publisher(ThymioLed, f"{_driver_ns}/led", 10)
         self.watchdog_sec = float(self.get_parameter("watchdog_sec").value)
         self.verbose = bool(self.get_parameter("verbose").value)
         self.analysis_verbose = bool(self.get_parameter("analysis_verbose").value)
@@ -474,18 +479,29 @@ class EegControlNode(Node):
         return twist
 
     def _update_leds(self) -> None:
-        """Set bottom LEDs to show current steer direction (green = active side)."""
-        green = ColorRGBA(r=0.0, g=1.0, b=0.0, a=1.0)
-        off   = ColorRGBA(r=0.0, g=0.0, b=0.0, a=0.0)
+        """Light circle LEDs to show current steer direction.
+
+        Circle LED indices (from Thymio default behaviours source):
+              0 (front)
+          7       1
+        6           2
+          5       3
+              4 (back)
+
+        Right turn → LEDs 1, 2, 3 (right arc)
+        Left turn  → LEDs 5, 6, 7 (left arc)
+        No turn    → all off
+        """
+        if self._led_circle is None:
+            return
+        CIRCLE = 0  # thymio_msgs Led.CIRCLE
         if self.steer_direction > 0:
-            self._led_right.publish(green)
-            self._led_left.publish(off)
+            values = [0.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0]  # right arc
         elif self.steer_direction < 0:
-            self._led_left.publish(green)
-            self._led_right.publish(off)
+            values = [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]  # left arc
         else:
-            self._led_right.publish(off)
-            self._led_left.publish(off)
+            values = [0.0] * 8
+        self._led_circle.publish(ThymioLed(id=CIRCLE, values=values))
 
 
 def main(args: Optional[list] = None) -> None:
