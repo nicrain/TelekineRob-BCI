@@ -501,7 +501,8 @@ class EegControlNode(Node):
         Left turn  → LEDs 5, 6, 7 (left arc)
         No turn    → all off
         """
-        self._led_off.publish(Empty())
+        if self._led_primed < 10:
+            self._led_off.publish(Empty())  # release built-in behaviour once
         if self._led_circle is None:
             return
         CIRCLE = 0  # thymio_msgs Led.CIRCLE
