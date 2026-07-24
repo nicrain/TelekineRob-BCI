@@ -74,7 +74,7 @@ class EegControlNode(Node):
         self.declare_parameter("csv_path", "/tmp/thymio_eeg_log.csv")
 
         # Motion mapping parameters
-        self.declare_parameter("max_forward_speed", 0.1)
+        self.declare_parameter("max_forward_speed", 0.05)
         self.declare_parameter("reverse_speed", -0.15)
         self.declare_parameter("turn_forward_speed", 0.1)
         self.declare_parameter("turn_angular_speed", 0.8)
@@ -173,7 +173,7 @@ class EegControlNode(Node):
         self.last_twist = Twist()
         self._steer_role = str(self.get_parameter("role").value) == "steering"
         self.steer_direction = 1   # 1 = right, -1 = left (blink toggles)
-        self._led_primed = False   # re-publish on first tick (driver may miss __init__ publish)
+        self._led_primed = 0   # publish LED on first 10 ticks (~0.5s) until driver ready
         self._blink_holdoff = 0
         self._blink_holdoff_frames = int(self.get_parameter("blink_holdoff_frames").value)
 
@@ -312,8 +312,8 @@ class EegControlNode(Node):
         self.ground["right"] = float(msg.range)
 
     def _tick(self) -> None:
-        if not self._led_primed:
-            self._led_primed = True
+        if self._led_primed < 10:
+            self._led_primed += 1
             self._update_leds()
         frame = self.adapter.read_frame()
         if frame is not None:
