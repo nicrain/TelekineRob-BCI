@@ -173,6 +173,7 @@ class EegControlNode(Node):
         self.last_twist = Twist()
         self._steer_role = str(self.get_parameter("role").value) == "steering"
         self.steer_direction = 1   # 1 = right, -1 = left (blink toggles)
+        self._led_primed = False   # re-publish on first tick (driver may miss __init__ publish)
         self._blink_holdoff = 0
         self._blink_holdoff_frames = int(self.get_parameter("blink_holdoff_frames").value)
 
@@ -311,6 +312,9 @@ class EegControlNode(Node):
         self.ground["right"] = float(msg.range)
 
     def _tick(self) -> None:
+        if not self._led_primed:
+            self._led_primed = True
+            self._update_leds()
         frame = self.adapter.read_frame()
         if frame is not None:
             has_band_features = all(key in frame.metrics for key in ("alpha", "theta", "beta"))
