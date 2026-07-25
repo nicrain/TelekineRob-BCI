@@ -633,7 +633,7 @@ export default function App() {
   const metricDataKey = { alpha: 'alpha', tbr: 'ratio', ei: 'focus' };
   const featureOption = useMemo(() => {
     const calibHigh = calibOffset + calibScale;
-    const showCalib = calibrating || calibScale > 2;  // scale ≈ 1 = default (not calibrated)
+    const showCalib = calibrating || calibOffset !== 0 || calibScale !== 1;
     return {
       backgroundColor: 'transparent',
       tooltip: { trigger: 'axis', backgroundColor: isDarkCharts ? '#fff' : '#2a2a2a', borderColor: isDarkCharts ? '#ddd' : '#444', textStyle: { color: isDarkCharts ? '#333' : '#ddd' } },
