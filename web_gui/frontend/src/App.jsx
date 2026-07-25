@@ -545,11 +545,16 @@ export default function App() {
           setCalibCountdown((prev) => {
             if (prev <= 1) {
               clearInterval(calibTimerRef.current);
-              // Countdown done — re-read config and transition to Running
-              api.get('/api/config', { params: { reload: true } }).then(r => {
-                const eeg = r.data?.config?.eeg;
-                finishCalibration(eeg || {});
-              }).catch(() => { setCalibrating(false); setCalibPhase(null); });
+              // Countdown done — poll until node writes calib YAML (calibrate→false)
+              const poll = setInterval(() => {
+                api.get('/api/config', { params: { reload: true } }).then(r => {
+                  const eeg = r.data?.config?.eeg;
+                  if (!eeg?.calibrate) {
+                    clearInterval(poll);
+                    finishCalibration(eeg || {});
+                  }
+                }).catch(() => { clearInterval(poll); setCalibrating(false); setCalibPhase(null); });
+              }, 500);
               return 0;
             }
             return prev - 1;
