@@ -70,6 +70,10 @@ class RosBridge:
         create request is queued first, then the teleop message is queued
         after it.  The rclpy thread processes both in order.
         """
+        if self._error:
+            return False, f"Bridge unavailable: {self._error}"
+        if not self._ready.is_set():
+            return False, "Bridge not yet ready"
         if direction not in TELEOP_DIRECTIONS:
             return False, f"Unknown direction: {direction!r}"
 

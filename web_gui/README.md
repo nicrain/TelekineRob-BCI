@@ -51,7 +51,7 @@ frontend ←WebSocket→ backend ←rclpy→ ROS2 topics
 - **RosBridge**: single rclpy thread manages both signal subscription and teleop publishing
 - **Signal flow**: pipeline → `/eeg_analysis` (JSON) → RosBridge → WebSocket → charts
 - **Teleop flow**: web keypad → `/ws/teleop` → RosBridge `pub.publish()` (direct, zero-latency)
-- **Config persistence**: web UI changes are written back to `launch_args.yaml`, `eeg_control_node.params.yaml`, `experiment_config.yaml`
+- **Config persistence**: web UI changes are written back to `launch_args.yaml`, `eeg_control_node.params.yaml`
 
 ## Available APIs
 
