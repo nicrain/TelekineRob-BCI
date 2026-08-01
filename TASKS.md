@@ -56,3 +56,4 @@
 | O2 | Device connect integration + Log panel | TODO |
 | O3 | 17-channel support: full Unicorn data + selective DSP | TODO |
 | O4 | Docs: keep all .md files in sync with code | ONGOING |
+| O5 | App.jsx 1157→~300 lines: extract components/hooks incrementally alongside UI feature work | TODO |
