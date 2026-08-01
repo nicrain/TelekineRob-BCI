@@ -150,6 +150,7 @@ def _manual_welch_psd(
 
     psd /= n_ensembles
     psd /= fs
+    psd /= np.sum(window ** 2)  # window power (matching scipy Welch)
     return freqs, psd
 
 
