@@ -77,8 +77,6 @@ def _get_subscriber() -> RosBridge:
 async def _startup() -> None:
     init_store()
     _get_subscriber()
-    _log = logging.getLogger("main")
-    _log.info(cleanup_residual_processes())
 
 
 @app.on_event("shutdown")

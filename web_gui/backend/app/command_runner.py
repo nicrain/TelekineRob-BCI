@@ -203,13 +203,21 @@ def _send_stop_to_thymio() -> None:
 
 
 def stop_system(dry_run: bool = True) -> CommandResult:
+    command = "; ".join(f"pkill -f '{p}'" for p in _KILL_PATTERNS)
+    if dry_run:
+        return CommandResult(
+            accepted=True,
+            dry_run=True,
+            command=command,
+            detail="(dry-run) Would terminate ROS/Gazebo processes.",
+        )
     _send_stop_to_thymio()
     _stop_runtime_processes()
     _kill_ros_processes()
     set_runtime_state(False, None)
     return CommandResult(
         accepted=True,
-        dry_run=dry_run,
-        command="; ".join(f"pkill -f '{p}'" for p in _KILL_PATTERNS),
+        dry_run=False,
+        command=command,
         detail="ROS/Gazebo processes terminated.",
     )
