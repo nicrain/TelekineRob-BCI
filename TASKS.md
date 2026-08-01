@@ -7,7 +7,7 @@
 | 1 | P1: BCI Core-4 LSL bridge (gpype → LSL → RawLslAdapter) | 2026-07-02 |
 | 2 | Calibration Phase B: auto-save p5/p95 + UX | 2026-07-06 |
 | 3 | Policy rename: Ei/Tbr/Alpha | 2026-07-03 |
-| 4 | Remove legacy: Enobio/Tobii/TCP/EDF/gaze/mock | 2026-07-10 |
+| 4 | Remove legacy: Enobio/Tobii/TCP/EDF/gaze/mock from production path (lsl_test retained for offline validation) | 2026-07-10 |
 | 5 | One-click stop-before-start | 2026-07-05 |
 | 6 | Device persistence in YAML | 2026-07-14 |
 | 7 | Default input=lsl everywhere | 2026-07-14 |
@@ -34,7 +34,7 @@
 | P2.3a | Restore steer_intent in TbrPolicy + AlphaPolicy | P1.1–4 | ✅ 2026-07-20 |
 | P2.3b | Blink steer: turn direction state machine + circle LED | P2.3a | ✅ 2026-07-24 |
 | P2.4 | Metric-only blink detection (p95×2 threshold + confirm counter) | P2.3b | ✅ 2026-07-24 |
-| P2.5 | Steering: half-range mapping + reduced speed (0.2→0.05 rad/s) | P2.4 | ✅ 2026-07-24 |
+| P2.5 | Steering: half-range mapping + reduced speed (max_forward=0.05, turn_angular=0.8) | P2.4 | ✅ 2026-07-24 |
 | P2.6 | Calibration p95→p50 (median as upper reference) | P2.5 | ✅ 2026-07-24 |
 
 ---
@@ -43,7 +43,7 @@
 
 | # | Task | Depends on | Status |
 |---|---|---|---|
-| P3.1 | UI + backend for dual-device setup | — | TODO |
+| P3.1 | UI + backend for dual-device setup (note: EegConfig2 lacks calibrate/calib_offset/calib_scale — needs modelling before dual calibration works) | — | TODO |
 | P3.2 | Dual-device routing (headband→steer, hybrid→speed) | P2.3a, P2.3b, P3.1 | TODO |
 
 ---
