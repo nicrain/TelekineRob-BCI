@@ -33,7 +33,6 @@ class MockSignalGenerator:
             "features": {
                 "theta_beta_ratio": ratio,
                 "focus_index": alpha - theta * 0.4,
-                "asymmetry": random.uniform(-0.2, 0.2),
             },
             "control": {
                 "speed_intent": speed_intent,
