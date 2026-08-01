@@ -37,9 +37,12 @@ class EegConfig2(BaseModel):
 class MotionConfig(BaseModel):
     max_forward_speed: float = 0.2
     reverse_speed: float = -0.15
+    turn_forward_speed: float = 0.1
     turn_angular_speed: float = 1.2
     steer_deadzone: float = 0.1
     line_mode: Literal["", "blackline", "whiteline"] = ""
+    line_pivot_gain: float = 8.0
+    line_spin_gain: float = 15.0
 
 
 class AppConfig(BaseModel):

@@ -83,6 +83,8 @@ class EegControlNode(Node):
 
         # Optional line-following
         self.declare_parameter("line_mode", "")  # '', 'blackline', 'whiteline'
+        self.declare_parameter("line_pivot_gain", 8.0)
+        self.declare_parameter("line_spin_gain", 15.0)
 
         input_mode = self.get_parameter("input").value
         policy_name = self.get_parameter("policy").value
@@ -147,6 +149,8 @@ class EegControlNode(Node):
                 self._csv_writer.writeheader()
 
         self.line_mode = str(self.get_parameter("line_mode").value).strip() or None
+        self.line_pivot_gain = float(self.get_parameter("line_pivot_gain").value)
+        self.line_spin_gain = float(self.get_parameter("line_spin_gain").value)
         self.ground = {"left": 0.5, "right": 0.5}
         self.state_dir = 0
 
@@ -443,8 +447,8 @@ class EegControlNode(Node):
                     else:
                         self.state_dir = 10
 
-                w_pivot = speed * 8.0
-                w_spin = speed * 15.0
+                w_pivot = speed * self.line_pivot_gain
+                w_spin = speed * self.line_spin_gain
                 if self.state_dir == 0:
                     twist.linear.x = speed
                 elif self.state_dir == 1:

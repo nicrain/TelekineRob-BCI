@@ -36,7 +36,6 @@ def test_patch_config_persists_to_yaml(monkeypatch, tmp_path: Path):
                     "reverse_speed": -0.15,
                     "turn_forward_speed": 0.1,
                     "turn_angular_speed": 1.2,
-                    "reverse_threshold": 0.2,
                     "steer_deadzone": 0.1,
                     "line_mode": "",
                 }
