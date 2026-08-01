@@ -1,12 +1,12 @@
-"""EiPolicy — maps focus level and alpha asymmetry to control intents.
+"""EiPolicy — maps focus level to speed and steering.
 
 Algorithm
 ---------
 - **speed_intent**: derived from ``beta_alpha_theta`` (the "engagement" ratio).
   Higher engagement → higher speed intent.  EMA smoothing (α=0.35) applied
   to the raw ratio before normalisation to reduce frame-to-frame jitter.
-- **steer_intent**: derived from ``alpha_asym`` (right minus left alpha power,
-  normalised).  Values > 0.5 indicate rightward bias; < 0.5 leftward.
+- **steer_intent**: same metric as speed (beta_alpha_theta), mapped to [0.5, 0.75].
+  Direction controlled by blink toggle.
 
 Note
 ----
@@ -23,11 +23,7 @@ from thymio_control.processors.enrich import clip01
 
 
 class EiPolicy(Policy):
-    """Map focus level and alpha lateralisation to speed / steer intents.
-
-    Attributes are intentionally exposed as class-level defaults so they can
-    be overridden in subclasses or via config injection without subclassing.
-    """
+    """Map focus level to speed / steer intents (blink controls direction)."""
 
     focus_offset: float = 0.3230
     focus_scale:  float = 2.0355

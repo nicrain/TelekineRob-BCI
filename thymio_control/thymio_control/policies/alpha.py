@@ -1,4 +1,4 @@
-"""AlphaPolicy — uses alpha band power for speed and asymmetry for steering.
+"""AlphaPolicy — uses alpha band power for speed and steering.
 
 Algorithm
 ---------
@@ -6,8 +6,8 @@ Algorithm
   Alpha suppression (lower alpha) indicates cortical activation and
   higher attention, so lower alpha → higher speed intent.
   EMA smoothing (α=0.35) applied before normalisation.
-- **steer_intent**: derived from ``alpha_asym`` (same mapping as
-  EiPolicy and TbrPolicy).  Values > 0.5 indicate rightward bias.
+- **steer_intent**: same metric as speed (alpha), mapped to [0.5, 0.75].
+  Direction controlled by blink toggle.
 
 Calibration
 -----------
@@ -26,7 +26,7 @@ from thymio_control.processors.enrich import clip01
 
 
 class AlphaPolicy(Policy):
-    """Use alpha power inversely for speed intent; alpha asymmetry for steering."""
+    """Use alpha power for speed and steering (blink controls direction)."""
 
     # Normalisation: clip01(1.0 - (alpha_smooth - offset) / scale)
     # Alpha range from calibration: ~0.5 to ~7.5 µV²

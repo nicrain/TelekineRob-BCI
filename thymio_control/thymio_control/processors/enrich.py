@@ -29,21 +29,15 @@ def safe_div(a: float, b: float, eps: float = 1e-9) -> float:
 def enrich_features(metrics: Dict[str, float]) -> Dict[str, float]:
     """Derive composite features from a raw metrics dict.
 
-    Adds ``theta_beta``, ``beta_alpha``, ``beta_alpha_theta``, and
-    ``alpha_asym`` so policy classes can remain simple look-ups.
+    Adds ``theta_beta``, ``beta_alpha``, and ``beta_alpha_theta``
+    so policy classes can remain simple look-ups.
     """
     f = dict(metrics)
-    alpha       = f.get("alpha", 0.0)
-    theta       = f.get("theta", 0.0)
-    beta        = f.get("beta",  0.0)
-    left_alpha  = f.get("left_alpha",  alpha * 0.5)
-    right_alpha = f.get("right_alpha", alpha * 0.5)
+    alpha = f.get("alpha", 0.0)
+    theta = f.get("theta", 0.0)
+    beta  = f.get("beta",  0.0)
 
-    f["theta_beta"]      = safe_div(theta, beta)
-    f["beta_alpha"]      = safe_div(beta, alpha)
+    f["theta_beta"]       = safe_div(theta, beta)
+    f["beta_alpha"]       = safe_div(beta, alpha)
     f["beta_alpha_theta"] = safe_div(beta, alpha + theta)
-    f["alpha_asym"]      = safe_div(
-        right_alpha - left_alpha,
-        right_alpha + left_alpha,
-    )
     return f

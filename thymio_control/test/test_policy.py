@@ -20,7 +20,7 @@ def test_focus_policy_clips_speed_and_steer_bounds():
 
 
 def test_focus_policy_steer_uses_same_metric():
-    """EiPolicy steer_intent is driven by beta_alpha_theta, not alpha_asym."""
+    """EiPolicy steer_intent is driven by beta_alpha_theta."""
     policy = EiPolicy()
 
     result = policy.compute_intents({"beta_alpha_theta": 0.5})
@@ -39,7 +39,7 @@ def test_theta_beta_policy_ratio_controls_speed_inversely():
 
 
 def test_theta_beta_policy_steer_uses_same_metric():
-    """TbrPolicy steer_intent is driven by theta_beta, not alpha_asym."""
+    """TbrPolicy steer_intent is driven by theta_beta."""
     policy = TbrPolicy()
 
     result = policy.compute_intents({"theta_beta": 1.0})
@@ -70,7 +70,7 @@ def test_alpha_only_policy_speed_inversely_proportional():
 
 
 def test_alpha_only_policy_steer_uses_same_metric():
-    """AlphaPolicy steer_intent is driven by alpha, not alpha_asym."""
+    """AlphaPolicy steer_intent is driven by alpha."""
     policy = AlphaPolicy()
 
     result = policy.compute_intents({"alpha": 3.0})
