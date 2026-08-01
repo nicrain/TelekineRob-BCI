@@ -8,11 +8,6 @@ Algorithm
 - **steer_intent**: same metric as speed (beta_alpha_theta), mapped to [0.5, 0.75].
   Direction controlled by blink toggle.
 
-Note
-----
-The normalisation constants are calibrated against
-``20260408111446_Patient01.edf`` (3-min stats: p5=0.323, p95=2.359).
-Re-calibrate for different recordings.
 """
 from __future__ import annotations
 
@@ -25,11 +20,9 @@ from thymio_control.processors.enrich import clip01
 class EiPolicy(Policy):
     """Map focus level to speed / steer intents (blink controls direction)."""
 
-    focus_offset: float = 0.3230
-    focus_scale:  float = 2.0355
-    ema_alpha:    float = 0.35
+    ema_alpha: float = 0.35
 
-    def __init__(self, offset: float = 0.323, scale: float = 2.036) -> None:
+    def __init__(self, offset: float = 0.0, scale: float = 1.0) -> None:
         super().__init__()
         self.focus_offset = offset
         self.focus_scale = scale
