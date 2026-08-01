@@ -14,9 +14,9 @@ def test_focus_policy_clips_speed_and_steer_bounds():
 
     assert low["speed_intent"] == pytest.approx(0.0)
     assert high["speed_intent"] == pytest.approx(1.0)
-    # steer_intent uses same metric: low metric → near 0.5, high metric → near 1.0
+    # steer_intent uses same metric: low metric → near 0.5, high metric → near 0.75
     assert low["steer_intent"] == pytest.approx(0.5)
-    assert high["steer_intent"] == pytest.approx(1.0)
+    assert high["steer_intent"] == pytest.approx(0.75)
 
 
 def test_focus_policy_steer_uses_same_metric():
@@ -24,7 +24,7 @@ def test_focus_policy_steer_uses_same_metric():
     policy = EiPolicy()
 
     result = policy.compute_intents({"beta_alpha_theta": 0.5})
-    assert 0.5 <= result["steer_intent"] <= 1.0  # metric controls magnitude only
+    assert 0.5 <= result["steer_intent"] <= 0.75  # metric controls magnitude only
 
 
 def test_theta_beta_policy_ratio_controls_speed_inversely():
@@ -43,7 +43,7 @@ def test_theta_beta_policy_steer_uses_same_metric():
     policy = TbrPolicy()
 
     result = policy.compute_intents({"theta_beta": 1.0})
-    assert 0.5 <= result["steer_intent"] <= 1.0  # metric controls magnitude only
+    assert 0.5 <= result["steer_intent"] <= 0.75  # metric controls magnitude only
 
 
 def test_alpha_only_policy_clips_bounds():
@@ -53,9 +53,9 @@ def test_alpha_only_policy_clips_bounds():
     high = policy.compute_intents({"alpha": 100.0})
 
     assert low["speed_intent"] == pytest.approx(1.0)
-    assert low["steer_intent"] == pytest.approx(0.5)
+    assert low["steer_intent"] == pytest.approx(0.75)  # focused → turn
     assert high["speed_intent"] == pytest.approx(0.0)
-    assert high["steer_intent"] == pytest.approx(1.0)
+    assert high["steer_intent"] == pytest.approx(0.5)  # relaxed → no turn
 
 
 def test_alpha_only_policy_speed_inversely_proportional():
@@ -74,4 +74,4 @@ def test_alpha_only_policy_steer_uses_same_metric():
     policy = AlphaPolicy()
 
     result = policy.compute_intents({"alpha": 3.0})
-    assert 0.5 <= result["steer_intent"] <= 1.0
+    assert 0.5 <= result["steer_intent"] <= 0.75
