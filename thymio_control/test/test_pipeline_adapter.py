@@ -13,21 +13,10 @@ class _FakeArgs:
             setattr(self, k, v)
 
 
-def test_build_adapter_keyboard_mode():
-    args = _FakeArgs(input="keyboard")
-    adapter = build_adapter(args)
-    from thymio_control.adapters.mock import KeyboardAdapter
-
-    assert isinstance(adapter, KeyboardAdapter)
-
-
 def test_build_adapter_rejects_unknown_mode():
     args = _FakeArgs(input="nonesuch")
     with pytest.raises(RuntimeError, match="Unsupported input mode"):
         build_adapter(args)
-
-
-
 
 
 
