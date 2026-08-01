@@ -54,6 +54,6 @@
 |---|---|---|
 | O1 | Calib UX: rename p5/p95 + manual edit input | ✅ 2026-07-20 |
 | O2 | Device connect integration + Log panel | TODO |
-| O3 | 17-channel support: full Unicorn data + selective DSP | TODO |
+| O3 | 17-channel support: send all Unicorn Hybrid Black channels (8 EEG + 3 accel + 3 gyro + battery + counter + validation) via LSL for motion/artifact detection | TODO |
 | O4 | Docs: keep all .md files in sync with code | ONGOING |
 | O5 | App.jsx 1157→~300 lines: extract components/hooks incrementally alongside UI feature work | TODO |
