@@ -24,7 +24,7 @@ Config:     device_profiles.py (设备注册表：hybrid-black, bci-core-4)
 ```
 LSL 流 (Windows bridge)
   → RawLslAdapter (pull_chunk → Welch PSD → band powers)
-  → enrich_features (theta_beta, beta_alpha_theta, alpha_asym)
+  → enrich_features (theta_beta, beta_alpha_theta)
   → Policy.compute_intents (speed_intent, steer_intent)
   → _intents_to_twist → Twist → /cmd_vel
 ```

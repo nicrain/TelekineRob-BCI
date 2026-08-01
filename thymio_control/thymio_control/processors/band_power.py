@@ -625,7 +625,7 @@ def per_channel_metrics(
 
     For example, with labels ``["Fz", "C3", "Cz", "C4", "Pz"]`` this emits
     ``alpha_Fz``, ``theta_C3``, ``alpha_C3``, ``alpha_C4``, … allowing the
-    the policy layer to access individual channel metrics without losing
+    policy layer to access individual channel metrics without losing
     spatial information.
 
     It also synthesises ``left_alpha`` and ``right_alpha`` as the mean of
