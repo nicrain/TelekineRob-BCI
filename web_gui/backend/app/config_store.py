@@ -64,9 +64,7 @@ def _load_defaults() -> AppConfig:
 
     cfg.motion.max_forward_speed = float(ros_params.get("max_forward_speed", cfg.motion.max_forward_speed))
     cfg.motion.reverse_speed = float(ros_params.get("reverse_speed", cfg.motion.reverse_speed))
-    cfg.motion.turn_forward_speed = float(ros_params.get("turn_forward_speed", cfg.motion.turn_forward_speed))
     cfg.motion.turn_angular_speed = float(ros_params.get("turn_angular_speed", cfg.motion.turn_angular_speed))
-    cfg.motion.reverse_threshold = float(ros_params.get("reverse_threshold", cfg.motion.reverse_threshold))
     cfg.motion.steer_deadzone = float(ros_params.get("steer_deadzone", cfg.motion.steer_deadzone))
     cfg.motion.line_mode = str(ros_params.get("line_mode", cfg.motion.line_mode))
 
@@ -101,9 +99,7 @@ def _persist_config(cfg: AppConfig) -> None:
             "role": str(cfg.eeg.role),
             "max_forward_speed": float(cfg.motion.max_forward_speed),
             "reverse_speed": float(cfg.motion.reverse_speed),
-            "turn_forward_speed": float(cfg.motion.turn_forward_speed),
             "turn_angular_speed": float(cfg.motion.turn_angular_speed),
-            "reverse_threshold": float(cfg.motion.reverse_threshold),
             "steer_deadzone": float(cfg.motion.steer_deadzone),
             "line_mode": str(cfg.motion.line_mode),
         }

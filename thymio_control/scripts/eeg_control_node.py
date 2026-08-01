@@ -76,9 +76,7 @@ class EegControlNode(Node):
         # Motion mapping parameters
         self.declare_parameter("max_forward_speed", 0.05)
         self.declare_parameter("reverse_speed", -0.15)
-        self.declare_parameter("turn_forward_speed", 0.1)
         self.declare_parameter("turn_angular_speed", 0.8)
-        self.declare_parameter("reverse_threshold", 0.2)
         self.declare_parameter("steer_deadzone", 0.1)
         self.declare_parameter("blink_holdoff_frames", 4)
         self.declare_parameter("blink_confirm_frames", 2)
@@ -122,9 +120,7 @@ class EegControlNode(Node):
         self.csv_path = str(self.get_parameter("csv_path").value)
         self.max_forward_speed = min(1.0, max(0.0, float(self.get_parameter("max_forward_speed").value)))
         self.reverse_speed = min(0.0, max(-1.0, float(self.get_parameter("reverse_speed").value)))
-        self.turn_forward_speed = min(1.0, max(0.0, float(self.get_parameter("turn_forward_speed").value)))
         self.turn_angular_speed = min(3.0, max(0.0, float(self.get_parameter("turn_angular_speed").value)))
-        self.reverse_threshold = min(1.0, max(0.0, float(self.get_parameter("reverse_threshold").value)))
         self.steer_deadzone = min(1.0, max(0.0, float(self.get_parameter("steer_deadzone").value)))
         self._csv_file = None
         self._csv_writer = None

@@ -34,21 +34,10 @@ class EegConfig2(BaseModel):
     lsl_source_id: str = ""
 
 
-class FilterConfig(BaseModel):
-    enabled: bool = True
-    type: Literal["none", "lowpass", "bandpass", "notch"] = "bandpass"
-    low_hz: float = 1.0
-    high_hz: float = 40.0
-    notch_hz: float = 50.0
-    order: int = 4
-
-
 class MotionConfig(BaseModel):
     max_forward_speed: float = 0.2
     reverse_speed: float = -0.15
-    turn_forward_speed: float = 0.1
     turn_angular_speed: float = 1.2
-    reverse_threshold: float = 0.2
     steer_deadzone: float = 0.1
     line_mode: Literal["", "blackline", "whiteline"] = ""
 
@@ -57,7 +46,6 @@ class AppConfig(BaseModel):
     launch: LaunchConfig = Field(default_factory=LaunchConfig)
     eeg: EegConfig = Field(default_factory=EegConfig)
     eeg2: EegConfig2 | None = None
-    filter: FilterConfig = Field(default_factory=FilterConfig)
     motion: MotionConfig = Field(default_factory=MotionConfig)
 
 
