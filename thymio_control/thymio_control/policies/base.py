@@ -29,8 +29,7 @@ class Policy:
         ----------
         features : dict
             Enriched EEG metrics (output of ``enrich_features``).
-            Expected keys include at minimum ``beta_alpha_theta`` and
-            ``alpha_asym`` (set by ``processors.enrich``).
+            Expected keys include ``theta_beta`` and ``beta_alpha_theta``.
 
         Returns
         -------

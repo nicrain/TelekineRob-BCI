@@ -139,6 +139,7 @@ def _manual_welch_psd(
     start = 0
     while start + nperseg <= n:
         segment = signal[start: start + nperseg]
+        segment = segment - np.mean(segment)  # detrend (matching scipy)
         windowed = segment * window
         spectrum = np.fft.rfft(windowed, n=nperseg)
         psd += np.abs(spectrum) ** 2
@@ -151,6 +152,8 @@ def _manual_welch_psd(
     psd /= n_ensembles
     psd /= fs
     psd /= np.sum(window ** 2)  # window power (matching scipy Welch)
+    # One-sided PSD: double interior bins (DC / Nyquist excluded)
+    psd[1:-1] *= 2.0
     return freqs, psd
 
 

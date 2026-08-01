@@ -202,7 +202,6 @@ class RosBridge:
             "features": {
                 "theta_beta_ratio": float(features.get("theta_beta", 0)),
                 "focus_index": float(features.get("beta_alpha_theta", 0)),
-                "asymmetry": float(features.get("alpha_asym", 0)),
             },
             "control": {
                 "speed_intent": float(intents.get("speed_intent", 0)),
