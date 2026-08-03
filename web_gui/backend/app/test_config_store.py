@@ -1,6 +1,8 @@
 from pathlib import Path
 
+import pytest
 import yaml
+from pydantic import ValidationError
 
 from app import config_store
 
@@ -228,3 +230,21 @@ def test_motion_changes_reach_eeg2_file(monkeypatch, tmp_path: Path):
     params = yaml.safe_load(eeg2_path.read_text(encoding="utf-8"))["/**"]["ros__parameters"]
     assert params["turn_angular_speed"] == 2.4
     assert params["max_forward_speed"] == 0.35
+
+
+def test_device1_invalid_role_rejected_on_load(monkeypatch, tmp_path: Path):
+    """O25: device-1 config must go through model_validate, so an invalid
+    role (silently accepted before) now fails fast like device 2."""
+    launch_path = tmp_path / "launch_args.yaml"
+    eeg_path = tmp_path / "eeg_control_node.params.yaml"
+    eeg2_path = tmp_path / "eeg_control_node.eeg2.params.yaml"
+
+    _write_yaml(launch_path, {"use_sim": True, "run_eeg": False})
+    _write_yaml(eeg_path, {"/**": {"ros__parameters": {"role": "sideways", "policy": "tbr"}}})
+
+    monkeypatch.setattr(config_store, "_LAUNCH_YAML", launch_path)
+    monkeypatch.setattr(config_store, "_EEG_YAML", eeg_path)
+    monkeypatch.setattr(config_store, "_EEG2_YAML", eeg2_path)
+
+    with pytest.raises(ValidationError):
+        config_store.init_store()

@@ -6,7 +6,7 @@ from typing import Any
 
 import yaml
 
-from .models import AppConfig, ConfigEnvelope, EegConfig2, MotionConfig
+from .models import AppConfig, ConfigEnvelope, EegConfig, EegConfig2, MotionConfig
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -41,15 +41,21 @@ def _load_defaults() -> AppConfig:
 
     eeg_root = _safe_load(_EEG_YAML)
     ros_params = eeg_root.get("/**", {}).get("ros__parameters", {})
-    cfg.eeg.input = str(ros_params.get("input", cfg.eeg.input))
-    cfg.eeg.policy = str(ros_params.get("policy", cfg.eeg.policy))
-    cfg.eeg.calibrate = bool(ros_params.get("calibrate", cfg.eeg.calibrate))
-    cfg.eeg.calib_offset = float(ros_params.get("calib_offset", cfg.eeg.calib_offset))
-    cfg.eeg.calib_scale = float(ros_params.get("calib_scale", cfg.eeg.calib_scale))
-    cfg.eeg.lsl_stream_type = str(ros_params.get("lsl_stream_type", cfg.eeg.lsl_stream_type))
-    cfg.eeg.lsl_timeout = float(ros_params.get("lsl_timeout", cfg.eeg.lsl_timeout))
-    cfg.eeg.lsl_source_id = str(ros_params.get("lsl_source_id", cfg.eeg.lsl_source_id))
-    cfg.eeg.role = str(ros_params.get("role", cfg.eeg.role))
+    # Build device 1 through model_validate so role/policy are checked against
+    # their Literal types (fail-fast on invalid YAML), matching device 2.
+    cfg.eeg = EegConfig.model_validate(
+        {
+            "input": str(ros_params.get("input", cfg.eeg.input)),
+            "policy": str(ros_params.get("policy", cfg.eeg.policy)),
+            "calibrate": bool(ros_params.get("calibrate", cfg.eeg.calibrate)),
+            "calib_offset": float(ros_params.get("calib_offset", cfg.eeg.calib_offset)),
+            "calib_scale": float(ros_params.get("calib_scale", cfg.eeg.calib_scale)),
+            "lsl_stream_type": str(ros_params.get("lsl_stream_type", cfg.eeg.lsl_stream_type)),
+            "lsl_timeout": float(ros_params.get("lsl_timeout", cfg.eeg.lsl_timeout)),
+            "lsl_source_id": str(ros_params.get("lsl_source_id", cfg.eeg.lsl_source_id)),
+            "role": str(ros_params.get("role", cfg.eeg.role)),
+        }
+    )
 
     # Device 2 is gated by the launch-level run_eeg2 switch; its own param
     # file is the source of truth. A residual file is NOT honored when off.
