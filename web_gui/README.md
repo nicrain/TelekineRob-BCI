@@ -68,6 +68,6 @@ frontend ←WebSocket→ backend ←rclpy→ ROS2 topics
 
 ## Process Lifecycle
 
-- **Startup**: cleans residual ROS/Gazebo processes, inits RosBridge in background
+- **Startup**: loads config from YAML, inits RosBridge in background (no residual process cleanup)
 - **Stop button**: SIGTERM child processes + `pkill` all known ROS/Gazebo patterns
 - **Shutdown (Ctrl+C)**: same cleanup as Stop

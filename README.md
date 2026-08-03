@@ -8,6 +8,14 @@
 - 通过 `ros-aseba` 与 Aseba 的集成
 - Gazebo 仿真资源（URDF、mesh、传感器）
 
+## 功能特性
+
+- 双设备 EEG 输入：g.tec BCI Core-4 Headband / Unicorn Hybrid Black（经 LSL）
+- 三种控制策略：TBR（θ/β）、EI（β/(α+θ)）、Alpha
+- **眨眼切换转向**（metric-only 检测）+ 原地转向（`role=steering`）
+- 30 秒自动校准（p5/p50）→ 写入 YAML
+- Web GUI：实时波形、校准、遥控（FastAPI + React）
+
 ## 硬件
 
 | 设备 | API | 通道 |

@@ -11,6 +11,7 @@
 | 5 | One-click stop-before-start | 2026-07-05 |
 | 6 | Device persistence in YAML | 2026-07-14 |
 | 7 | Default input=lsl everywhere | 2026-07-14 |
+| 8 | WSL2 IPv6 fix: disable eth0 IPv6 — liblsl picks unreachable fe80:: LSL address, hanging the eeg node | 2026-08-03 |
 
 ---
 
@@ -55,5 +56,5 @@
 | O1 | Calib UX: rename p5/p95 + manual edit input | ✅ 2026-07-20 |
 | O2 | Device connect integration + Log panel | TODO |
 | O3 | 17-channel support: send all Unicorn Hybrid Black channels (8 EEG + 3 accel + 3 gyro + battery + counter + validation) via LSL for motion/artifact detection | TODO |
-| O4 | Docs: keep all .md files in sync with code | ONGOING |
+| O4 | Docs: keep all .md files in sync with code | ✅ 2026-08-03 |
 | O5 | App.jsx 1157→~300 lines: extract components/hooks incrementally alongside UI feature work | TODO |
