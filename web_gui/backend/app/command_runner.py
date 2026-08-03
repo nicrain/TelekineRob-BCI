@@ -19,6 +19,18 @@ def _bool_str(v: bool) -> str:
     return "true" if v else "false"
 
 
+def _real_commands_enabled() -> bool:
+    """Whether this backend may act on real ROS/Gazebo processes.
+
+    Single source of truth for the ``WEB_GUI_ALLOW_REAL_COMMANDS`` gate.
+    Defaults to **false** (mock/dry-run) — real commands must be explicitly
+    enabled by the operator. The same gate protects start (launch), stop
+    (blanket pkill) and startup/shutdown cleanup so mock mode never touches
+    unrelated real processes.
+    """
+    return os.getenv("WEB_GUI_ALLOW_REAL_COMMANDS", "false").lower() in {"1", "true", "yes"}
+
+
 def _build_launch_command(cfg: AppConfig) -> list[str]:
     launch = cfg.launch
     run_eeg = bool(launch.run_eeg)
@@ -111,7 +123,7 @@ def _stop_runtime_processes() -> None:
 def start_system(cfg: AppConfig, dry_run: bool = True) -> CommandResult:
     cmd = _build_launch_command(cfg)
     cmd_str = " ".join(cmd)  # For display only
-    allow_real = os.getenv("WEB_GUI_ALLOW_REAL_COMMANDS", "true").lower() in {"1", "true", "yes"}
+    allow_real = _real_commands_enabled()
 
     if dry_run or not allow_real:
         set_runtime_state(True, None)
@@ -178,7 +190,13 @@ def _kill_ros_processes() -> None:
 
 
 def cleanup_residual_processes() -> str:
-    """Kill any leftover ROS/Gazebo processes. Safe to call at startup."""
+    """Kill any leftover ROS/Gazebo processes. Safe to call at startup.
+
+    Gated on ``WEB_GUI_ALLOW_REAL_COMMANDS``: in mock mode the backend must
+    never blanket-kill real ROS/Gazebo processes on the host.
+    """
+    if not _real_commands_enabled():
+        return "Real-command mode disabled; skipped residual process cleanup"
     import shutil
     if shutil.which("pkill") is None:
         return "pkill not available"
@@ -213,11 +231,16 @@ def stop_system(dry_run: bool = True) -> CommandResult:
         )
     _send_stop_to_thymio()
     _stop_runtime_processes()
-    _kill_ros_processes()
+    if _real_commands_enabled():
+        _kill_ros_processes()
     set_runtime_state(False, None)
     return CommandResult(
         accepted=True,
         dry_run=False,
         command=command,
-        detail="ROS/Gazebo processes terminated.",
+        detail=(
+            "ROS/Gazebo processes terminated."
+            if _real_commands_enabled()
+            else "Backend processes stopped (mock mode; no real processes touched)."
+        ),
     )

@@ -8,7 +8,7 @@ from typing import Any
 
 logging.basicConfig(level=logging.INFO, format="%(name)s | %(levelname)s | %(message)s")
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from .command_runner import cleanup_residual_processes, start_system, stop_system
@@ -19,11 +19,28 @@ from .signal_subscriber import RosBridge
 
 app = FastAPI(title="Thymio Web GUI Backend", version="0.1.0")
 
-# Origin whitelist for CORS + WebSocket.  Set to a specific origin (e.g.
-# "https://eeg.zhaoyu.wang") to lock down access; leave unset or set to "*"
-# to allow any origin (convenient for research / shared use).
-_frontend_origin = os.getenv("WEB_GUI_FRONTEND_ORIGIN", "*").strip()
+# Origin whitelist for CORS + WebSocket. Defaults to the local Vite dev
+# server (reachable via both localhost and 127.0.0.1 — the frontend proxies
+# /api and /ws to the backend, so the browser's Origin stays on :5173).
+# Set WEB_GUI_FRONTEND_ORIGIN to a specific remote origin (e.g.
+# "https://eeg.zhaoyu.wang") to lock it down further. An explicit "*" still
+# disables the origin check for research convenience, but the Web GUI now
+# defaults to a locked-down posture.
+_DEFAULT_FRONTEND_ORIGINS = (
+    "http://127.0.0.1:5173",
+    "https://127.0.0.1:5173",
+    "http://localhost:5173",
+    "https://localhost:5173",
+)
+
+_frontend_origin = os.getenv("WEB_GUI_FRONTEND_ORIGIN", "http://127.0.0.1:5173").strip()
 _wildcard_origin = _frontend_origin in ("", "*")
+
+# Control token for robot-driving endpoints. Empty → token auth disabled.
+# Set WEB_GUI_CONTROL_TOKEN and pass `Authorization: Bearer <token>` (REST)
+# or `?token=<token>` (WebSocket) to use it. CORS does not protect
+# WebSockets, so a token is the defence-in-depth for a non-loopback bind.
+_control_token = os.getenv("WEB_GUI_CONTROL_TOKEN", "").strip()
 
 
 def _validate_origin(origin: str) -> bool:
@@ -34,8 +51,19 @@ def _validate_origin(origin: str) -> bool:
         return False
     if not (origin.startswith("http://") or origin.startswith("https://")):
         return False
-    allowed = [_frontend_origin, "http://127.0.0.1:5173", "https://127.0.0.1:5173"]
+    allowed = set(_DEFAULT_FRONTEND_ORIGINS)
+    allowed.add(_frontend_origin)
     return origin in allowed
+
+
+def _rest_authorized(authorization: str) -> bool:
+    """Token gate for REST control endpoints (Authorization: Bearer <token>)."""
+    return (not _control_token) or authorization == f"Bearer {_control_token}"
+
+
+def _ws_authorized(token: str) -> bool:
+    """Token gate for control WebSockets (browsers cannot set WS headers)."""
+    return (not _control_token) or token == _control_token
 
 
 async def _reject_invalid_origin(websocket: WebSocket) -> bool:
@@ -49,11 +77,9 @@ async def _reject_invalid_origin(websocket: WebSocket) -> bool:
     return True
 
 
-_cors_origins = ["*"] if _wildcard_origin else [
-    _frontend_origin,
-    "http://127.0.0.1:5173",
-    "https://127.0.0.1:5173",
-]
+_cors_origins = ["*"] if _wildcard_origin else sorted(
+    {_frontend_origin, *_DEFAULT_FRONTEND_ORIGINS}
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -116,14 +142,17 @@ def get_status() -> dict[str, Any]:
 
 
 @app.post("/api/system/start")
-def api_start(req: CommandRequest) -> dict[str, Any]:
+def api_start(request: Request, req: CommandRequest) -> dict[str, Any]:
+    if not _rest_authorized(request.headers.get("authorization", "")):
+        raise HTTPException(status_code=401, detail="missing or invalid control token")
     cfg = get_config_envelope().config
     return start_system(cfg, dry_run=req.dry_run).model_dump()
 
 
-
 @app.post("/api/system/stop")
-def api_stop(req: CommandRequest) -> dict[str, Any]:
+def api_stop(request: Request, req: CommandRequest) -> dict[str, Any]:
+    if not _rest_authorized(request.headers.get("authorization", "")):
+        raise HTTPException(status_code=401, detail="missing or invalid control token")
     return stop_system(dry_run=req.dry_run).model_dump()
 
 
@@ -198,6 +227,9 @@ async def ws_teleop(websocket: WebSocket) -> None:
     """WebSocket teleop endpoint: receives direction commands and publishes Twist."""
     if await _reject_invalid_origin(websocket):
         return
+    if not _ws_authorized(websocket.query_params.get("token", "")):
+        await websocket.close(code=1008, reason="unauthorized")
+        return
     await websocket.accept()
 
     cfg = get_config_envelope().config
@@ -231,4 +263,9 @@ async def ws_teleop(websocket: WebSocket) -> None:
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8010, reload=False)
+    # Default to loopback only: the Web GUI drives a physical robot, so it
+    # must not be reachable from the LAN unless the operator explicitly
+    # opts in (WEB_GUI_HOST=0.0.0.0 — and then a control token is advised).
+    host = os.getenv("WEB_GUI_HOST", "127.0.0.1")
+    port = int(os.getenv("WEB_GUI_PORT", "8010"))
+    uvicorn.run("app.main:app", host=host, port=port, reload=False)

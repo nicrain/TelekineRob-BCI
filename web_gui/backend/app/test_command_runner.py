@@ -1,4 +1,5 @@
-from app.command_runner import _build_launch_command
+import app.command_runner as command_runner
+from app.command_runner import _build_launch_command, cleanup_residual_processes, start_system, stop_system
 from app.models import AppConfig
 
 
@@ -26,3 +27,63 @@ def test_launch_command_without_eeg_omits_role_and_device():
     assert "role:=" not in command
     assert "policy:=" not in command
     assert "device:=" not in command
+
+
+# ---------------------------------------------------------------------------
+# allow_real gate (default OFF) — start / stop / cleanup must be symmetric
+# ---------------------------------------------------------------------------
+
+
+def test_real_commands_default_false(monkeypatch):
+    monkeypatch.delenv("WEB_GUI_ALLOW_REAL_COMMANDS", raising=False)
+    assert command_runner._real_commands_enabled() is False
+
+
+def test_real_commands_enabled_when_env_set(monkeypatch):
+    monkeypatch.setenv("WEB_GUI_ALLOW_REAL_COMMANDS", "true")
+    assert command_runner._real_commands_enabled() is True
+
+
+def test_start_system_dry_run_when_not_allowed(monkeypatch):
+    monkeypatch.delenv("WEB_GUI_ALLOW_REAL_COMMANDS", raising=False)
+    result = start_system(AppConfig(), dry_run=False)
+    assert result.dry_run is True
+    assert "Dry-run" in result.detail
+
+
+def test_stop_system_mock_mode_does_not_pkill(monkeypatch):
+    monkeypatch.delenv("WEB_GUI_ALLOW_REAL_COMMANDS", raising=False)
+    killed: list[bool] = []
+    monkeypatch.setattr(command_runner, "_kill_ros_processes", lambda: killed.append(True))
+    monkeypatch.setattr(command_runner, "_send_stop_to_thymio", lambda: None)
+    monkeypatch.setattr(command_runner, "_stop_runtime_processes", lambda: None)
+    monkeypatch.setattr(command_runner, "set_runtime_state", lambda *_: None)
+
+    result = stop_system(dry_run=False)
+
+    assert killed == []
+    assert "mock mode" in result.detail.lower()
+
+
+def test_stop_system_real_mode_pkills(monkeypatch):
+    monkeypatch.setenv("WEB_GUI_ALLOW_REAL_COMMANDS", "true")
+    killed: list[bool] = []
+    monkeypatch.setattr(command_runner, "_kill_ros_processes", lambda: killed.append(True))
+    monkeypatch.setattr(command_runner, "_send_stop_to_thymio", lambda: None)
+    monkeypatch.setattr(command_runner, "_stop_runtime_processes", lambda: None)
+    monkeypatch.setattr(command_runner, "set_runtime_state", lambda *_: None)
+
+    stop_system(dry_run=False)
+
+    assert killed == [True]
+
+
+def test_cleanup_residual_skips_in_mock_mode(monkeypatch):
+    monkeypatch.delenv("WEB_GUI_ALLOW_REAL_COMMANDS", raising=False)
+    killed: list[bool] = []
+    monkeypatch.setattr(command_runner, "_kill_ros_processes", lambda: killed.append(True))
+
+    detail = cleanup_residual_processes()
+
+    assert "skipped" in detail
+    assert killed == []
