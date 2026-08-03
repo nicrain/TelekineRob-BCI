@@ -58,6 +58,7 @@ class EegControlNode(Node):
         self.declare_parameter("calibrate", False)
         self.declare_parameter("calib_offset", 0.0)
         self.declare_parameter("calib_scale", 1.0)
+        self.declare_parameter("calib_config_file", "eeg_control_node.params.yaml")
         self.declare_parameter("lsl_stream_type", "EEG")
         self.declare_parameter("lsl_timeout", 8.0)
         self.declare_parameter("lsl_source_id", "")
@@ -68,6 +69,9 @@ class EegControlNode(Node):
         self.declare_parameter("analysis_topic", "/eeg_analysis")
         self.declare_parameter("publish_hz", 20.0)
         self.declare_parameter("watchdog_sec", 0.5)
+        # Dual-device: stop publishing partial twists on data loss so the
+        # fuser sees staleness instead of stale-replayed commands.
+        self.declare_parameter("stop_on_data_loss", False)
         self.declare_parameter("verbose", False)
         self.declare_parameter("analysis_verbose", False)
         self.declare_parameter("record_csv", False)
@@ -103,6 +107,7 @@ class EegControlNode(Node):
         calib_offset = float(self.get_parameter("calib_offset").value)
         calib_scale = float(self.get_parameter("calib_scale").value)
         self._calibrate = bool(self.get_parameter("calibrate").value)
+        self._calib_config_file = str(self.get_parameter("calib_config_file").value)
         self._calib_samples: list[float] = []
         self._calib_deadline: float = 0.0
 
@@ -110,6 +115,12 @@ class EegControlNode(Node):
 
         self.pub = self.create_publisher(Twist, self.get_parameter("cmd_topic").value, 10)
         self.analysis_pub = self.create_publisher(String, self.get_parameter("analysis_topic").value, 10)
+
+        # Parse robustly: launch may hand over a "true"/"false" string (from
+        # a PythonExpression) or a native bool.
+        self.stop_on_data_loss = str(
+            self.get_parameter("stop_on_data_loss").value
+        ).lower() in {"1", "true", "yes", "on"}
 
         # Circle LED publisher for steering direction indication
         self._led_circle = None
@@ -269,7 +280,7 @@ class EegControlNode(Node):
             install_dir = Path(__file__).parents[2] / "share" / "thymio_control" / "config"
             for cfg_root in [install_dir, source_root / "thymio_control" / "config"]:
                 try:
-                    cfg_file = cfg_root / "eeg_control_node.params.yaml"
+                    cfg_file = cfg_root / self._calib_config_file
                     with cfg_file.open("r", encoding="utf-8") as fhand:
                         doc = yaml.safe_load(fhand) or {}
                     params = doc.setdefault("/**", {}).setdefault("ros__parameters", {})
@@ -372,6 +383,7 @@ class EegControlNode(Node):
             analysis = {
                 "ts": frame.ts,
                 "source": frame.source,
+                "role": "steering" if self._steer_role else "speed",
                 "metrics": frame.metrics,
                 "features": show_features,
                 "intents": self.last_intents,
@@ -417,11 +429,14 @@ class EegControlNode(Node):
         if time.time() - self.last_msg_ts > self.watchdog_sec:
             if self._adapter_connected:
                 self._adapter_connected = False
-                self.pub.publish(Twist())
+                self.pub.publish(Twist())  # zero once on the loss transition
+                if self.stop_on_data_loss:
+                    self.get_logger().warning("data loss — partial twist halted (dual mode)")
+            elif not self.stop_on_data_loss:
+                # Single-device legacy behavior: keep replaying last intents.
+                # In dual mode we stay silent so the fuser sees staleness.
+                self.pub.publish(self._intents_to_twist(self.last_intents))
             return
-
-        if not self._calibrate:
-            self.pub.publish(self._intents_to_twist(self.last_intents))
     def _intents_to_twist(self, intents) -> Twist:
         speed_intent = clip01(float(intents.get("speed_intent", 0.0)))
         steer_intent = clip01(float(intents.get("steer_intent", 0.5)))
@@ -492,8 +507,12 @@ class EegControlNode(Node):
         Right turn → LEDs 1, 2, 3 (right arc)
         Left turn  → LEDs 5, 6, 7 (left arc)
         No turn    → all off
+
+        Only the steering node drives the LEDs — a speed node (including
+        single-device mode) publishes nothing, otherwise two nodes contend
+        on /led and overwrite each other.
         """
-        if self._led_circle is None:
+        if self._led_circle is None or not self._steer_role:
             return
         CIRCLE = 0  # thymio_msgs Led.CIRCLE
         if self.steer_direction > 0:
