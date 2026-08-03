@@ -102,10 +102,10 @@ flowchart LR
         FUS[cmd_vel_fuser]
         ROB[Thymio<br/>/cmd_vel 或 /model/thymio/cmd_vel]
         N1 -->|"partial Twist<br/>/eeg_cmd_vel/speed"| FUS
-        N2 -->|"partial Twist<br/>/eeg_cmd_vel/steer"| FUS
+        N2 -->|"partial Twist<br/>/eeg_cmd_vel/steering"| FUS
         FUS -->|"linear.x←speed, angular.z←steer"| ROB
         N1 -->|"analysis<br/>/eeg_analysis/speed"| WS[RosBridge → WebSocket]
-        N2 -->|"analysis<br/>/eeg_analysis/steer"| WS
+        N2 -->|"analysis<br/>/eeg_analysis/steering"| WS
     end
     HB -.LSL.-> N1
     HD -.LSL.-> N2
@@ -126,12 +126,13 @@ flowchart LR
 | 决策点 | 选择 | 理由 |
 |---|---|---|
 | D1 拓扑 | 双节点 + 融合节点 | 复用已验证代码，单设备零改动，故障隔离 |
-| D2 主题命名 | 按 **role** 命名（`/eeg_analysis/speed`、`/eeg_cmd_vel/steer`…） | 融合节点订阅位置固定；与前端按 role 分列对齐 |
+| D2 主题命名 | 按 **role** 命名（`/eeg_analysis/speed`、`/eeg_cmd_vel/steering`…） | 融合节点订阅位置固定；与前端按 role 分列对齐 |
 | D3 融合语义 | 任一输入过期 → 零速 | 双源控制中沿用旧转向有失控风险（fail-safe） |
 | D4 设备断流 | 双设备模式节点**停止发布** partial Twist（stop_on_data_loss） | 融合层靠"静默"感知断流，而不是被陈旧回放欺骗 |
 | D5 配置源 | 每设备独立参数文件；`launch_args.yaml` 只留 `run_eeg2` 开关 | 校准回写互不干扰；配置单一来源 |
 | D6 校准交互 | 单设备维持现状（校准后继续运行）；双设备每列独立校准按钮，校准结束**自动停止**，不自动 start | 避免"半校准"状态开车；复用现有交互心智，实现成本低 |
 | D7 分析负载 | WS 升级为 `devices: {role: frame}` | 前端按 role 取数，语义清晰 |
+| D8 主题后缀 | 双设备主题后缀用 **role 字面量**（`/eeg_cmd_vel/steering`，非 `steer`） | role 字面量统一为 `speed`/`steering`，避免 `steering→steer` 隐式映射表；与 WS 负载 `devices: {speed, steering}` 键一致（2026-08-03 CTO 裁定，见 REVIEW_FINDINGS O1） |
 
 ---
 
@@ -143,8 +144,8 @@ flowchart LR
 |---|---|---|
 | 单设备 | `/eeg_analysis` | eeg 节点 → RosBridge |
 | 单设备 | `/cmd_vel`（或仿真 `/model/thymio/cmd_vel`） | eeg 节点 → Thymio |
-| 双设备 | `/eeg_analysis/speed`、`/eeg_analysis/steer` | 各 eeg 节点 → RosBridge |
-| 双设备 | `/eeg_cmd_vel/speed`、`/eeg_cmd_vel/steer` | 各 eeg 节点 → fuser（partial Twist） |
+| 双设备 | `/eeg_analysis/speed`、`/eeg_analysis/steering` | 各 eeg 节点 → RosBridge |
+| 双设备 | `/eeg_cmd_vel/speed`、`/eeg_cmd_vel/steering` | 各 eeg 节点 → fuser（partial Twist） |
 | 双设备 | `/cmd_vel`（或仿真） | fuser → Thymio |
 
 节点名：
@@ -157,7 +158,7 @@ flowchart LR
 
 - **单设备模式不启动 fuser**，节点直连最终主题，行为与今天完全一致。
 - **双设备模式的 role 与设备绑定完全由配置驱动**（`lsl_source_id` + `role`），"headband→steer、hybrid→speed"只是 P3.2 的推荐默认排布，不硬编码。
-- RosBridge **始终订阅 3 个分析主题**（`/eeg_analysis`、`/eeg_analysis/speed`、`/eeg_analysis/steer`）。单设备时后两个静默，双设备时第一个静默；无需在配置切换时重建订阅。
+- RosBridge **始终订阅 3 个分析主题**（`/eeg_analysis`、`/eeg_analysis/speed`、`/eeg_analysis/steering`）。单设备时后两个静默，双设备时第一个静默；无需在配置切换时重建订阅。
 
 ### 5.2 数据契约
 
@@ -246,8 +247,8 @@ class WsFrame(BaseModel):           # 升级：devices 按 role 索引
     calib_offset: 0.0
     calib_scale: 1.0
     role: steering
-    cmd_topic: /eeg_cmd_vel/steer
-    analysis_topic: /eeg_analysis/steer
+    cmd_topic: /eeg_cmd_vel/steering
+    analysis_topic: /eeg_analysis/steering
     publish_hz: 20.0
     watchdog_sec: 0.5
     verbose: false
@@ -378,7 +379,7 @@ def _update_leds(self):
 | 参数 | 默认 | 说明 |
 |---|---|---|
 | `speed_topic` | `/eeg_cmd_vel/speed` | speed 节点 partial Twist |
-| `steer_topic` | `/eeg_cmd_vel/steer` | steering 节点 partial Twist |
+| `steer_topic` | `/eeg_cmd_vel/steering` | steering 节点 partial Twist |
 | `cmd_topic` | `/cmd_vel` | 最终输出（仿真时 `/model/thymio/cmd_vel`） |
 | `publish_hz` | 20.0 | 融合发布频率 |
 | `watchdog_sec` | 0.5 | 输入过期阈值 |
@@ -499,7 +500,7 @@ cmd_vel_fuser = Node(
     name="cmd_vel_fuser",
     parameters=[{
         "speed_topic": "/eeg_cmd_vel/speed",
-        "steer_topic": "/eeg_cmd_vel/steer",
+        "steer_topic": "/eeg_cmd_vel/steering",
         "cmd_topic": cmd_topic,            # 复用现有仿真/真实主题表达式
         "publish_hz": 20.0,
         "watchdog_sec": 0.5,
@@ -608,7 +609,7 @@ _KILL_PATTERNS = [
 
 #### 5.4.4 `signal_subscriber.py`（RosBridge）
 
-- 构造时订阅 3 个主题：`["/eeg_analysis", "/eeg_analysis/speed", "/eeg_analysis/steer"]`。
+- 构造时订阅 3 个主题：`["/eeg_analysis", "/eeg_analysis/speed", "/eeg_analysis/steering"]`。
 - `_latest` / `_last_ts` 改为按主题索引的字典；回调带主题参数。
 - 新增 `get_latest_frames() -> dict[str, dict]`：遍历主题，过滤过期（`stale_threshold`，与 watchdog 一致 0.5s），用 `role` 字段（优先）→ 主题后缀 → 配置兜底 解析 role，返回 `{role: frame}`。
 - 保留 `get_latest_frame()`（单设备兼容入口，返回 `/eeg_analysis` 的帧）。
@@ -791,7 +792,7 @@ pytest web_gui/backend/app/test_*.py -v
    - 只进 `lsl_test/`（离线验证目录），不进生产路径；参考 `lsl_test/edf_to_lsl.py` 的 StreamInfo 写法。
    - 或直接跑 Windows 侧两个真实 bridge。
 2. `ros2 launch thymio_control experiment_core.launch.py use_sim:=true run_eeg:=true run_eeg2:=true eeg2_role:=steering`
-3. `ros2 topic echo /eeg_cmd_vel/speed`、`/eeg_cmd_vel/steer`、`/model/thymio/cmd_vel`（或 `/cmd_vel`）确认融合结果。
+3. `ros2 topic echo /eeg_cmd_vel/speed`、`/eeg_cmd_vel/steering`、`/model/thymio/cmd_vel`（或 `/cmd_vel`）确认融合结果。
 
 ### 7.3 手动验收清单
 
