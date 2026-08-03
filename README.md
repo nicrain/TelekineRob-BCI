@@ -23,6 +23,17 @@
 - **Thymio 机器人**（真机运行时需要）
 - **Aseba Runtime**（`ros-aseba` 与 Thymio 通信需要）
 
+### WSL2 网络配置（必需）
+
+g.tec 的 LSL 流在 WSL2 上发现时，liblsl 可能选中 **不可达的 IPv6 link-local 地址**（`fe80::...`）来建立数据连接，导致 eeg 节点连接挂起、无波形、校准卡在 preparing。需要在 WSL2 内禁用 eth0 的 IPv6，强制 LSL 走 IPv4：
+
+```bash
+echo "net.ipv6.conf.eth0.disable_ipv6=1" | sudo tee -a /etc/sysctl.conf
+sudo sysctl --system
+```
+
+WSL2 需启用 systemd（`/etc/wsl.conf` 中 `[boot] systemd=true`），systemd 会在每次 WSL 启动时自动应用该配置。若未启用 systemd，改用 `/etc/wsl.conf` 的 `[boot] command` 每次启动执行上述 sysctl。
+
 ## 架构
 
 ```
