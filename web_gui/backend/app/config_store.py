@@ -88,7 +88,9 @@ def _load_eeg2_config(launch_cfg: dict[str, Any]) -> EegConfig2:
                 lsl_timeout=float(legacy.get("lsl_timeout", 8.0)),
                 lsl_source_id=str(legacy.get("lsl_source_id", "")),
             )
-            _write_eeg2_params(eeg2)
+            # Motion not available during load — seed defaults; the next
+            # persist() rewrites with the real cfg.motion.
+            _write_eeg2_params(eeg2, MotionConfig())
             return eeg2
     return EegConfig2(
         input=str(ros_params.get("input", "lsl")),
@@ -103,15 +105,15 @@ def _load_eeg2_config(launch_cfg: dict[str, Any]) -> EegConfig2:
     )
 
 
-def _write_eeg2_params(eeg2: EegConfig2) -> None:
+def _write_eeg2_params(eeg2: EegConfig2, motion: MotionConfig) -> None:
     """Write the device-2 ROS params file (full block, deterministic).
 
     The file always exists — when device 2 is disabled it holds safe defaults.
-    ``cmd_topic`` / ``analysis_topic`` are derived from the role; launch
-    overrides them anyway (this is only a fallback default).
+    Motion params come from *motion* so UI changes (turn_angular_speed, etc.)
+    reach device 2, not just device 1. ``cmd_topic`` / ``analysis_topic`` are
+    derived from the role; launch overrides them anyway (fallback default).
     """
     _EEG2_YAML.parent.mkdir(parents=True, exist_ok=True)
-    motion = MotionConfig()
     params = {
         "input": str(eeg2.input),
         "policy": str(eeg2.policy),
@@ -191,7 +193,10 @@ def _persist_config(cfg: AppConfig) -> None:
         yaml.safe_dump(eeg_payload, f, sort_keys=False, allow_unicode=False)
     # Device-2 file is always (re)written: safe defaults when disabled,
     # never deleted (avoid destructive operations).
-    _write_eeg2_params(cfg.eeg2 if cfg.eeg2 is not None else EegConfig2())
+    _write_eeg2_params(
+        cfg.eeg2 if cfg.eeg2 is not None else EegConfig2(),
+        cfg.motion,
+    )
 
 
 def init_store() -> None:

@@ -201,3 +201,30 @@ def test_legacy_eeg2_block_migrates_to_file(monkeypatch, tmp_path: Path):
     params = yaml.safe_load(eeg2_path.read_text(encoding="utf-8"))["/**"]["ros__parameters"]
     assert params["role"] == "steering"
     assert params["lsl_source_id"] == "gtec_bci_core4"
+
+
+def test_motion_changes_reach_eeg2_file(monkeypatch, tmp_path: Path):
+    """O2: device-2 params file must mirror cfg.motion, not frozen defaults."""
+    launch_path = tmp_path / "launch_args.yaml"
+    eeg_path = tmp_path / "eeg_control_node.params.yaml"
+    eeg2_path = tmp_path / "eeg_control_node.eeg2.params.yaml"
+
+    _write_yaml(launch_path, {"use_sim": True, "run_eeg": False})
+    _write_yaml(eeg_path, {"/**": {"ros__parameters": {"role": "speed"}}})
+
+    monkeypatch.setattr(config_store, "_LAUNCH_YAML", launch_path)
+    monkeypatch.setattr(config_store, "_EEG_YAML", eeg_path)
+    monkeypatch.setattr(config_store, "_EEG2_YAML", eeg2_path)
+
+    config_store.init_store()
+    config_store.patch_config(
+        {
+            "eeg": {"role": "speed"},
+            "eeg2": {"role": "steering"},
+            "motion": {"turn_angular_speed": 2.4, "max_forward_speed": 0.35},
+        }
+    )
+
+    params = yaml.safe_load(eeg2_path.read_text(encoding="utf-8"))["/**"]["ros__parameters"]
+    assert params["turn_angular_speed"] == 2.4
+    assert params["max_forward_speed"] == 0.35
