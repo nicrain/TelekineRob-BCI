@@ -28,6 +28,10 @@ class TbrPolicy(Policy):
         self._tbr_smooth: float = 0.0
         self._primed: bool = False
 
+    def set_calibration(self, offset: float, scale: float) -> None:
+        self.tbr_offset = offset
+        self.tbr_scale = scale
+
     def compute_intents(self, features: Dict[str, float]) -> Dict[str, float]:
         ratio = features.get("theta_beta", 1.0)
 

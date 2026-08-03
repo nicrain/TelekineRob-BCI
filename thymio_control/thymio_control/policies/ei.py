@@ -29,6 +29,10 @@ class EiPolicy(Policy):
         self._bat_smooth: float = 0.0
         self._primed: bool = False
 
+    def set_calibration(self, offset: float, scale: float) -> None:
+        self.focus_offset = offset
+        self.focus_scale = scale
+
     def compute_intents(self, features: Dict[str, float]) -> Dict[str, float]:
         focus = features.get("beta_alpha_theta", 0.0)
 

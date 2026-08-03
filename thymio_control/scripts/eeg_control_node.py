@@ -189,9 +189,9 @@ class EegControlNode(Node):
 
         # Metric-based blink confirmation: raw-signal blink candidates must
         # also show a corresponding spike/drop in the policy metric.
-        # Uses calibration p5/p95 as the normal-range reference.
+        # Uses calibration p5 / p50 (median) as the normal-range reference.
         # EI is inverted (blink → denominator up → EI below p5);
-        # TBR/Alpha spike upward (blink → theta/alpha above p95).
+        # TBR/Alpha spike upward (blink → theta/alpha above p50_ref).
         self._metric_key = self._CALIB_METRIC.get(policy_name, "")
         self._metric_inverse = (policy_name == "ei")
         self._blink_confirm_frames = int(self.get_parameter("blink_confirm_frames").value)
@@ -211,8 +211,11 @@ class EegControlNode(Node):
     def _confirm_blink_metric(self, features: dict) -> bool:
         """Check that the policy metric exceeds its calibrated normal range.
 
+        Calibration stores offset=p5 and scale=p50−p5, so ``offset + scale``
+        is the p50 (median) reference — not p95. The naming reflects that.
+
         TBR / Alpha: blink EOG inflates theta or alpha → metric spikes
-        above p95.  Check: ``metric > p95 × 2``.
+        above the median reference.  Check: ``metric > p50_ref × 2``.
 
         EI: blink inflates alpha + theta (denominator) → EI drops below
         p5.  Check: ``metric < p5 / 2``.
@@ -224,15 +227,15 @@ class EegControlNode(Node):
 
         offset = float(self.get_parameter("calib_offset").value)
         scale  = float(self.get_parameter("calib_scale").value)
-        p5  = offset
-        p95 = offset + scale
+        p5      = offset
+        p50_ref = offset + scale
 
         if self._metric_inverse:
             confirmed = val < p5 / 2.0
             ref = f"p5={p5:.3f} p5/2={p5 / 2:.3f}"
         else:
-            confirmed = val > p95 * 2.0
-            ref = f"p95={p95:.3f} p95*2={p95 * 2:.3f}"
+            confirmed = val > p50_ref * 2.0
+            ref = f"p50_ref={p50_ref:.3f} p50_ref*2={p50_ref * 2:.3f}"
 
         if confirmed:
             self.get_logger().info(
@@ -295,8 +298,10 @@ class EegControlNode(Node):
                         f"CALIB: failed to write {cfg_root}: {exc}"
                     )
 
-            policy_name = str(self.get_parameter("policy").value)
-            self.policy = POLICIES[policy_name](offset=offset, scale=scale)
+            # Update offset/scale in place — rebuilding the policy instance
+            # would reset its EMA smoothing state and cause an intent jump
+            # immediately after calibration.
+            self.policy.set_calibration(offset=offset, scale=scale)
 
         except Exception:
             self.get_logger().error(f"CALIB failed:\n{traceback.format_exc()}")
@@ -342,7 +347,14 @@ class EegControlNode(Node):
             # Metric-based blink detection — requires metric to stay outside
             # the calibrated normal range for N consecutive frames.
             # Single-frame spikes (noise/artifact) are rejected by the counter.
-            if self._steer_role and has_band_features and self._blink_holdoff == 0:
+            # Skipped while calibrating: the pre-calibration thresholds are
+            # meaningless and would spuriously toggle steer direction.
+            if (
+                self._steer_role
+                and has_band_features
+                and not self._calibrate
+                and self._blink_holdoff == 0
+            ):
                 if self._confirm_blink_metric(features):
                     self._metric_blink_counter += 1
                     if self._metric_blink_counter >= self._blink_confirm_frames:

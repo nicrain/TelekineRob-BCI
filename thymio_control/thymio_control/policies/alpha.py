@@ -29,6 +29,10 @@ class AlphaPolicy(Policy):
         self._alpha_smooth: float = 0.0
         self._primed: bool = False
 
+    def set_calibration(self, offset: float, scale: float) -> None:
+        self.alpha_offset = offset
+        self.alpha_scale = scale
+
     def compute_intents(self, features: Dict[str, float]) -> Dict[str, float]:
         alpha = features.get("alpha", 0.0)
 

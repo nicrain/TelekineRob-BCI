@@ -5,9 +5,13 @@ All concrete policies must subclass ``Policy`` and implement
 
 Design constraints
 ------------------
-- Policies are **stateless** by default (no instance state).
+- Policies hold per-instance **EMA smoothing state** (``_<metric>_smooth``)
+  plus calibration ``offset``/``scale``; they are not stateless.
 - ``compute_intents`` must return a dict containing at least
   ``"speed_intent"`` and ``"steer_intent"``, each in the range [0, 1].
+- Calibration must call :meth:`set_calibration` to update offset/scale
+  **in place** — rebuilding the instance would reset the EMA state and
+  cause an intent jump right after calibration.
 """
 from __future__ import annotations
 
@@ -36,4 +40,8 @@ class Policy:
         dict
             Must include ``"speed_intent"`` and ``"steer_intent"`` in [0, 1].
         """
+        raise NotImplementedError
+
+    def set_calibration(self, offset: float, scale: float) -> None:
+        """Update the calibration offset/scale without resetting EMA state."""
         raise NotImplementedError
