@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class LaunchConfig(BaseModel):
     use_sim: bool = True
     use_gui: bool = True
     run_eeg: bool = False
+    run_eeg2: bool = False
     run_rviz: bool = False
     device: str = ""
 
@@ -29,6 +30,9 @@ class EegConfig2(BaseModel):
     input: str = "lsl"
     role: Literal["speed", "steering"] = "steering"
     policy: Literal["ei", "tbr", "alpha"] = "tbr"
+    calibrate: bool = False
+    calib_offset: float = 0.0
+    calib_scale: float = 1.0
     lsl_stream_type: str = "EEG"
     lsl_timeout: float = 8.0
     lsl_source_id: str = ""
@@ -50,6 +54,12 @@ class AppConfig(BaseModel):
     eeg: EegConfig = Field(default_factory=EegConfig)
     eeg2: EegConfig2 | None = None
     motion: MotionConfig = Field(default_factory=MotionConfig)
+
+    @model_validator(mode="after")
+    def _dual_roles_must_differ(self) -> AppConfig:
+        if self.eeg2 is not None and self.eeg.role == self.eeg2.role:
+            raise ValueError("dual-device mode requires eeg and eeg2 roles to differ")
+        return self
 
 
 class ConfigEnvelope(BaseModel):
@@ -78,12 +88,17 @@ class CommandResult(BaseModel):
     detail: str
 
 
-class WsFrame(BaseModel):
-    status: SystemStatus
+class DeviceFrame(BaseModel):
     channels: dict[str, float]
     features: dict[str, float]
     control: dict[str, float]
     timestamp: float
+
+
+class WsFrame(BaseModel):
+    status: SystemStatus
+    devices: dict[str, DeviceFrame]
+    timestamp: float | None = None
 
 
 class ConfigPatch(BaseModel):
