@@ -131,6 +131,143 @@ function useChartOptions(series, metric, calibOffset, calibScale, calibrating, t
   }, [series, metric, calibOffset, calibScale, calibrating, theme]);
 }
 
+/* O22 (b): lsl_source_id is the persisted source of truth. brand is a
+ * frontend-only selector: forward (save) maps brand → source_id, and on
+ * config load we infer the brand back from source_id (the backend drops
+ * the brand field, so it can never be read back directly). */
+const INIT_SERIES = { t: [], alpha: [], theta: [], beta: [], ratio: [], focus: [], speed: [], steer: [] };
+
+const BRAND_TO_SOURCE_ID = {
+  gtec_hybrid: 'gtec_hybrid_black',
+  gtec_headband: 'gtec_bci_core4',
+};
+const SOURCE_ID_TO_BRAND = {
+  gtec_hybrid_black: 'gtec_hybrid',
+  gtec_bci_core4: 'gtec_headband',
+};
+
+/**
+ * Per-device calibration state (design §5.5.1/§5.5.4, O5 continuation).
+ * Instantiate once per device: useCalibration('eeg', …) / useCalibration('eeg2', …).
+ *
+ * O19 absorbed here: the countdown interval is driven by a ref (never created
+ * inside a setState updater), both the countdown and the poll intervals are
+ * stored in refs, and reset() clears both — Stop can no longer leak a poll.
+ *
+ * @param {'eeg'|'eeg2'} device  config block key (used for patch + poll read)
+ * @param {Function} setFeedback  App's feedback setter (for save errors)
+ * @param {Function} onDone       called after calibration finishes — App clears
+ *                                charts and auto-stops in dual mode (§5.5.4)
+ */
+function useCalibration(device, setFeedback, onDone) {
+  const [calibrating, setCalibrating] = useState(false);
+  const [calibPhase, setCalibPhase] = useState(null);       // 'preparing' | 'counting'
+  const [calibCountdown, setCalibCountdown] = useState(30);
+  const [calibOffset, setCalibOffset] = useState(0);
+  const calibOffsetRef = useRef(0);
+  calibOffsetRef.current = calibOffset;
+  const [calibScale, setCalibScale] = useState(1);
+  const countRef = useRef(30);       // countdown value, readable inside the interval
+  const timerRef = useRef(null);     // countdown interval
+  const pollRef = useRef(null);      // "waiting for node to write calibrate=false" poll
+  const waitingRef = useRef(false);  // true between beginWaiting() and first frame
+
+  function clearTimers() {
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    if (pollRef.current)  { clearInterval(pollRef.current);  pollRef.current = null; }
+  }
+
+  function syncCalib(offset, scale) {
+    if (offset != null) setCalibOffset(Number(offset));
+    if (scale != null) setCalibScale(Number(scale));
+  }
+
+  /** User clicked Calibrate — arm the countdown; it starts on the first frame. */
+  function beginWaiting() {
+    waitingRef.current = true;
+    setCalibrating(true);
+    setCalibPhase('preparing');
+    setCalibCountdown(30);
+    countRef.current = 30;
+  }
+
+  /** First analysis frame for this device arrived → start the 30s countdown. */
+  function startCountdown() {
+    waitingRef.current = false;
+    setCalibPhase('counting');
+    timerRef.current = setInterval(() => {
+      countRef.current -= 1;
+      setCalibCountdown(countRef.current);
+      if (countRef.current <= 0) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+        // Poll until the node writes its params file (calibrate → false).
+        pollRef.current = setInterval(() => {
+          api.get('/api/config', { params: { reload: true } })
+            .then((r) => {
+              const dev = r.data?.config?.[device];
+              if (!dev?.calibrate) {
+                clearInterval(pollRef.current);
+                pollRef.current = null;
+                finishCalibration(dev || {});
+              }
+            })
+            .catch(() => {
+              clearInterval(pollRef.current);
+              pollRef.current = null;
+              reset();
+            });
+        }, 500);
+      }
+    }, 1000);
+  }
+
+  function finishCalibration(eeg) {
+    clearTimers();
+    setCalibrating(false);
+    setCalibPhase(null);
+    if (eeg?.calib_offset != null) setCalibOffset(Number(eeg.calib_offset));
+    if (eeg?.calib_scale != null) setCalibScale(Number(eeg.calib_scale));
+    if (onDone) onDone();
+  }
+
+  /** Cancel (Stop pressed / poll failed): clear both intervals + waiting flag. */
+  function reset() {
+    clearTimers();
+    waitingRef.current = false;
+    setCalibrating(false);
+    setCalibPhase(null);
+    setCalibCountdown(30);
+    countRef.current = 30;
+  }
+
+  async function updateCalibMin(raw) {
+    const v = Number(raw);
+    if (isNaN(v)) return;
+    setCalibOffset(v);
+    try {
+      await api.put('/api/config', { patch: { [device]: { calib_offset: v } } });
+    } catch (err) { setFeedback(`Save offset failed: ${err.message}`); }
+  }
+
+  async function updateCalibMax(raw) {
+    const v = Number(raw);
+    if (isNaN(v)) return;
+    const scale = Math.max(0.001, v - calibOffsetRef.current);
+    setCalibScale(scale);
+    try {
+      await api.put('/api/config', { patch: { [device]: { calib_scale: scale } } });
+    } catch (err) { setFeedback(`Save scale failed: ${err.message}`); }
+  }
+
+  return {
+    calibrating, calibPhase, calibCountdown, calibOffset, calibScale,
+    calibOffsetRef, waitingRef, timerRef, pollRef,
+    syncCalib, beginWaiting, startCountdown, finishCalibration, reset,
+    updateCalibMin, updateCalibMax,
+  };
+}
+
 /* ── Hero: Thymio robot icon ─────────────────────────────── */
 function HeroEmblem() {
   return (
@@ -470,7 +607,12 @@ function ControlVector({ speed, steer, role, steerDirection }) {
 }
 
 /* ── Chart Column (role-adapted charts for one input) ──── */
-function ChartColumn({ label, role, waveOption, featureOption, metricLabel, speed, steer, steerDirection, dimmed }) {
+function ChartColumn({
+  label, role, waveOption, featureOption, metricLabel,
+  speed, steer, steerDirection, dimmed,
+  showCalib, calibOffset, calibScale, calibrating, calibPhase, calibCountdown,
+  onCalibrate, onMinChange, onMaxChange, disabled,
+}) {
   const roleLabel = role === 'speed' ? 'Speed' : 'Steering';
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -493,6 +635,44 @@ function ChartColumn({ label, role, waveOption, featureOption, metricLabel, spee
           <ControlVector speed={speed} steer={steer} role={role} steerDirection={steerDirection} />
         </div>
       </div>
+      {showCalib && (
+        <div className="chart-card">
+          <h3>Calibration (this device)</h3>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <button
+              className="btn btn-ghost calib-btn"
+              disabled={disabled || calibrating}
+              onClick={onCalibrate}
+            >
+              {calibrating
+                ? (calibPhase === 'counting' ? `Calibrating… ${calibCountdown}s` : 'Preparing…')
+                : 'Calibrate'}
+            </button>
+            <span className="calib-edit-group">
+              <span className="calib-edit-row">
+                <label className="calib-edit-label">min</label>
+                <input
+                  type="number" step="any"
+                  className="calib-edit-input"
+                  value={calibOffset}
+                  onChange={(e) => onMinChange(e.target.value)}
+                  disabled={disabled}
+                />
+              </span>
+              <span className="calib-edit-row">
+                <label className="calib-edit-label">max</label>
+                <input
+                  type="number" step="any"
+                  className="calib-edit-input"
+                  value={calibOffset + calibScale}
+                  onChange={(e) => onMaxChange(e.target.value)}
+                  disabled={disabled}
+                />
+              </span>
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -502,10 +682,8 @@ export default function App() {
   /* ── State ─────────────────────────────────────────── */
   const [config, setConfig]         = useState(null);
   const [feedback, setFeedback]     = useState('Ready.');
-  const [series, setSeries]         = useState({
-    t: [], alpha: [], theta: [], beta: [],
-    ratio: [], focus: [], speed: [], steer: [],
-  });
+  const [series, setSeries]         = useState({ ...INIT_SERIES });
+  const [series2, setSeries2]       = useState({ ...INIT_SERIES });
   const [wsConnected, setWsConnected] = useState(false);
 
   /* ── UI mode state ─────────────────────────────────── */
@@ -527,23 +705,26 @@ export default function App() {
   const [outputMode, setOutputMode]         = useState('thymio_simu');
   const [thymioDevice, setThymioDevice]     = useState('ser:device=/dev/ttyACM0');
   const [running, setRunning]               = useState(false);
-  const [calibrating, setCalibrating]        = useState(false);
-  const [calibPhase, setCalibPhase]          = useState(null);  // 'preparing' | 'counting'
-  const [calibCountdown, setCalibCountdown]  = useState(30);
-  const [calibOffset, setCalibOffset]        = useState(0);
-  const calibOffsetRef                        = useRef(0);
-  calibOffsetRef.current = calibOffset;
-  // Kept in a ref so the WS onmessage closure always sees the current role1
-  // without reopening the socket when role1 changes.
+  const [theme, setTheme]                   = useState(() => localStorage.getItem('theme') || 'dark');
+  // role refs so the WS onmessage closure always sees the current roles
+  // without reopening the socket when they change.
   const role1Ref = useRef(role1);
   role1Ref.current = role1;
-  const [calibScale, setCalibScale]          = useState(1);
-  const [theme, setTheme]                   = useState(() => localStorage.getItem('theme') || 'dark');
-  const calibTimerRef                        = useRef(null);
-  const calibWaitingRef                      = useRef(false);  // waiting for first WS frame
+  const role2Ref = useRef(role2);
+  role2Ref.current = role2;
+  // Per-device calibration (design §5.5.1): two independent hook instances.
+  // onDone: clear charts + auto-stop in dual mode (calibration ends stopped,
+  // user starts the real experiment manually — §5.5.4).
+  const calib1 = useCalibration('eeg', setFeedback, () => {
+    clearSeries();
+    if (role2Ref.current !== 'none') stopSystem();
+  });
+  const calib2 = useCalibration('eeg2', setFeedback, () => {
+    clearSeries();
+    stopSystem();
+  });
 
-  const INIT_SERIES = { t: [], alpha: [], theta: [], beta: [], ratio: [], focus: [], speed: [], steer: [] };
-  function clearSeries() { setSeries({ ...INIT_SERIES }); }
+  function clearSeries() { setSeries({ ...INIT_SERIES }); setSeries2({ ...INIT_SERIES }); }
 
   /* ── System status (ROS2 + Thymio) ──────────────────── */
   const [systemStatus, setSystemStatus] = useState({ ros_available: false, thymio_connected: false });
@@ -561,6 +742,7 @@ export default function App() {
 
   /* ── Derived ────────────────────────────────────────── */
   const isControlMode = inputMode === 'teleop';
+  const activeCalib = calib1.calibrating ? calib1 : (calib2.calibrating ? calib2 : null);
 
   /* ── Load config ────────────────────────────────────── */
   useEffect(() => {
@@ -574,17 +756,23 @@ export default function App() {
         let loadedRole2 = role2;
         if (cfg.eeg) {
           if (cfg.eeg.input) setInputMode('eeg');
-          if (cfg.eeg.calib_offset != null) setCalibOffset(Number(cfg.eeg.calib_offset));
-          if (cfg.eeg.calib_scale != null) setCalibScale(Number(cfg.eeg.calib_scale));
+          calib1.syncCalib(cfg.eeg.calib_offset, cfg.eeg.calib_scale);
           if (cfg.eeg.role) { loadedRole1 = cfg.eeg.role; setRole1(cfg.eeg.role); }
           if (cfg.eeg.policy) setMetric(cfg.eeg.policy);
-          if (cfg.eeg.brand) setEegBrand(cfg.eeg.brand);
+          // O22 (b): brand is frontend-local — infer it from the persisted
+          // lsl_source_id (the backend drops the brand field on patch).
+          if (cfg.eeg.lsl_source_id) {
+            setEegBrand(SOURCE_ID_TO_BRAND[cfg.eeg.lsl_source_id] || 'gtec_headband');
+          }
         }
         if (cfg.eeg2) {
           loadedRole2 = cfg.eeg2.role || 'steering';
           setRole2(loadedRole2);
+          calib2.syncCalib(cfg.eeg2.calib_offset, cfg.eeg2.calib_scale);
           if (cfg.eeg2.policy) setMetric2(cfg.eeg2.policy);
-          if (cfg.eeg2.brand) setEegBrand2(cfg.eeg2.brand);
+          if (cfg.eeg2.lsl_source_id) {
+            setEegBrand2(SOURCE_ID_TO_BRAND[cfg.eeg2.lsl_source_id] || 'gtec_headband');
+          }
         }
         // Guard against YAML hand-edits: if both roles are the same (and not 'none'), fix
         if (loadedRole1 !== 'none' && loadedRole2 !== 'none' && loadedRole1 === loadedRole2) {
@@ -626,46 +814,41 @@ export default function App() {
     ws.onclose = () => setWsConnected(false);
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
-      // New payload: { status, devices: { role: frame }, timestamp }. Device 1
-      // is the configured role1, falling back to the first available device.
       const devs = data.devices || {};
       const dev1 = devs[role1Ref.current] || Object.values(devs)[0] || null;
-      if (!dev1) return;  // no real data yet — keep charts frozen
-      // First data frame arrived → environment ready, start real countdown
-      if (calibWaitingRef.current) {
-        calibWaitingRef.current = false;
-        setCalibPhase('counting');
-        calibTimerRef.current = setInterval(() => {
-          setCalibCountdown((prev) => {
-            if (prev <= 1) {
-              clearInterval(calibTimerRef.current);
-              // Countdown done — poll until node writes calib YAML (calibrate→false)
-              const poll = setInterval(() => {
-                api.get('/api/config', { params: { reload: true } }).then(r => {
-                  const eeg = r.data?.config?.eeg;
-                  if (!eeg?.calibrate) {
-                    clearInterval(poll);
-                    finishCalibration(eeg || {});
-                  }
-                }).catch(() => { clearInterval(poll); setCalibrating(false); setCalibPhase(null); });
-              }, 500);
-              return 0;
-            }
-            return prev - 1;
-          });
-        }, 1000);
-      }
+      const dev2 = devs[role2Ref.current] || null;
+      if (!dev1 && !dev2) return;  // no real data yet — keep charts frozen
+
+      // A device awaiting calibration starts its 30s countdown on its first
+      // analysis frame (design §5.5.4).
+      if (calib1.waitingRef.current && dev1) calib1.startCountdown();
+      else if (calib2.waitingRef.current && dev2) calib2.startCountdown();
+
       if (!isControlMode) {
-        setSeries((prev) => ({
-          t:     pushPoint(prev.t,     new Date(dev1.timestamp * 1000).toLocaleTimeString()),
-          alpha: pushPoint(prev.alpha,  dev1.channels?.alpha             ?? 0),
-          theta: pushPoint(prev.theta,  dev1.channels?.theta             ?? 0),
-          beta:  pushPoint(prev.beta,   dev1.channels?.beta               ?? 0),
-          ratio: pushPoint(prev.ratio,  dev1.features?.theta_beta_ratio   ?? 0),
-          focus: pushPoint(prev.focus,  dev1.features?.focus_index        ?? 0),
-          speed: pushPoint(prev.speed,  dev1.control?.speed_intent        ?? 0),
-          steer: pushPoint(prev.steer,  dev1.control?.steer_intent        ?? 0),
-        }));
+        if (dev1) {
+          setSeries((prev) => ({
+            t:     pushPoint(prev.t,     new Date(dev1.timestamp * 1000).toLocaleTimeString()),
+            alpha: pushPoint(prev.alpha,  dev1.channels?.alpha             ?? 0),
+            theta: pushPoint(prev.theta,  dev1.channels?.theta             ?? 0),
+            beta:  pushPoint(prev.beta,   dev1.channels?.beta               ?? 0),
+            ratio: pushPoint(prev.ratio,  dev1.features?.theta_beta_ratio   ?? 0),
+            focus: pushPoint(prev.focus,  dev1.features?.focus_index        ?? 0),
+            speed: pushPoint(prev.speed,  dev1.control?.speed_intent        ?? 0),
+            steer: pushPoint(prev.steer,  dev1.control?.steer_intent        ?? 0),
+          }));
+        }
+        if (dev2) {
+          setSeries2((prev) => ({
+            t:     pushPoint(prev.t,     new Date(dev2.timestamp * 1000).toLocaleTimeString()),
+            alpha: pushPoint(prev.alpha,  dev2.channels?.alpha             ?? 0),
+            theta: pushPoint(prev.theta,  dev2.channels?.theta             ?? 0),
+            beta:  pushPoint(prev.beta,   dev2.channels?.beta               ?? 0),
+            ratio: pushPoint(prev.ratio,  dev2.features?.theta_beta_ratio   ?? 0),
+            focus: pushPoint(prev.focus,  dev2.features?.focus_index        ?? 0),
+            speed: pushPoint(prev.speed,  dev2.control?.speed_intent        ?? 0),
+            steer: pushPoint(prev.steer,  dev2.control?.steer_intent        ?? 0),
+          }));
+        }
         // steer_direction is read from the steering device's control when it
         // exists, else from the single device's own control.
         const steerDev = devs.steering || dev1;
@@ -704,10 +887,9 @@ export default function App() {
 
   /* ── Fetch record files when source is file-based ──── */
 
-  /* ── Chart options (per column — O5) ─────────────────── */
-  const { waveOption, featureOption } = useChartOptions(
-    series, metric, calibOffset, calibScale, calibrating, theme,
-  );
+  /* ── Chart options (per column — O5/O6) ──────────────── */
+  const col1 = useChartOptions(series, metric, calib1.calibOffset, calib1.calibScale, calib1.calibrating, theme);
+  const col2 = useChartOptions(series2, metric2, calib2.calibOffset, calib2.calibScale, calib2.calibrating, theme);
 
   /* ── Build patch ─────────────────────────────────────── */
   function buildPatch() {
@@ -720,8 +902,8 @@ export default function App() {
         calibrate:       false,
         lsl_stream_type: 'EEG',
         lsl_timeout:     8.0,
-        lsl_source_id:   eegBrand === 'gtec_headband' ? 'gtec_bci_core4' : eegBrand === 'gtec_hybrid' ? 'gtec_hybrid_black' : '',
-        brand:           eegBrand,
+        lsl_source_id:   BRAND_TO_SOURCE_ID[eegBrand] || '',
+        brand:           eegBrand,  // backend ignores; frontend-local (O22)
       },
       eeg2: (dualDevice && device2 === 'eeg') ? {
         input:           'lsl',
@@ -729,8 +911,8 @@ export default function App() {
         policy:          metric2,
         lsl_stream_type: 'EEG',
         lsl_timeout:     8.0,
-        lsl_source_id:   eegBrand2 === 'gtec_headband' ? 'gtec_bci_core4' : eegBrand2 === 'gtec_hybrid' ? 'gtec_hybrid_black' : '',
-        brand:           eegBrand2,
+        lsl_source_id:   BRAND_TO_SOURCE_ID[eegBrand2] || '',
+        brand:           eegBrand2,  // backend ignores; frontend-local (O22)
       } : null,
       launch: {
         use_sim:  isSim,
@@ -753,17 +935,30 @@ export default function App() {
     }
   }
 
-  async function startSystem(skipSave) {
+  async function startSystem(skipSave, skipUncalibratedPrompt) {
     try {
       await runAction('/api/system/stop', false);  // kill old processes, keep calib state
+      // UX (design §5.5.4): starting with an uncalibrated device is allowed
+      // but prompts first. "Uncalibrated" = never calibrated (0/1 defaults).
+      // Calibration itself must skip this prompt (it would block the start).
+      if (role2Ref.current !== 'none' && !skipUncalibratedPrompt) {
+        const uncalibrated = [];
+        if (calib1.calibOffset === 0 && calib1.calibScale === 1) {
+          uncalibrated.push(role1 === 'speed' ? 'Speed device' : 'Steering device');
+        }
+        if (calib2.calibOffset === 0 && calib2.calibScale === 1) {
+          uncalibrated.push(role2 === 'speed' ? 'Speed device' : 'Steering device');
+        }
+        if (uncalibrated.length && !window.confirm(`${uncalibrated.join(' & ')} not calibrated. Start anyway?`)) {
+          return;
+        }
+      }
       if (!skipSave) await saveConfig();
       // Re-read calib values (may have been updated by a previous calibration run)
       const r = await api.get('/api/config', { params: { reload: true } });
-      const eeg = r.data?.config?.eeg;
-      if (eeg) {
-        if (eeg.calib_offset != null) setCalibOffset(Number(eeg.calib_offset));
-        if (eeg.calib_scale != null) setCalibScale(Number(eeg.calib_scale));
-      }
+      const cfg = r.data?.config;
+      calib1.syncCalib(cfg?.eeg?.calib_offset, cfg?.eeg?.calib_scale);
+      calib2.syncCalib(cfg?.eeg2?.calib_offset, cfg?.eeg2?.calib_scale);
       await runAction('/api/system/start', false);
       setRunning(true);
     } catch (err) {
@@ -773,47 +968,32 @@ export default function App() {
     }
   }
 
-  function finishCalibration(eeg) {
-    setCalibrating(false);
-    setCalibPhase(null);
-    clearSeries();
-    if (eeg?.calib_offset != null) setCalibOffset(Number(eeg.calib_offset));
-    if (eeg?.calib_scale != null) setCalibScale(Number(eeg.calib_scale));
-  }
-
-  function startCountdown() {
-    calibWaitingRef.current = true;
-    setCalibrating(true);
-    setCalibPhase('preparing');
-    setCalibCountdown(30);
-  }
-
-  async function updateCalibMin(raw) {
-    const v = Number(raw);
-    if (isNaN(v)) return;
-    setCalibOffset(v);
-    try {
-      await api.put('/api/config', { patch: { eeg: { calib_offset: v } } });
-    } catch (err) { setFeedback(`Save offset failed: ${err.message}`); }
-  }
-
-  async function updateCalibMax(raw) {
-    const v = Number(raw);
-    if (isNaN(v)) return;
-    const scale = Math.max(0.001, v - calibOffsetRef.current);
-    setCalibScale(scale);
-    try {
-      await api.put('/api/config', { patch: { eeg: { calib_scale: scale } } });
-    } catch (err) { setFeedback(`Save scale failed: ${err.message}`); }
+  /** Arm one device's calibration: patch calibrate=true, then start the system
+   *  (the hook's countdown begins on that device's first analysis frame). */
+  async function calibrateDevice(device, calib) {
+    const patch = buildPatch();
+    patch[device].calibrate = true;
+    await api.put('/api/config', { patch });
+    calib.beginWaiting();
+    // Skip saveConfig (already saved with calibrate=true) and skip the
+    // uncalibrated-start prompt (calibration is the very act of calibrating).
+    await startSystem(true, true);
   }
 
   async function stopSystem() {
     try {
-      clearInterval(calibTimerRef.current);
-      calibWaitingRef.current = false;
-      setCalibrating(false);
-      setCalibPhase(null);
-      setCalibCountdown(30);
+      // UX (design §5.5.4): if a device was mid-calibration, clear its
+      // calibrate flag so the next Start doesn't re-enter calibration.
+      const wasCalib1 = calib1.calibrating;
+      const wasCalib2 = calib2.calibrating;
+      calib1.reset();
+      calib2.reset();
+      if (wasCalib1) {
+        try { await api.put('/api/config', { patch: { eeg: { calibrate: false } } }); } catch {}
+      }
+      if (wasCalib2) {
+        try { await api.put('/api/config', { patch: { eeg2: { calibrate: false } } }); } catch {}
+      }
       await runAction('/api/system/stop', false);
     } finally {
       setRunning(false);
@@ -852,26 +1032,22 @@ export default function App() {
             {theme === 'dark' ? '☀' : '☾'}
           </button>
           <button className="btn btn-cta" disabled={running} onClick={() => startSystem()}>
-            {running ? (calibPhase === 'preparing' ? 'Preparing...' : calibPhase === 'counting' ? `Calibrating... ${calibCountdown}s` : 'Running...') : 'Start'}
+            {running ? (activeCalib?.calibPhase === 'preparing' ? 'Preparing...' : activeCalib?.calibPhase === 'counting' ? `Calibrating... ${activeCalib.calibCountdown}s` : 'Running...') : 'Start'}
           </button>
           <button className="btn btn-ghost" disabled={!running} onClick={() => stopSystem()}>Stop</button>
-          {inputMode === 'eeg' && (
+          {/* Single-device calibration lives in the topbar (design §5.5.4 现状);
+              in dual mode each column has its own Calibrate + min/max editors. */}
+          {inputMode === 'eeg' && !dualDevice && (
             <span className="calib-right-group">
-              <button className="btn btn-ghost calib-btn" disabled={running} onClick={async () => {
-                const patch = buildPatch();
-                patch.eeg.calibrate = true;
-                await api.put('/api/config', { patch });
-                startCountdown();
-                await startSystem(true);  // skip saveConfig — already saved with calibrate=true
-              }}>Calibrate</button>
+              <button className="btn btn-ghost calib-btn" disabled={running} onClick={() => calibrateDevice('eeg', calib1)}>Calibrate</button>
               <span className="calib-edit-group">
                 <span className="calib-edit-row">
                   <label className="calib-edit-label">min</label>
                   <input
                     type="number" step="any"
                     className="calib-edit-input"
-                    value={calibOffset}
-                    onChange={(e) => updateCalibMin(e.target.value)}
+                    value={calib1.calibOffset}
+                    onChange={(e) => calib1.updateCalibMin(e.target.value)}
                     disabled={running}
                   />
                 </span>
@@ -880,8 +1056,8 @@ export default function App() {
                   <input
                     type="number" step="any"
                     className="calib-edit-input"
-                    value={calibOffset + calibScale}
-                    onChange={(e) => updateCalibMax(e.target.value)}
+                    value={calib1.calibOffset + calib1.calibScale}
+                    onChange={(e) => calib1.updateCalibMax(e.target.value)}
                     disabled={running}
                   />
                 </span>
@@ -1150,25 +1326,45 @@ export default function App() {
             <ChartColumn
               label={eegBrand === 'gtec_hybrid' ? 'Hybrid Black' : 'Headband'}
               role={role1}
-              waveOption={waveOption}
-              featureOption={featureOption}
+              waveOption={col1.waveOption}
+              featureOption={col1.featureOption}
               metricLabel={METRIC_LABELS[metric]}
               speed={series.speed.length ? series.speed[series.speed.length - 1] : 0}
               steer={series.steer.length ? series.steer[series.steer.length - 1] : 0.5}
               steerDirection={steerDirection}
               dimmed={inputMode !== 'eeg'}
+              showCalib={dualDevice}
+              calibOffset={calib1.calibOffset}
+              calibScale={calib1.calibScale}
+              calibrating={calib1.calibrating}
+              calibPhase={calib1.calibPhase}
+              calibCountdown={calib1.calibCountdown}
+              onCalibrate={() => calibrateDevice('eeg', calib1)}
+              onMinChange={calib1.updateCalibMin}
+              onMaxChange={calib1.updateCalibMax}
+              disabled={running}
             />
             {dualDevice && (
               <ChartColumn
                 label={eegBrand2 === 'gtec_hybrid' ? 'Hybrid Black' : 'Headband'}
                 role={role2}
-                waveOption={waveOption}
-                featureOption={featureOption}
+                waveOption={col2.waveOption}
+                featureOption={col2.featureOption}
                 metricLabel={METRIC_LABELS[metric2]}
-                speed={series.speed.length ? series.speed[series.speed.length - 1] : 0}
-                steer={series.steer.length ? series.steer[series.steer.length - 1] : 0.5}
+                speed={series2.speed.length ? series2.speed[series2.speed.length - 1] : 0}
+                steer={series2.steer.length ? series2.steer[series2.steer.length - 1] : 0.5}
                 steerDirection={steerDirection}
                 dimmed={inputMode !== 'eeg'}
+                showCalib
+                calibOffset={calib2.calibOffset}
+                calibScale={calib2.calibScale}
+                calibrating={calib2.calibrating}
+                calibPhase={calib2.calibPhase}
+                calibCountdown={calib2.calibCountdown}
+                onCalibrate={() => calibrateDevice('eeg2', calib2)}
+                onMinChange={calib2.updateCalibMin}
+                onMaxChange={calib2.updateCalibMax}
+                disabled={running}
               />
             )}
           </div>
