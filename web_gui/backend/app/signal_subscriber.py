@@ -268,6 +268,11 @@ class RosBridge:
         beta = float(metrics.get("beta", 0))
 
         frame = {
+            # The M2 node emits role in the analysis JSON — carry it through
+            # so _resolve_role's first link hits on the production path
+            # (single-device steering on the bare topic would otherwise fall
+            # through to the "speed" backstop).
+            "role": data.get("role"),
             "channels": {
                 "alpha": alpha,
                 "theta": theta,

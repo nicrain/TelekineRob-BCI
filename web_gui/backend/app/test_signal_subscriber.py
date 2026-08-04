@@ -1,7 +1,9 @@
 """Tests for RosBridge multi-topic frame aggregation (no ROS needed:
 rclpy import fails gracefully in the daemon thread on this host)."""
 
+import json
 import time
+from types import SimpleNamespace
 
 from app.signal_subscriber import RosBridge
 
@@ -63,4 +65,28 @@ def test_get_latest_frame_none_when_only_suffixed_topics_have_data():
     _seed(bridge, "/eeg_analysis/speed", {"role": "speed", "alpha": 0.4})
 
     assert bridge.get_latest_frame() is None  # bare topic carries no data
+    bridge.stop()
+
+
+def test_on_analysis_preserves_role_from_node_json():
+    """M3-1: a single-device steering frame on the bare topic must resolve to
+    "steering". This feeds the real M2 analysis JSON through _on_analysis —
+    no _seed injection — so the frame-building path that previously dropped
+    the role field is exercised."""
+    bridge = RosBridge()
+    payload = {
+        "ts": 123.0,
+        "source": "lsl",
+        "role": "steering",
+        "metrics": {"alpha": 0.1, "theta": 0.2, "beta": 0.3},
+        "features": {"theta_beta": 0.7},
+        "intents": {"speed_intent": 0.5, "steer_intent": 0.5},
+        "steer_direction": 1,
+    }
+    bridge._on_analysis("/eeg_analysis", SimpleNamespace(data=json.dumps(payload)))
+
+    frames = bridge.get_latest_frames()
+
+    assert "steering" in frames
+    assert "speed" not in frames  # role field wins — not the speed backstop
     bridge.stop()
