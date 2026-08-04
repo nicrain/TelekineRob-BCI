@@ -59,3 +59,24 @@ def test_build_command_zero_when_one_input_never_arrived():
     assert out is not None
     assert out.linear.x == 0.0
     assert out.angular.z == 0.0
+
+
+def test_fuser_zeroes_within_watchdog_of_last_input():
+    """N4: fail-safe latency — once an input goes stale (no message for
+    watchdog_sec), the fuser outputs zero. This is the bound the dual-mode
+    node relies on when it goes silent after a real loss."""
+    watchdog = 0.5
+    speed = _FakeTwist(linear_x=0.4)
+    steer = _FakeTwist(angular_z=-0.9)
+    last_ts = 0.0
+
+    def fused(now):
+        ok = now - last_ts <= watchdog
+        return build_command(speed, steer, ok, ok)
+
+    # just inside the freshness window → still fused
+    assert fused(0.49).linear.x == 0.4
+    # just past the window → zero velocity within ≤0.5 s of the last input
+    zero = fused(0.5 + 1e-3)
+    assert zero.linear.x == 0.0
+    assert zero.angular.z == 0.0

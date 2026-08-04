@@ -440,9 +440,11 @@ class EegControlNode(Node):
             return
 
         # No frame this tick — the watchdog response is a pure decision.
-        # Single device: replay within the grace window, one zero at timeout,
-        # then silent (original behavior — NOT perpetual replay). Dual device:
-        # fully silent so the fuser sees staleness and takes over.
+        # Frames arrive at hop cadence (~2 Hz) but _tick runs at 20 Hz; the
+        # inter-frame ticks are NOT loss, so both modes "replay" to keep the
+        # partial at ~20 Hz. Only a real loss (stale) makes the node go
+        # silent: single device sends one zero, dual device halts and lets
+        # the fuser's freshness watchdog take over.
         action = decide_watchdog_action(
             stale=time.time() - self.last_msg_ts > self.watchdog_sec,
             connected=self._adapter_connected,
@@ -450,7 +452,7 @@ class EegControlNode(Node):
         )
 
         if action == "replay":
-            # Within the grace window (single device): hold the last intents.
+            # Within the grace window (both modes): hold the last intents.
             if not self._calibrate:
                 self.pub.publish(self._intents_to_twist(self.last_intents))
             return

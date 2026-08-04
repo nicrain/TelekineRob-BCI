@@ -80,7 +80,7 @@ WSL2:
 1. **双节点争用 `/cmd_vel`**：两个节点若都发布 Twist 到 `/cmd_vel`，最后一帧胜出，speed/steering 互相覆盖 —— 必须有融合层。
 2. **双节点同名**：ROS2 同一 domain 内节点名必须唯一，第二个节点必须改名。
 3. **双节点 CSV 冲突**：默认 `csv_path` 都是 `/tmp/thymio_eeg_log.csv`，双设备时两个节点写同一文件。
-4. **设备断流时的"短暂回放"**：单设备断流后**宽限期内（< 0.5s）回放最后 intents**，超时后发一次零速并静默（watchdog 语义，**非**永续回放——设计初版 §5.3.1 误述为"持续重发"，2026-08-04 更正，见 review N1）。双设备若沿用宽限回放，断流后 speed/steering 会继续用旧值 ~0.5s，融合层靠"静默"感知会延迟 —— 故双设备用 `stop_on_data_loss` 使节点**断流即静默**。
+4. **设备断流时的"短暂回放"**：单设备断流后**宽限期内（< 0.5s）回放最后 intents**，超时后发一次零速并静默（watchdog 语义，**非**永续回放——设计初版 §5.3.1 误述为"持续重发"，2026-08-04 更正，见 review N1）。注意分析帧按 hop 节奏（~2Hz）到达、`_tick` 以 20Hz 运行，帧间空隙**不是断流**，两种模式都应持续回放保持 partial 20Hz；只有**真断流**（超 watchdog 无新帧）才触发 stop_on_data_loss 静默（见 N4）。
 5. **LED 争用**：`_update_leds()` 与 role 无关，speed 节点也会向 `/led` 发布圆弧 LED；双节点会互相覆盖。
 6. **进程清理遗漏**：`pkill -f eeg_control_node` 能匹配两个节点（子串匹配），但融合节点需要新 pattern。
 
@@ -128,7 +128,7 @@ flowchart LR
 | D1 拓扑 | 双节点 + 融合节点 | 复用已验证代码，单设备零改动，故障隔离 |
 | D2 主题命名 | 按 **role** 命名（`/eeg_analysis/speed`、`/eeg_cmd_vel/steering`…） | 融合节点订阅位置固定；与前端按 role 分列对齐 |
 | D3 融合语义 | 任一输入过期 → 零速 | 双源控制中沿用旧转向有失控风险（fail-safe） |
-| D4 设备断流 | 双设备模式节点**停止发布** partial Twist（stop_on_data_loss） | 融合层靠"静默"感知断流，而不是被陈旧回放欺骗 |
+| D4 设备断流 | 双设备模式节点**数据丢失后（超 watchdog）停止发布** partial Twist；数据流动期间持续回放（保持 20Hz） | 融合层靠"静默"感知**真断流**；帧间空隙非断流，持续回放维持 fuser 输入新鲜（2026-08-04 依 N4 修正措辞） |
 | D5 配置源 | 每设备独立参数文件；`launch_args.yaml` 只留 `run_eeg2` 开关 | 校准回写互不干扰；配置单一来源 |
 | D6 校准交互 | 单设备维持现状（校准后继续运行）；双设备每列独立校准按钮，校准结束**自动停止**，不自动 start | 避免"半校准"状态开车；复用现有交互心智，实现成本低 |
 | D7 分析负载 | WS 升级为 `devices: {role: frame}` | 前端按 role 取数，语义清晰 |
@@ -361,7 +361,7 @@ if self._adapter_connected:
 语义（`decide_watchdog_action` 契约，见 `watchdog.py`）：
 
 - 单设备（`stop_on_data_loss=False`，**真实旧行为，零回归**）：宽限内回放最后 intents → 超时发一次零速并停 → 不再发布。
-- 双设备（`stop_on_data_loss=True`）：断流即**完全静默**（无宽限回放、无零速标记），融合层靠消息新鲜度感知 staleness 并整车零速；设备恢复后节点恢复发布，fuser 自动续跑。
+- 双设备（`stop_on_data_loss=True`）：**数据流动期间（宽限内）持续回放最后 intents，保持 partial ~20Hz**（帧按 hop ~2Hz 到达、tick 20Hz，帧间空隙非断流——见 N4）；**真断流**（超 watchdog 无新帧）才静默（halt、无零速标记），融合层靠消息新鲜度感知 staleness 并整车零速；设备恢复后节点恢复发布，fuser 自动续跑。
 
 3. **`_update_leds()` 增加 role 门控**（speed 节点一律不发 LED；同时消除双节点争用 `/led`）：
 
@@ -744,7 +744,7 @@ sequenceDiagram
    - steering 节点：`linear.x = 0`，`angular.z = -steer_direction × turn_angular_speed × |steer_intent-0.5|`
 2. fuser 只做 `merge_twists`：`linear.x ← speed`，`angular.z ← steer`，其余分量清零。
 3. **断流语义（关键）**：
-   - 任一 eeg 节点断流（`stop_on_data_loss=true`）→ 该节点**立即停止发布** partial Twist（无宽限回放、无零速标记），fuser 靠消息新鲜度感知。
+   - 任一 eeg 节点**真断流**（超 watchdog 无新帧，`stop_on_data_loss=true`）→ 该节点停止发布 partial Twist（数据流动期间仍持续回放保持 ~20Hz，见 N4），fuser 靠消息新鲜度感知。
    - fuser 侧任一输入超过 `watchdog_sec`（0.5s）未更新 → 发布整车零速并记录状态迁移。
    - 设备恢复 → 节点恢复发布 → fuser 恢复融合（自动，无人工干预）。
    - 单设备（`stop_on_data_loss=false`）：宽限内回放最后 intents → 超时发一次零速并静默（原始行为，非永续回放）。
