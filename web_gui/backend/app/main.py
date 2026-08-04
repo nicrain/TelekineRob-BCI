@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
+import time
 from pathlib import Path
 from typing import Any
 
@@ -163,13 +165,13 @@ async def ws_stream(websocket: WebSocket) -> None:
     await websocket.accept()
     try:
         while True:
-            frame = _get_subscriber().get_latest_frame()
+            frames = _get_subscriber().get_latest_frames()
             payload = {
-                "status": probe_system().model_dump(),
-                "channels": frame["channels"] if frame else None,
-                "features": frame["features"] if frame else None,
-                "control": frame["control"] if frame else None,
-                "timestamp": frame["timestamp"] if frame else None,
+                # O23: probe_system() runs blocking `which` + /dev globs — keep
+                # it off the event loop.
+                "status": (await asyncio.to_thread(probe_system)).model_dump(),
+                "devices": frames or None,
+                "timestamp": time.time(),
             }
             await websocket.send_json(payload)
             await asyncio.sleep(0.2)
@@ -235,7 +237,8 @@ async def ws_teleop(websocket: WebSocket) -> None:
     cfg = get_config_envelope().config
     use_sim = cfg.launch.use_sim
 
-    # Send initial config so the client knows which topic is in use.
+    # Send initial config so the client knows which topic is in use
+    # (informational; the real topic is re-read on every message — O11).
     await websocket.send_json({
         "type": "config",
         "use_sim": use_sim,
@@ -246,8 +249,17 @@ async def ws_teleop(websocket: WebSocket) -> None:
     bridge = _get_subscriber()
     try:
         while True:
-            msg = await websocket.receive_json()
+            try:
+                msg = await websocket.receive_json()
+            except (json.JSONDecodeError, ValueError) as e:
+                # O23: malformed JSON must not crash the handler / spam tracebacks.
+                await websocket.send_json({"type": "error", "detail": f"invalid JSON: {e}"})
+                continue
             direction = msg.get("direction", "")
+            # O11: re-read config on every message so a sim ↔ real switch takes
+            # effect without reconnecting.
+            cfg = get_config_envelope().config
+            use_sim = cfg.launch.use_sim
             _log.info("received direction=%s", direction)
             ok, detail = bridge.publish_teleop(direction, use_sim, cfg)
             _log.info("publish direction=%s ok=%s detail=%s", direction, ok, detail)

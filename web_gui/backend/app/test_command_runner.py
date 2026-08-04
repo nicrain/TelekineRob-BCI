@@ -1,6 +1,8 @@
+import pytest
+
 import app.command_runner as command_runner
 from app.command_runner import _build_launch_command, cleanup_residual_processes, start_system, stop_system
-from app.models import AppConfig
+from app.models import AppConfig, EegConfig2
 
 
 def test_launch_command_includes_run_eeg_and_device():
@@ -87,3 +89,48 @@ def test_cleanup_residual_skips_in_mock_mode(monkeypatch):
 
     assert "skipped" in detail
     assert killed == []
+
+
+# ---------------------------------------------------------------------------
+# Dual-device launch args (design §5.4.3)
+# ---------------------------------------------------------------------------
+
+
+def test_launch_command_includes_dual_device_args():
+    cfg = AppConfig()
+    cfg.launch.run_eeg = True
+    cfg.eeg.role = "speed"
+    cfg.eeg2 = EegConfig2(role="steering", input="lsl")
+
+    command = " ".join(_build_launch_command(cfg))
+
+    assert "run_eeg2:=true" in command
+    assert "eeg2_role:=steering" in command
+    assert "eeg2_input:=lsl" in command
+
+
+def test_launch_command_single_device_omits_dual_args():
+    cfg = AppConfig()
+    cfg.launch.run_eeg = True
+
+    command = " ".join(_build_launch_command(cfg))
+
+    assert "run_eeg2:=" not in command
+    assert "eeg2_role:=" not in command
+
+
+def test_launch_command_eeg2_ignored_when_run_eeg_false():
+    cfg = AppConfig()  # run_eeg defaults to False
+    cfg.eeg2 = EegConfig2(role="steering")
+
+    command = " ".join(_build_launch_command(cfg))
+
+    assert "run_eeg2:=" not in command
+
+
+def test_start_system_rejects_eeg2_without_run_eeg():
+    cfg = AppConfig()
+    cfg.eeg2 = EegConfig2(role="steering")
+
+    with pytest.raises(ValueError, match="eeg2 is configured"):
+        start_system(cfg, dry_run=True)

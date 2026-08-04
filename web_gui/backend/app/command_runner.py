@@ -4,6 +4,7 @@ import os
 import shlex
 import signal
 import subprocess
+import threading
 from pathlib import Path
 from typing import Any, Optional
 
@@ -13,6 +14,9 @@ from .ros_probe import set_runtime_state
 
 _runtime_processes: list[subprocess.Popen[str]] = []
 _ros_env_cache: Optional[dict[str, str]] = None
+# O21: FastAPI runs endpoints on a thread pool; start/stop can race. RLock so
+# the spawn section may call _load_ros_env/_stop_runtime_processes safely.
+_state_lock = threading.RLock()
 
 
 def _bool_str(v: bool) -> str:
@@ -50,6 +54,13 @@ def _build_launch_command(cfg: AppConfig) -> list[str]:
         cmd.append(f"input:={cfg.eeg.input}")
     if run_eeg and cfg.eeg.role:
         cmd.append(f"role:={cfg.eeg.role}")
+    # Dual-device (design §5.4.3): eeg2 configured and run_eeg on → launch the
+    # second node. Roles must differ (AppConfig validator enforces it).
+    if run_eeg and cfg.eeg2 is not None:
+        cmd.append("run_eeg2:=true")
+        cmd.append(f"eeg2_role:={cfg.eeg2.role}")
+        if cfg.eeg2.input:
+            cmd.append(f"eeg2_input:={cfg.eeg2.input}")
     if not use_sim:
         cmd.append(f"device:={launch.device}")
     return cmd
@@ -72,21 +83,23 @@ def _load_ros_env() -> dict[str, str]:
     global _ros_env_cache
     if _ros_env_cache is not None:
         return _ros_env_cache
-
-    try:
-        command = f"{_source_prefix()} && env -0"
-        raw = subprocess.check_output(["bash", "-lc", command])
-        env: dict[str, str] = {}
-        for entry in raw.split(b"\0"):
-            if not entry:
-                continue
-            key, sep, value = entry.partition(b"=")
-            if not sep:
-                continue
-            env[key.decode("utf-8", errors="ignore")] = value.decode("utf-8", errors="ignore")
-        _ros_env_cache = env or os.environ.copy()
-    except Exception:
-        _ros_env_cache = os.environ.copy()
+    with _state_lock:
+        if _ros_env_cache is not None:  # double-check after acquiring
+            return _ros_env_cache
+        try:
+            command = f"{_source_prefix()} && env -0"
+            raw = subprocess.check_output(["bash", "-lc", command])
+            env: dict[str, str] = {}
+            for entry in raw.split(b"\0"):
+                if not entry:
+                    continue
+                key, sep, value = entry.partition(b"=")
+                if not sep:
+                    continue
+                env[key.decode("utf-8", errors="ignore")] = value.decode("utf-8", errors="ignore")
+            _ros_env_cache = env or os.environ.copy()
+        except Exception:
+            _ros_env_cache = os.environ.copy()
 
     return _ros_env_cache
 
@@ -106,21 +119,28 @@ def _spawn_ros_command(command: list[str]) -> subprocess.Popen[str]:
 
 def _stop_runtime_processes() -> None:
     global _runtime_processes
-    for process in _runtime_processes:
-        if process.poll() is not None:
-            continue
-        try:
-            os.killpg(process.pid, signal.SIGTERM)
-            process.wait(timeout=2.0)
-        except (ProcessLookupError, subprocess.TimeoutExpired):
+    with _state_lock:
+        for process in _runtime_processes:
+            if process.poll() is not None:
+                continue
             try:
-                os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-    _runtime_processes = []
+                os.killpg(process.pid, signal.SIGTERM)
+                process.wait(timeout=2.0)
+            except (ProcessLookupError, subprocess.TimeoutExpired):
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+        _runtime_processes = []
 
 
 def start_system(cfg: AppConfig, dry_run: bool = True) -> CommandResult:
+    # Fail-fast: dual device configured but the EEG pipeline disabled is an
+    # invalid combo (design §5.4.3). Checked before dry_run so config errors
+    # are surfaced regardless of mode.
+    if cfg.eeg2 is not None and not bool(cfg.launch.run_eeg):
+        raise ValueError("eeg2 is configured but run_eeg is false")
+
     cmd = _build_launch_command(cfg)
     cmd_str = " ".join(cmd)  # For display only
     allow_real = _real_commands_enabled()
@@ -140,8 +160,9 @@ def start_system(cfg: AppConfig, dry_run: bool = True) -> CommandResult:
     if cfg.launch.use_sim:
         commands.append(["ros2", "run", "thymio_web_bridge", "gazebo_camera_bridge"])
 
-    for ros_command in commands:
-        _runtime_processes.append(_spawn_ros_command(ros_command))
+    with _state_lock:
+        for ros_command in commands:
+            _runtime_processes.append(_spawn_ros_command(ros_command))
 
     set_runtime_state(True, None)
     use_sim = bool(cfg.launch.use_sim)
@@ -165,6 +186,7 @@ def start_system(cfg: AppConfig, dry_run: bool = True) -> CommandResult:
 _KILL_PATTERNS = [
     "ros2 launch thymio_control",
     "eeg_control_node",
+    "cmd_vel_fuser",
     "gz sim",
     "gz server",
     "gz client",
