@@ -139,14 +139,18 @@ def update_config(req: ConfigPatch) -> dict[str, Any]:
 
 
 @app.get("/api/config/control_token")
-def control_token() -> dict[str, str]:
+def control_token(request: Request) -> dict[str, str]:
     """Return the configured control token (empty string when unset).
 
-    The frontend fetches this at startup and echoes it back as
-    ``Authorization: Bearer <token>`` on REST and ``?token=`` on the teleop
-    WebSocket (O17). When the backend has no token configured, this returns
-    "" and the frontend sends nothing — behaviour is unchanged.
+    Only **loopback** clients may read the token (M4-3): the local frontend
+    (via the Vite proxy → same-host backend) can, but LAN clients cannot —
+    otherwise the token's whole purpose (gating non-browser control calls)
+    would be defeated by anyone who can reach this endpoint. ⚠️ verify on
+    WSL2 that proxied local access still sees a loopback client.host.
     """
+    host = request.client.host if request.client else ""
+    if host not in ("127.0.0.1", "::1"):
+        raise HTTPException(status_code=403, detail="control token only readable from loopback")
     return {"token": _control_token}
 
 

@@ -42,10 +42,14 @@
 
 ## 🟢 Phase 3 — Dual-device
 
+> 实现完成（M1–M4，2026-08-04），待 WSL2 端到端验收（编译 + 视觉终验）。EegConfig2 缺口（P3.1 原注）已在 M1 补齐校准字段。
+
 | # | Task | Depends on | Status |
 |---|---|---|---|
-| P3.1 | UI + backend for dual-device setup (note: EegConfig2 lacks calibrate/calib_offset/calib_scale — needs modelling before dual calibration works) | — | TODO |
-| P3.2 | Dual-device routing (headband→steer, hybrid→speed) | P2.3a, P2.3b, P3.1 | TODO |
+| P3.1 | UI + backend for dual-device setup（EegConfig2 校准字段 M1 补齐；每设备独立参数文件；双设备每列独立校准） | — | ✅ 2026-08-04 |
+| P3.2 | Dual-device routing（`cmd_vel_fuser` 融合；`/eeg_cmd_vel/<role>` 角色后缀主题；任一流断流 0.5s 整车零速） | P2.3a, P2.3b, P3.1 | ✅ 2026-08-04 |
+
+里程碑：M1 数据建模（含 review O1/O2/O3/O25/N1/N4）→ M2 ROS 融合（fuser/launch/参数文件/CMake，O7/O8/O9）→ M3 后端接入（三主题 RosBridge/devices 负载，O18/O20/O21/O24）→ M4 前端（双系列/每列校准/useChartOptions，O19/O22/O17）。
 
 ---
 

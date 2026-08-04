@@ -11,10 +11,11 @@
 ## 功能特性
 
 - 双设备 EEG 输入：g.tec BCI Core-4 Headband / Unicorn Hybrid Black（经 LSL）
+- **双设备模式（Phase 3）**：一台负责 speed、一台负责 steering，`cmd_vel_fuser` 融合；每设备独立参数文件与独立校准
 - 三种控制策略：TBR（θ/β）、EI（β/(α+θ)）、Alpha
 - **眨眼切换转向**（metric-only 检测）+ 原地转向（`role=steering`）
-- 30 秒自动校准（p5/p50）→ 写入 YAML
-- Web GUI：实时波形、校准、遥控（FastAPI + React）
+- 30 秒自动校准（p5/p50）→ 写入各自 YAML
+- Web GUI：实时波形（双列）、逐设备校准、遥控（FastAPI + React）
 
 ## 硬件
 
@@ -89,12 +90,36 @@ ros2 launch thymio_control experiment_core.launch.py use_sim:=false run_eeg:=tru
 ### Web GUI
 
 ```bash
-# 后端
-cd web_gui/backend && source ../../.venv/bin/activate && python -m app.main
+# 后端（真机实验需显式允许真实命令，见下方环境变量）
+cd web_gui/backend && source ../../.venv/bin/activate && WEB_GUI_ALLOW_REAL_COMMANDS=true python -m app.main
 
 # 前端
 cd web_gui/frontend && npm install && npm run dev
 ```
+
+### 双设备（Dual-device）
+
+一台设备负责 **speed**、另一台负责 **steering**（`/eeg_cmd_vel/<role>` 后缀主题），`cmd_vel_fuser` 融合后发布最终 `/cmd_vel`。任一流断流 → fuser 在 0.5s 内整车零速（fail-safe）。
+
+```bash
+# 双设备仿真（dummy 双流验证）
+python lsl_test/dummy_dual_streams.py --blink
+ros2 launch thymio_control experiment_core.launch.py use_sim:=true run_eeg:=true run_eeg2:=true eeg2_role:=steering
+```
+
+主题约定：双设备分析/指令主题按 **role 字面量** 后缀（`/eeg_analysis/steering`、`/eeg_cmd_vel/steering`，非 `steer`）。每设备有独立参数文件（`eeg_control_node.params.yaml` / `eeg_control_node.eeg2.params.yaml`），校准回写互不覆盖。
+
+## Web GUI 后端环境变量
+
+后端默认**锁紧**（控制真实机器人）：origin 白名单为本地 Vite、绑定 `127.0.0.1`、真实命令默认关闭。
+
+| 变量 | 默认 | 说明 |
+|---|---|---|
+| `WEB_GUI_ALLOW_REAL_COMMANDS` | `false` | 真实命令门禁。`false` → Start 是 dry-run、Stop 不 pkill 真实进程。**真机实验必须设 `true`** |
+| `WEB_GUI_HOST` | `127.0.0.1` | 绑定地址。设 `0.0.0.0` 暴露到局域网（建议同时配 token） |
+| `WEB_GUI_PORT` | `8010` | 绑定端口 |
+| `WEB_GUI_FRONTEND_ORIGIN` | `http://127.0.0.1:5173` | origin 白名单（本地 `localhost:5173`/`127.0.0.1:5173` 恒放行） |
+| `WEB_GUI_CONTROL_TOKEN` | *(空)* | 控制接口 token：REST `Authorization: Bearer`、teleop WS `?token=`。前端启动时经 `/api/config/control_token` 获取（仅 loopback 可读）；未配置则前端不带 → 行为不变 |
 
 ## Web GUI 设备选择
 
@@ -103,7 +128,7 @@ cd web_gui/frontend && npm install && npm run dev
 | g.tec Headband | LSL Stream | `gtec_bci_core4` |
 | g.tec Hybrid Black | LSL Stream | `gtec_hybrid_black` |
 
-校准功能：选 g.tec 设备后点 **Calibrate** 按钮，30 秒自动采集 → 计算 p5/p95 → 虚线标注。
+校准功能：选 g.tec 设备后点 **Calibrate** 按钮，30 秒自动采集 → 计算 p5/p50（中位数参考）→ 虚线标注。双设备模式下每列有独立的 Calibrate 按钮，校准结束自动停止，用户手动 **Start** 开始正式实验。
 
 ## 测试
 
