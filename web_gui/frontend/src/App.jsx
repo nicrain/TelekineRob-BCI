@@ -45,6 +45,92 @@ function fmtAxis(val) {
   return val.toFixed(3);
 }
 
+/* ── Chart options (O5: extracted for reuse across both columns) ── */
+const METRIC_LABELS = { alpha: 'Alpha (α)', tbr: 'TBR (θ/β)', ei: 'EI (β/(α+θ))' };
+const METRIC_DATA_KEY = { alpha: 'alpha', tbr: 'ratio', ei: 'focus' };
+
+/** Build both ECharts options for one device column.
+ *  Extracted so each column can call it with its own series/metric/calib
+ *  (batch 2 wires series2; the single-device path calls it once).
+ *  @param {Object} series   { t, alpha, theta, beta, ratio, focus, speed, steer }
+ *  @param {string} metric   'alpha' | 'tbr' | 'ei'
+ *  @param {number} calibOffset / calibScale / calibrating — calibration display
+ *  @param {string} theme    'dark' | 'light'
+ */
+function useChartOptions(series, metric, calibOffset, calibScale, calibrating, theme) {
+  const isLight = theme === 'light';
+  return useMemo(() => {
+    const waveOption = {
+      backgroundColor: 'transparent',
+      tooltip: { trigger: 'axis', backgroundColor: isLight ? '#fff' : '#2a2a2a', borderColor: isLight ? '#ddd' : '#444', textStyle: { color: isLight ? '#333' : '#ddd' } },
+      legend: { textStyle: { color: isLight ? '#555' : '#aaa' }, top: 2 },
+      grid: { left: 65, right: 16, top: 36, bottom: 24 },
+      xAxis: { type: 'category', data: series.t, axisLabel: { color: isLight ? '#999' : '#888', fontSize: 10 } },
+      yAxis: {
+        type: 'value',
+        max: p95Max(series.alpha, series.theta, series.beta),
+        axisLabel: { color: isLight ? '#999' : '#888', fontSize: 10, formatter: fmtAxis },
+      },
+      series: [
+        { name: 'alpha', type: 'line', smooth: true, showSymbol: false, data: series.alpha },
+        { name: 'theta', type: 'line', smooth: true, showSymbol: false, data: series.theta },
+        { name: 'beta',  type: 'line', smooth: true, showSymbol: false, data: series.beta  },
+      ],
+      color: isLight ? ['#DA291C', '#F6E500', '#000000'] : ['#DA291C', '#F6E500', '#CCCCCC'],
+      animation: false,
+    };
+
+    const calibHigh = calibOffset + calibScale;
+    const showCalib = calibrating || calibOffset !== 0 || calibScale !== 1;
+    const featureOption = {
+      backgroundColor: 'transparent',
+      tooltip: { trigger: 'axis', backgroundColor: isLight ? '#fff' : '#2a2a2a', borderColor: isLight ? '#ddd' : '#444', textStyle: { color: isLight ? '#333' : '#ddd' } },
+      legend: { textStyle: { color: isLight ? '#555' : '#aaa' }, top: 2 },
+      grid: { left: 65, right: 16, top: 36, bottom: 24 },
+      xAxis: { type: 'category', data: series.t, axisLabel: { color: isLight ? '#999' : '#888', fontSize: 10 } },
+      yAxis: {
+        type: 'value',
+        ...(showCalib ? { min: calibOffset, max: calibHigh } : { max: p95Max(series[METRIC_DATA_KEY[metric]]) }),
+        axisLabel: { color: isLight ? '#999' : '#888', fontSize: 10, formatter: fmtAxis },
+      },
+      series: [
+        {
+          name: METRIC_LABELS[metric], type: 'line', smooth: true, showSymbol: false,
+          data: series[METRIC_DATA_KEY[metric]],
+          ...(showCalib ? {
+            markLine: {
+              silent: true, symbol: 'none',
+              lineStyle: { type: 'dashed', color: isLight ? '#888' : '#aaa', width: 1 },
+              label: { show: true, position: 'start', formatter: '{b}', color: isLight ? '#888' : '#999', fontSize: 10 },
+              data: [
+                { yAxis: calibOffset, name: `min=${calibOffset.toFixed(1)}` },
+                { yAxis: calibHigh,  name: `max=${(calibOffset+calibScale).toFixed(1)}` },
+              ],
+            },
+          } : {}),
+        },
+      ],
+      color: [calibrating ? '#888' : '#DA291C'],
+      animation: false,
+      ...(showCalib ? {
+        graphic: [
+          {
+            type: 'text',
+            right: 10, top: 6,
+            style: {
+              text: `min=${calibOffset.toFixed(1)}  max=${(calibOffset + calibScale).toFixed(1)}`,
+              fill: isLight ? '#aaa' : '#666',
+              fontSize: 11,
+            },
+          },
+        ],
+      } : {}),
+    };
+
+    return { waveOption, featureOption };
+  }, [series, metric, calibOffset, calibScale, calibrating, theme]);
+}
+
 /* ── Hero: Thymio robot icon ─────────────────────────────── */
 function HeroEmblem() {
   return (
@@ -447,6 +533,10 @@ export default function App() {
   const [calibOffset, setCalibOffset]        = useState(0);
   const calibOffsetRef                        = useRef(0);
   calibOffsetRef.current = calibOffset;
+  // Kept in a ref so the WS onmessage closure always sees the current role1
+  // without reopening the socket when role1 changes.
+  const role1Ref = useRef(role1);
+  role1Ref.current = role1;
   const [calibScale, setCalibScale]          = useState(1);
   const [theme, setTheme]                   = useState(() => localStorage.getItem('theme') || 'dark');
   const calibTimerRef                        = useRef(null);
@@ -536,7 +626,11 @@ export default function App() {
     ws.onclose = () => setWsConnected(false);
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
-      if (data.channels == null) return;  // no real data yet — keep charts frozen
+      // New payload: { status, devices: { role: frame }, timestamp }. Device 1
+      // is the configured role1, falling back to the first available device.
+      const devs = data.devices || {};
+      const dev1 = devs[role1Ref.current] || Object.values(devs)[0] || null;
+      if (!dev1) return;  // no real data yet — keep charts frozen
       // First data frame arrived → environment ready, start real countdown
       if (calibWaitingRef.current) {
         calibWaitingRef.current = false;
@@ -563,16 +657,19 @@ export default function App() {
       }
       if (!isControlMode) {
         setSeries((prev) => ({
-          t:     pushPoint(prev.t,     new Date(data.timestamp * 1000).toLocaleTimeString()),
-          alpha: pushPoint(prev.alpha,  data.channels?.alpha             ?? 0),
-          theta: pushPoint(prev.theta,  data.channels?.theta             ?? 0),
-          beta:  pushPoint(prev.beta,   data.channels?.beta               ?? 0),
-          ratio: pushPoint(prev.ratio,  data.features?.theta_beta_ratio   ?? 0),
-          focus: pushPoint(prev.focus,  data.features?.focus_index        ?? 0),
-          speed: pushPoint(prev.speed,  data.control?.speed_intent        ?? 0),
-          steer: pushPoint(prev.steer,  data.control?.steer_intent        ?? 0),
+          t:     pushPoint(prev.t,     new Date(dev1.timestamp * 1000).toLocaleTimeString()),
+          alpha: pushPoint(prev.alpha,  dev1.channels?.alpha             ?? 0),
+          theta: pushPoint(prev.theta,  dev1.channels?.theta             ?? 0),
+          beta:  pushPoint(prev.beta,   dev1.channels?.beta               ?? 0),
+          ratio: pushPoint(prev.ratio,  dev1.features?.theta_beta_ratio   ?? 0),
+          focus: pushPoint(prev.focus,  dev1.features?.focus_index        ?? 0),
+          speed: pushPoint(prev.speed,  dev1.control?.speed_intent        ?? 0),
+          steer: pushPoint(prev.steer,  dev1.control?.steer_intent        ?? 0),
         }));
-        setSteerDirection(data.control?.steer_direction ?? 0);
+        // steer_direction is read from the steering device's control when it
+        // exists, else from the single device's own control.
+        const steerDev = devs.steering || dev1;
+        setSteerDirection(steerDev?.control?.steer_direction ?? 0);
       }
     };
     return () => ws.close();
@@ -607,78 +704,10 @@ export default function App() {
 
   /* ── Fetch record files when source is file-based ──── */
 
-  /* ── ECharts options (adapt to theme) ────────────────── */
-  const isDarkCharts = theme === 'light';
-  const waveOption = useMemo(() => ({
-    backgroundColor: 'transparent',
-    tooltip: { trigger: 'axis', backgroundColor: isDarkCharts ? '#fff' : '#2a2a2a', borderColor: isDarkCharts ? '#ddd' : '#444', textStyle: { color: isDarkCharts ? '#333' : '#ddd' } },
-    legend: { textStyle: { color: isDarkCharts ? '#555' : '#aaa' }, top: 2 },
-    grid: { left: 65, right: 16, top: 36, bottom: 24 },
-    xAxis: { type: 'category', data: series.t, axisLabel: { color: isDarkCharts ? '#999' : '#888', fontSize: 10 } },
-    yAxis: {
-      type: 'value',
-      max: p95Max(series.alpha, series.theta, series.beta),
-      axisLabel: { color: isDarkCharts ? '#999' : '#888', fontSize: 10, formatter: fmtAxis },
-    },
-    series: [
-      { name: 'alpha', type: 'line', smooth: true, showSymbol: false, data: series.alpha },
-      { name: 'theta', type: 'line', smooth: true, showSymbol: false, data: series.theta },
-      { name: 'beta',  type: 'line', smooth: true, showSymbol: false, data: series.beta  },
-    ],
-    color: isDarkCharts ? ['#DA291C', '#F6E500', '#000000'] : ['#DA291C', '#F6E500', '#CCCCCC'],
-    animation: false,
-  }), [series, isDarkCharts]);
-
-  const metricLabels = { alpha: 'Alpha (α)', tbr: 'TBR (θ/β)', ei: 'EI (β/(α+θ))' };
-  const metricDataKey = { alpha: 'alpha', tbr: 'ratio', ei: 'focus' };
-  const featureOption = useMemo(() => {
-    const calibHigh = calibOffset + calibScale;
-    const showCalib = calibrating || calibOffset !== 0 || calibScale !== 1;
-    return {
-      backgroundColor: 'transparent',
-      tooltip: { trigger: 'axis', backgroundColor: isDarkCharts ? '#fff' : '#2a2a2a', borderColor: isDarkCharts ? '#ddd' : '#444', textStyle: { color: isDarkCharts ? '#333' : '#ddd' } },
-      legend: { textStyle: { color: isDarkCharts ? '#555' : '#aaa' }, top: 2 },
-      grid: { left: 65, right: 16, top: 36, bottom: 24 },
-      xAxis: { type: 'category', data: series.t, axisLabel: { color: isDarkCharts ? '#999' : '#888', fontSize: 10 } },
-      yAxis: {
-        type: 'value',
-        ...(showCalib ? { min: calibOffset, max: calibHigh } : { max: p95Max(series[metricDataKey[metric]]) }),
-        axisLabel: { color: isDarkCharts ? '#999' : '#888', fontSize: 10, formatter: fmtAxis },
-      },
-      series: [
-        {
-          name: metricLabels[metric], type: 'line', smooth: true, showSymbol: false,
-          data: series[metricDataKey[metric]],
-          ...(showCalib ? {
-            markLine: {
-              silent: true, symbol: 'none',
-              lineStyle: { type: 'dashed', color: isDarkCharts ? '#888' : '#aaa', width: 1 },
-              label: { show: true, position: 'start', formatter: '{b}', color: isDarkCharts ? '#888' : '#999', fontSize: 10 },
-              data: [
-                { yAxis: calibOffset, name: `min=${calibOffset.toFixed(1)}` },
-                { yAxis: calibHigh,  name: `max=${(calibOffset+calibScale).toFixed(1)}` },
-              ],
-            },
-          } : {}),
-        },
-      ],
-      color: [calibrating ? '#888' : '#DA291C'],
-      animation: false,
-      ...(showCalib ? {
-        graphic: [
-          {
-            type: 'text',
-            right: 10, top: 6,
-            style: {
-              text: `min=${calibOffset.toFixed(1)}  max=${(calibOffset + calibScale).toFixed(1)}`,
-              fill: isDarkCharts ? '#aaa' : '#666',
-              fontSize: 11,
-            },
-          },
-        ],
-      } : {}),
-    };
-  }, [series, metric, isDarkCharts, calibOffset, calibScale, calibrating]);
+  /* ── Chart options (per column — O5) ─────────────────── */
+  const { waveOption, featureOption } = useChartOptions(
+    series, metric, calibOffset, calibScale, calibrating, theme,
+  );
 
   /* ── Build patch ─────────────────────────────────────── */
   function buildPatch() {
@@ -1123,7 +1152,7 @@ export default function App() {
               role={role1}
               waveOption={waveOption}
               featureOption={featureOption}
-              metricLabel={metricLabels[metric]}
+              metricLabel={METRIC_LABELS[metric]}
               speed={series.speed.length ? series.speed[series.speed.length - 1] : 0}
               steer={series.steer.length ? series.steer[series.steer.length - 1] : 0.5}
               steerDirection={steerDirection}
@@ -1135,7 +1164,7 @@ export default function App() {
                 role={role2}
                 waveOption={waveOption}
                 featureOption={featureOption}
-                metricLabel={metricLabels[metric2]}
+                metricLabel={METRIC_LABELS[metric2]}
                 speed={series.speed.length ? series.speed[series.speed.length - 1] : 0}
                 steer={series.steer.length ? series.steer[series.steer.length - 1] : 0.5}
                 steerDirection={steerDirection}
