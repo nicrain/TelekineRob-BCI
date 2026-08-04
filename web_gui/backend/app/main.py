@@ -138,6 +138,18 @@ def update_config(req: ConfigPatch) -> dict[str, Any]:
     return patch_config(req.patch).model_dump()
 
 
+@app.get("/api/config/control_token")
+def control_token() -> dict[str, str]:
+    """Return the configured control token (empty string when unset).
+
+    The frontend fetches this at startup and echoes it back as
+    ``Authorization: Bearer <token>`` on REST and ``?token=`` on the teleop
+    WebSocket (O17). When the backend has no token configured, this returns
+    "" and the frontend sends nothing — behaviour is unchanged.
+    """
+    return {"token": _control_token}
+
+
 @app.get("/api/status")
 def get_status() -> dict[str, Any]:
     return probe_system().model_dump()

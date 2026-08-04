@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import ReactECharts from 'echarts-for-react';
-import { api, getWsUrl } from './api';
+import { api, getWsUrl, withWsToken } from './api';
 
 /* ── Constants ─────────────────────────────────────────── */
 const MAX_POINTS = 140;
@@ -744,6 +744,18 @@ export default function App() {
   const isControlMode = inputMode === 'teleop';
   const activeCalib = calib1.calibrating ? calib1 : (calib2.calibrating ? calib2 : null);
 
+  /* ── Control token (O17) ────────────────────────────── */
+  // Fetch the configured control token once at startup and keep it in
+  // sessionStorage; the axios interceptor and withWsToken() pick it up.
+  // Backend unset → empty → nothing stored → no token sent (behaviour unchanged).
+  useEffect(() => {
+    api.get('/api/config/control_token')
+      .then((r) => {
+        if (r.data?.token) sessionStorage.setItem('control_token', r.data.token);
+      })
+      .catch(() => {});
+  }, []);
+
   /* ── Load config ────────────────────────────────────── */
   useEffect(() => {
     api.get('/api/config')
@@ -865,7 +877,8 @@ export default function App() {
       return;
     }
 
-    const wsUrl = (import.meta.env.VITE_API_BASE || '').replace(/^http/, 'ws') + '/ws/teleop';
+    // O17: /ws/teleop is token-gated on the backend; append ?token= when configured.
+    const wsUrl = withWsToken((import.meta.env.VITE_API_BASE || '').replace(/^http/, 'ws') + '/ws/teleop');
     const ws = new WebSocket(wsUrl);
     teleopWsRef.current = ws;
 
@@ -972,6 +985,9 @@ export default function App() {
    *  (the hook's countdown begins on that device's first analysis frame). */
   async function calibrateDevice(device, calib) {
     const patch = buildPatch();
+    // M4-2: buildPatch().eeg2 is null when device2==='teleop' (historical
+    // Keyboard residue) — bail instead of throwing on patch['eeg2'].calibrate.
+    if (!patch[device]) return;
     patch[device].calibrate = true;
     await api.put('/api/config', { patch });
     calib.beginWaiting();
