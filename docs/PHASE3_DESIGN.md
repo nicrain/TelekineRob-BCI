@@ -80,7 +80,7 @@ WSL2:
 1. **双节点争用 `/cmd_vel`**：两个节点若都发布 Twist 到 `/cmd_vel`，最后一帧胜出，speed/steering 互相覆盖 —— 必须有融合层。
 2. **双节点同名**：ROS2 同一 domain 内节点名必须唯一，第二个节点必须改名。
 3. **双节点 CSV 冲突**：默认 `csv_path` 都是 `/tmp/thymio_eeg_log.csv`，双设备时两个节点写同一文件。
-4. **设备断流时的"陈旧回放"**：单设备设计在断流后**持续重发最后 intents**（watchdog 语义）。若双设备直接沿用，speed 节点断流后仍一直发布旧值，融合层无法感知 —— 需要新的 stop-on-loss 语义。
+4. **设备断流时的"短暂回放"**：单设备断流后**宽限期内（< 0.5s）回放最后 intents**，超时后发一次零速并静默（watchdog 语义，**非**永续回放——设计初版 §5.3.1 误述为"持续重发"，2026-08-04 更正，见 review N1）。双设备若沿用宽限回放，断流后 speed/steering 会继续用旧值 ~0.5s，融合层靠"静默"感知会延迟 —— 故双设备用 `stop_on_data_loss` 使节点**断流即静默**。
 5. **LED 争用**：`_update_leds()` 与 role 无关，speed 节点也会向 `/led` 发布圆弧 LED；双节点会互相覆盖。
 6. **进程清理遗漏**：`pkill -f eeg_control_node` 能匹配两个节点（子串匹配），但融合节点需要新 pattern。
 
@@ -336,25 +336,32 @@ self._calib_config_file = str(self.get_parameter("calib_config_file").value)
 cfg_file = cfg_root / self._calib_config_file   # 替换硬编码文件名
 ```
 
-2. **新增参数 `stop_on_data_loss`**（默认 `False`，保持单设备旧语义），改造 `_tick()` 的 watchdog 分支：
+2. **新增参数 `stop_on_data_loss`**（默认 `False`），改造 `_tick()` 的 watchdog 分支。watchdog 决策抽成纯函数 `decide_watchdog_action()`（`thymio_control/watchdog.py`），节点只做副作用（发布/置位）。
+
+> ⚠️ **2026-08-04 更正**：本设计的初版**误述了单设备旧行为**（声称"断流后持续回放最后 intents"）。实际旧代码是：宽限内（`< watchdog_sec`）回放最后 intents → 超时瞬间发一次零速 → **此后静默**（非永续回放）。M2 曾按误述实现为永续回放，构成单设备回归（review N1），已在实现中纠正为真实旧语义，`stop_on_data_loss` 仅作为双设备语义开关。
 
 ```python
-if time.time() - self.last_msg_ts > self.watchdog_sec:
-    if self._adapter_connected:
-        self._adapter_connected = False
-        self.pub.publish(Twist())          # 断流瞬间发一次零速
-        if self.stop_on_data_loss:
-            self.get_logger().warning("data loss — partial twist halted (dual mode)")
-    elif not self.stop_on_data_loss:
-        # 单设备旧行为：断流后继续回放最后 intents
+action = decide_watchdog_action(
+    stale=time.time() - self.last_msg_ts > self.watchdog_sec,
+    connected=self._adapter_connected,
+    stop_on_data_loss=self.stop_on_data_loss,
+)
+if action == "replay":
+    if not self._calibrate:                 # 宽限内：回放最后 intents
         self.pub.publish(self._intents_to_twist(self.last_intents))
     return
+if self._adapter_connected:
+    self._adapter_connected = False
+    if action == "zero":                    # 单设备超时：发一次零速，随后静默
+        self.pub.publish(Twist())
+    else:                                   # 双设备：静默，让 fuser 接管
+        self.get_logger().warning("data loss — partial twist halted (dual mode)")
 ```
 
-语义：
+语义（`decide_watchdog_action` 契约，见 `watchdog.py`）：
 
-- 单设备（`False`）：与现状完全一致（回放最后 Twist）。
-- 双设备（`True`）：断流后 partial Twist 主题**静默**，融合层靠 staleness 感知并整车零速。设备恢复后 `_adapter_connected = True`，自动恢复发布。
+- 单设备（`stop_on_data_loss=False`，**真实旧行为，零回归**）：宽限内回放最后 intents → 超时发一次零速并停 → 不再发布。
+- 双设备（`stop_on_data_loss=True`）：断流即**完全静默**（无宽限回放、无零速标记），融合层靠消息新鲜度感知 staleness 并整车零速；设备恢复后节点恢复发布，fuser 自动续跑。
 
 3. **`_update_leds()` 增加 role 门控**（speed 节点一律不发 LED；同时消除双节点争用 `/led`）：
 
@@ -737,9 +744,10 @@ sequenceDiagram
    - steering 节点：`linear.x = 0`，`angular.z = -steer_direction × turn_angular_speed × |steer_intent-0.5|`
 2. fuser 只做 `merge_twists`：`linear.x ← speed`，`angular.z ← steer`，其余分量清零。
 3. **断流语义（关键）**：
-   - 任一 eeg 节点断流（`stop_on_data_loss=true`）→ 该节点停止发布 partial Twist（发一次零速作为过渡标记）。
+   - 任一 eeg 节点断流（`stop_on_data_loss=true`）→ 该节点**立即停止发布** partial Twist（无宽限回放、无零速标记），fuser 靠消息新鲜度感知。
    - fuser 侧任一输入超过 `watchdog_sec`（0.5s）未更新 → 发布整车零速并记录状态迁移。
    - 设备恢复 → 节点恢复发布 → fuser 恢复融合（自动，无人工干预）。
+   - 单设备（`stop_on_data_loss=false`）：宽限内回放最后 intents → 超时发一次零速并静默（原始行为，非永续回放）。
 4. blink 方向状态机、LED 圆弧指示、blink hold-off 全部留在 steering 节点（现状已按 `_steer_role` 门控），无需改动。
 5. 设备↔role 绑定 = `lsl_source_id` + `role` 参数，全部配置驱动。"headband→steer、hybrid→speed"只是推荐默认排布（UI 默认值可设为：设备 1 = Hybrid + Speed，设备 2 = Headband + Steering，与 P3.2 描述一致）。
 

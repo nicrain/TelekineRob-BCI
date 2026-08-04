@@ -23,6 +23,7 @@ except ImportError:
 # --- Modular architecture ---
 from thymio_control.pipeline import POLICIES, build_adapter
 from thymio_control.processors.enrich import clip01, enrich_features
+from thymio_control.watchdog import decide_watchdog_action
 
 
 class _AdapterArgs:
@@ -438,17 +439,30 @@ class EegControlNode(Node):
                 )
             return
 
-        if time.time() - self.last_msg_ts > self.watchdog_sec:
-            if self._adapter_connected:
-                self._adapter_connected = False
-                self.pub.publish(Twist())  # zero once on the loss transition
-                if self.stop_on_data_loss:
-                    self.get_logger().warning("data loss — partial twist halted (dual mode)")
-            elif not self.stop_on_data_loss:
-                # Single-device legacy behavior: keep replaying last intents.
-                # In dual mode we stay silent so the fuser sees staleness.
+        # No frame this tick — the watchdog response is a pure decision.
+        # Single device: replay within the grace window, one zero at timeout,
+        # then silent (original behavior — NOT perpetual replay). Dual device:
+        # fully silent so the fuser sees staleness and takes over.
+        action = decide_watchdog_action(
+            stale=time.time() - self.last_msg_ts > self.watchdog_sec,
+            connected=self._adapter_connected,
+            stop_on_data_loss=self.stop_on_data_loss,
+        )
+
+        if action == "replay":
+            # Within the grace window (single device): hold the last intents.
+            if not self._calibrate:
                 self.pub.publish(self._intents_to_twist(self.last_intents))
             return
+
+        # "zero" (single-device timeout) or "halt" (dual / already stopped):
+        # the node publishes nothing further until data resumes.
+        if self._adapter_connected:
+            self._adapter_connected = False
+            if action == "zero":
+                self.pub.publish(Twist())  # one zero, then silent
+            else:
+                self.get_logger().warning("data loss — partial twist halted (dual mode)")
     def _intents_to_twist(self, intents) -> Twist:
         speed_intent = clip01(float(intents.get("speed_intent", 0.0)))
         steer_intent = clip01(float(intents.get("steer_intent", 0.5)))

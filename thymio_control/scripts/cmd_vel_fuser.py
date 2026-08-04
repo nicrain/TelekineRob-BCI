@@ -68,7 +68,7 @@ def main(args: Optional[list] = None) -> None:
             self._steer: Optional[Twist] = None
             self._speed_ts = 0.0
             self._steer_ts = 0.0
-            self._stopped = True        # whether currently holding zero velocity
+            self._inputs_lost = False   # transitions drive the loss/resume logs
             self._zero_twist = Twist()
             self._start = time.time()
             self._warned_no_data = False
@@ -106,15 +106,19 @@ def main(args: Optional[list] = None) -> None:
             if twist is None:
                 twist = self._zero_twist
 
-            stopped = twist.linear.x == 0.0 and twist.angular.z == 0.0
-            if stopped and not self._stopped:
+            # Log on the INPUT-health transition, not on the output value —
+            # a relaxed user (both inputs fresh, fused twist zero) is not a
+            # data-loss condition and must not raise the stale warning.
+            lost = not (speed_ok and steer_ok)
+            if lost and not self._inputs_lost:
                 self.get_logger().warning(
-                    "fuser: zero velocity — input missing/stale (speed_ok=%s steer_ok=%s)",
+                    "fuser: input missing/stale — holding zero velocity "
+                    "(speed_ok=%s steer_ok=%s)",
                     speed_ok, steer_ok,
                 )
-            elif not stopped and self._stopped:
-                self.get_logger().info("fuser: resumed fused control")
-            self._stopped = stopped
+            elif not lost and self._inputs_lost:
+                self.get_logger().info("fuser: inputs healthy — resumed fused control")
+            self._inputs_lost = lost
 
             if not self._warned_no_data and self._speed is None and self._steer is None:
                 if now - self._start > 5.0:

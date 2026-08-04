@@ -248,3 +248,23 @@ def test_device1_invalid_role_rejected_on_load(monkeypatch, tmp_path: Path):
 
     with pytest.raises(ValidationError):
         config_store.init_store()
+
+
+def test_motion_invalid_line_mode_rejected_on_load(monkeypatch, tmp_path: Path):
+    """N3: motion.line_mode is a Literal and must fail fast like O25."""
+    launch_path = tmp_path / "launch_args.yaml"
+    eeg_path = tmp_path / "eeg_control_node.params.yaml"
+    eeg2_path = tmp_path / "eeg_control_node.eeg2.params.yaml"
+
+    _write_yaml(launch_path, {"use_sim": True, "run_eeg": False})
+    _write_yaml(
+        eeg_path,
+        {"/**": {"ros__parameters": {"role": "speed", "line_mode": "sideways"}}},
+    )
+
+    monkeypatch.setattr(config_store, "_LAUNCH_YAML", launch_path)
+    monkeypatch.setattr(config_store, "_EEG_YAML", eeg_path)
+    monkeypatch.setattr(config_store, "_EEG2_YAML", eeg2_path)
+
+    with pytest.raises(ValidationError):
+        config_store.init_store()
