@@ -1064,35 +1064,8 @@ export default function App() {
             {running ? (activeCalib?.calibPhase === 'preparing' ? 'Preparing...' : activeCalib?.calibPhase === 'counting' ? `Calibrating... ${activeCalib.calibCountdown}s` : 'Running...') : 'Start'}
           </button>
           <button className="btn btn-ghost" disabled={!running} onClick={() => stopSystem()}>Stop</button>
-          {/* Single-device calibration lives in the topbar (design §5.5.4 现状);
-              in dual mode each column has its own Calibrate + min/max editors. */}
-          {inputMode === 'eeg' && !dualDevice && (
-            <span className="calib-right-group">
-              <button className="btn btn-ghost calib-btn" disabled={running} onClick={() => calibrateDevice('eeg', calib1)}>Calibrate</button>
-              <span className="calib-edit-group">
-                <span className="calib-edit-row">
-                  <label className="calib-edit-label">min</label>
-                  <input
-                    type="number" step="0.1"
-                    className="calib-edit-input"
-                    value={calib1.calibOffset}
-                    onChange={(e) => calib1.updateCalibMin(e.target.value)}
-                    disabled={running}
-                  />
-                </span>
-                <span className="calib-edit-row">
-                  <label className="calib-edit-label">max</label>
-                  <input
-                    type="number" step="0.1"
-                    className="calib-edit-input"
-                    value={calib1.calibOffset + calib1.calibScale}
-                    onChange={(e) => calib1.updateCalibMax(e.target.value)}
-                    disabled={running}
-                  />
-                </span>
-              </span>
-            </span>
-          )}
+          {/* Calibration lives inline in each ChartColumn (single + dual alike,
+              §5.5.4) — the topbar only has Start/Stop. */}
         </div>
       </header>
 
@@ -1362,7 +1335,7 @@ export default function App() {
               steer={series.steer.length ? series.steer[series.steer.length - 1] : 0.5}
               steerDirection={steerDirection}
               dimmed={inputMode !== 'eeg'}
-              showCalib={dualDevice}
+              showCalib={inputMode === 'eeg'}
               calibOffset={calib1.calibOffset}
               calibScale={calib1.calibScale}
               calibrating={calib1.calibrating}
