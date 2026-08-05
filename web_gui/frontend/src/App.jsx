@@ -665,7 +665,7 @@ function ChartColumn({
               <span className="calib-edit-row">
                 <label className="calib-edit-label">min</label>
                 <input
-                  type="number" step="any"
+                  type="number" step="0.1"
                   className="calib-edit-input"
                   value={calibOffset}
                   onChange={(e) => onMinChange(e.target.value)}
@@ -675,7 +675,7 @@ function ChartColumn({
               <span className="calib-edit-row">
                 <label className="calib-edit-label">max</label>
                 <input
-                  type="number" step="any"
+                  type="number" step="0.1"
                   className="calib-edit-input"
                   value={calibOffset + calibScale}
                   onChange={(e) => onMaxChange(e.target.value)}
@@ -1073,7 +1073,7 @@ export default function App() {
                 <span className="calib-edit-row">
                   <label className="calib-edit-label">min</label>
                   <input
-                    type="number" step="any"
+                    type="number" step="0.1"
                     className="calib-edit-input"
                     value={calib1.calibOffset}
                     onChange={(e) => calib1.updateCalibMin(e.target.value)}
@@ -1083,7 +1083,7 @@ export default function App() {
                 <span className="calib-edit-row">
                   <label className="calib-edit-label">max</label>
                   <input
-                    type="number" step="any"
+                    type="number" step="0.1"
                     className="calib-edit-input"
                     value={calib1.calibOffset + calib1.calibScale}
                     onChange={(e) => calib1.updateCalibMax(e.target.value)}
