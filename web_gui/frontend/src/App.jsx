@@ -171,6 +171,10 @@ function useCalibration(device, setFeedback, onDone) {
   const timerRef = useRef(null);     // countdown interval
   const pollRef = useRef(null);      // "waiting for node to write calibrate=false" poll
   const waitingRef = useRef(false);  // true between beginWaiting() and first frame
+  // Calibration values at the moment the calibration started — if the poll
+  // comes back with the same values, the run produced nothing (e.g. aborted
+  // for too few samples) and the UI should say so instead of staying silent.
+  const prevCalibRef = useRef({ offset: 0, scale: 1 });
 
   function clearTimers() {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
@@ -184,6 +188,7 @@ function useCalibration(device, setFeedback, onDone) {
 
   /** User clicked Calibrate — arm the countdown; it starts on the first frame. */
   function beginWaiting() {
+    prevCalibRef.current = { offset: calibOffsetRef.current, scale: calibScale };
     waitingRef.current = true;
     setCalibrating(true);
     setCalibPhase('preparing');
@@ -226,8 +231,16 @@ function useCalibration(device, setFeedback, onDone) {
     clearTimers();
     setCalibrating(false);
     setCalibPhase(null);
-    if (eeg?.calib_offset != null) setCalibOffset(Number(eeg.calib_offset));
-    if (eeg?.calib_scale != null) setCalibScale(Number(eeg.calib_scale));
+    const newOffset = eeg?.calib_offset != null ? Number(eeg.calib_offset) : prevCalibRef.current.offset;
+    const newScale = eeg?.calib_scale != null ? Number(eeg.calib_scale) : prevCalibRef.current.scale;
+    if (eeg?.calib_offset != null) setCalibOffset(newOffset);
+    if (eeg?.calib_scale != null) setCalibScale(newScale);
+    // If the node aborted (too few samples) it clears calibrate=false but
+    // writes no new offset/scale → values unchanged → tell the user to check
+    // the node log instead of silently finishing.
+    const unchanged = Math.abs(newOffset - prevCalibRef.current.offset) < 1e-9
+      && Math.abs(newScale - prevCalibRef.current.scale) < 1e-9;
+    if (unchanged) setFeedback('校准未产出新值(见节点日志)');
     if (onDone) onDone();
   }
 

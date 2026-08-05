@@ -246,18 +246,35 @@ class EegControlNode(Node):
         return confirmed
 
     def _finish_calibration(self) -> None:
-        """Compute p5/p95 from collected samples and update the parameter file."""
+        """Compute p5/p50 from collected samples and update the parameter file."""
         import numpy as np
-        import yaml
         import traceback
         from pathlib import Path
+
+        from thymio_control.calibration import (
+            MIN_CALIB_SAMPLES,
+            enough_samples,
+            write_calib_result,
+        )
+
+        # Both the source tree and the colcon install dir hold the params
+        # file; write to whichever exists. Computed up front so the abort
+        # path can also clear calibrate=false.
+        source_root = Path(__file__).resolve().parents[2]
+        install_dir = Path(__file__).parents[2] / "share" / "thymio_control" / "config"
+        cfg_roots = [install_dir, source_root / "thymio_control" / "config"]
 
         try:
             samples = np.array(self._calib_samples)
             n = len(samples)
             self.get_logger().info(f"CALIB: {n} samples collected")
-            if n < 60:
-                self.get_logger().error("CALIB: not enough samples — abort")
+            if not enough_samples(n):
+                # Abort but still clear calibrate=false so the frontend's poll
+                # terminates — otherwise it hangs at "Calibrating… 0s".
+                self.get_logger().error(
+                    f"CALIB: not enough samples ({n} < {MIN_CALIB_SAMPLES}) — abort"
+                )
+                write_calib_result(cfg_roots, self._calib_config_file)
                 return
             p5 = float(np.percentile(samples, 5))
             p50 = float(np.percentile(samples, 50))
@@ -280,24 +297,13 @@ class EegControlNode(Node):
                     f"CALIB: set_parameters() failed (in-memory params not updated): {exc}"
                 )
 
-            source_root = Path(__file__).resolve().parents[2]
-            install_dir = Path(__file__).parents[2] / "share" / "thymio_control" / "config"
-            for cfg_root in [install_dir, source_root / "thymio_control" / "config"]:
-                try:
-                    cfg_file = cfg_root / self._calib_config_file
-                    with cfg_file.open("r", encoding="utf-8") as fhand:
-                        doc = yaml.safe_load(fhand) or {}
-                    params = doc.setdefault("/**", {}).setdefault("ros__parameters", {})
-                    params["calib_offset"] = offset
-                    params["calib_scale"] = scale
-                    params["calibrate"] = False
-                    with cfg_file.open("w", encoding="utf-8") as fhand:
-                        yaml.safe_dump(doc, fhand, sort_keys=False, allow_unicode=False)
-                    self.get_logger().info(f"CALIB: wrote {cfg_file}")
-                except Exception as exc:
-                    self.get_logger().error(
-                        f"CALIB: failed to write {cfg_root}: {exc}"
-                    )
+            ok = write_calib_result(
+                cfg_roots, self._calib_config_file, offset=offset, scale=scale
+            )
+            if ok:
+                self.get_logger().info(f"CALIB: wrote {self._calib_config_file}")
+            else:
+                self.get_logger().error("CALIB: failed to write one or more config files")
 
             # Update offset/scale in place — rebuilding the policy instance
             # would reset its EMA smoothing state and cause an intent jump
