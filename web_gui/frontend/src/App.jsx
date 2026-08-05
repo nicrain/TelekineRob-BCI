@@ -639,6 +639,7 @@ function ChartColumn({
           <span style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <button
               className="btn btn-ghost calib-btn"
+              style={{ alignSelf: 'stretch' }}
               disabled={disabled || calibrating}
               onClick={onCalibrate}
             >
