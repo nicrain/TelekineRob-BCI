@@ -621,7 +621,7 @@ function ControlVector({ speed, steer, role, steerDirection }) {
 
 /* ── Chart Column (role-adapted charts for one input) ──── */
 function ChartColumn({
-  label, role, waveOption, featureOption, metricLabel,
+  label, logoSrc, role, waveOption, featureOption, metricLabel,
   speed, steer, steerDirection, dimmed,
   showCalib, calibOffset, calibScale, calibrating, calibPhase, calibCountdown,
   onCalibrate, onMinChange, onMaxChange, disabled,
@@ -631,6 +631,7 @@ function ChartColumn({
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between', flexWrap: 'wrap' }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {logoSrc && <img src={logoSrc} alt="" style={{ width: 28, height: 28 }} />}
           <span className="section-label">{label}</span>
           <span className="vl-dot" style={{ background: role === 'speed' ? '#4da6ff' : '#ff944d' }} />
           <span style={{ fontSize: 13, color: '#999' }}>{roleLabel}</span>
@@ -1327,6 +1328,7 @@ export default function App() {
           <div className="charts-grid" style={dualDevice ? { gridTemplateColumns: 'repeat(2, 1fr)' } : undefined}>
             <ChartColumn
               label={eegBrand === 'gtec_hybrid' ? 'Hybrid Black' : 'Headband'}
+              logoSrc={eegBrand === 'gtec_hybrid' ? '/HybridBlack.png' : '/Headband.png'}
               role={role1}
               waveOption={col1.waveOption}
               featureOption={col1.featureOption}
@@ -1349,6 +1351,7 @@ export default function App() {
             {dualDevice && (
               <ChartColumn
                 label={eegBrand2 === 'gtec_hybrid' ? 'Hybrid Black' : 'Headband'}
+                logoSrc={eegBrand2 === 'gtec_hybrid' ? '/HybridBlack.png' : '/Headband.png'}
                 role={role2}
                 waveOption={col2.waveOption}
                 featureOption={col2.featureOption}
