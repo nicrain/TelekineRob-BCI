@@ -818,6 +818,15 @@ export default function App() {
     }
   }, [role1]);  // only react to role1 changes
 
+  /* ── Enforce brand mutual exclusion (dual device) ───── */
+  // Two devices can't be the same model — mirrors the role-mutex pattern.
+  // Single-device mode is unaffected (dualDevice is false).
+  useEffect(() => {
+    if (dualDevice && eegBrand === eegBrand2) {
+      setEegBrand2(eegBrand === 'gtec_hybrid' ? 'gtec_headband' : 'gtec_hybrid');
+    }
+  }, [eegBrand, dualDevice]);
+
   /* ── Poll system status (ROS2 + Thymio) ─────────────── */
   useEffect(() => {
     const poll = () => {
@@ -1186,8 +1195,8 @@ export default function App() {
                     }}
                     disabled={running || !dualDevice}
                     options={[
-                      { value: 'gtec_hybrid',    label: 'g.tec Hybrid Black' },
-                      { value: 'gtec_headband',  label: 'g.tec Headband' },
+                      { value: 'gtec_hybrid',    label: 'g.tec Hybrid Black', disabled: eegBrand === 'gtec_hybrid' },
+                      { value: 'gtec_headband',  label: 'g.tec Headband',     disabled: eegBrand === 'gtec_headband' },
                     ]}
                   />
                   <CascadeSelect
