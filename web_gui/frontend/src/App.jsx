@@ -629,15 +629,14 @@ function ChartColumn({
   const roleLabel = role === 'speed' ? 'Speed' : 'Steering';
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span className="section-label">{label}</span>
-        <span className="vl-dot" style={{ background: role === 'speed' ? '#4da6ff' : '#ff944d' }} />
-        <span style={{ fontSize: 13, color: '#999' }}>{roleLabel}</span>
-      </div>
-      {showCalib && (
-        <div className="chart-card">
-          <h3>Calibration (this device)</h3>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between', flexWrap: 'wrap' }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span className="section-label">{label}</span>
+          <span className="vl-dot" style={{ background: role === 'speed' ? '#4da6ff' : '#ff944d' }} />
+          <span style={{ fontSize: 13, color: '#999' }}>{roleLabel}</span>
+        </span>
+        {showCalib && (
+          <span style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <button
               className="btn btn-ghost calib-btn"
               disabled={disabled || calibrating}
@@ -669,9 +668,9 @@ function ChartColumn({
                 />
               </span>
             </span>
-          </div>
-        </div>
-      )}
+          </span>
+        )}
+      </div>
       <div className={`chart-card${dimmed ? ' dimmed-card' : ''}`}>
         <h3>Raw Wave &mdash; alpha / theta / beta</h3>
         <ReactECharts option={waveOption} style={{ height: 200 }} />
