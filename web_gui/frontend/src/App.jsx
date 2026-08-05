@@ -634,20 +634,6 @@ function ChartColumn({
         <span className="vl-dot" style={{ background: role === 'speed' ? '#4da6ff' : '#ff944d' }} />
         <span style={{ fontSize: 13, color: '#999' }}>{roleLabel}</span>
       </div>
-      <div className={`chart-card${dimmed ? ' dimmed-card' : ''}`}>
-        <h3>Raw Wave &mdash; alpha / theta / beta</h3>
-        <ReactECharts option={waveOption} style={{ height: 200 }} />
-      </div>
-      <div className={`chart-card${dimmed ? ' dimmed-card' : ''}`}>
-        <h3>{metricLabel}</h3>
-        <ReactECharts option={featureOption} style={{ height: 200 }} />
-      </div>
-      <div className="chart-card">
-        <h3>Control Vector</h3>
-        <div className="vector-card-body">
-          <ControlVector speed={speed} steer={steer} role={role} steerDirection={steerDirection} />
-        </div>
-      </div>
       {showCalib && (
         <div className="chart-card">
           <h3>Calibration (this device)</h3>
@@ -686,6 +672,20 @@ function ChartColumn({
           </div>
         </div>
       )}
+      <div className={`chart-card${dimmed ? ' dimmed-card' : ''}`}>
+        <h3>Raw Wave &mdash; alpha / theta / beta</h3>
+        <ReactECharts option={waveOption} style={{ height: 200 }} />
+      </div>
+      <div className={`chart-card${dimmed ? ' dimmed-card' : ''}`}>
+        <h3>{metricLabel}</h3>
+        <ReactECharts option={featureOption} style={{ height: 200 }} />
+      </div>
+      <div className="chart-card">
+        <h3>Control Vector</h3>
+        <div className="vector-card-body">
+          <ControlVector speed={speed} steer={steer} role={role} steerDirection={steerDirection} />
+        </div>
+      </div>
     </div>
   );
 }
