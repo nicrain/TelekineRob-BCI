@@ -184,7 +184,13 @@ def generate_launch_description():
                 "analysis_topic": PythonExpression(["'/eeg_analysis/' + '", eeg2_role, "'"]),
                 "input": eeg2_input,
                 "role": eeg2_role,
-                "stop_on_data_loss": "true",
+                # BOOL param (node declares stop_on_data_loss=False). A bare
+                # "true" string bypasses launch's substitution normalization
+                # and lands as STRING → InvalidParameterTypeException at
+                # startup. Node 1 gets the same value via PythonExpression,
+                # which launch coerces to bool; here dual mode is the only
+                # mode, so a literal bool is the honest spelling.
+                "stop_on_data_loss": True,
                 "calib_config_file": "eeg_control_node.eeg2.params.yaml",
             },
         ],
