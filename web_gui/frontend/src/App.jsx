@@ -850,7 +850,11 @@ export default function App() {
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
       const devs = data.devices || {};
-      const dev1 = devs[role1Ref.current] || Object.values(devs)[0] || null;
+      // No fallback to the first arbitrary frame: in dual-device mode a
+      // missing device-1 frame must NOT surface device-2's data in column 1
+      // (identical-wave bug). M3-1 guarantees role-keyed frames; a missing
+      // key means "no frame for this role yet" → empty column.
+      const dev1 = devs[role1Ref.current] || null;
       const dev2 = devs[role2Ref.current] || null;
       if (!dev1 && !dev2) return;  // no real data yet — keep charts frozen
 
