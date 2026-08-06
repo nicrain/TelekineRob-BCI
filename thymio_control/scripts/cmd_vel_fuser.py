@@ -111,10 +111,12 @@ def main(args: Optional[list] = None) -> None:
             # data-loss condition and must not raise the stale warning.
             lost = not (speed_ok and steer_ok)
             if lost and not self._inputs_lost:
+                # rclpy's RcutilsLogger takes a single message string, not
+                # printf-style positional args — a TypeError would crash the
+                # fuser on exactly this "car won't move" path. Format inline.
                 self.get_logger().warning(
-                    "fuser: input missing/stale — holding zero velocity "
-                    "(speed_ok=%s steer_ok=%s)",
-                    speed_ok, steer_ok,
+                    f"fuser: input missing/stale — holding zero velocity "
+                    f"(speed_ok={speed_ok} steer_ok={steer_ok})"
                 )
             elif not lost and self._inputs_lost:
                 self.get_logger().info("fuser: inputs healthy — resumed fused control")
@@ -130,8 +132,8 @@ def main(args: Optional[list] = None) -> None:
             self._pub.publish(twist)
             if self._verbose:
                 self.get_logger().info(
-                    "fused linear.x=%.3f angular.z=%.3f (speed_ok=%s steer_ok=%s)",
-                    twist.linear.x, twist.angular.z, speed_ok, steer_ok,
+                    f"fused linear.x={twist.linear.x:.3f} angular.z={twist.angular.z:.3f} "
+                    f"(speed_ok={speed_ok} steer_ok={steer_ok})"
                 )
 
     rclpy.init(args=args)

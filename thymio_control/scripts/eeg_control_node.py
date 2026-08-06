@@ -436,12 +436,9 @@ class EegControlNode(Node):
 
             if self.verbose:
                 self.get_logger().info(
-                    "src=%s speed_intent=%.3f steer_intent=%.3f"
-                    % (
-                        frame.source,
-                        self.last_intents.get("speed_intent", 0.5),
-                        self.last_intents.get("steer_intent", 0.5),
-                    )
+                    f"src={frame.source} "
+                    f"speed_intent={self.last_intents.get('speed_intent', 0.5):.3f} "
+                    f"steer_intent={self.last_intents.get('steer_intent', 0.5):.3f}"
                 )
             return
 
