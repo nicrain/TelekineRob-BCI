@@ -1,0 +1,14 @@
+# Force LF line endings on checkout. The ROS2 deployment target is WSL2,
+# where a Windows-side git default of core.autocrlf=true would otherwise
+# convert checked-out text files to CRLF and break the runtime:
+#   - a CRLF shebang (#!...\r) makes `ros2 launch` fail with an exec
+#     format / bad-interpreter error on the symlinked node scripts,
+#   - CRLF YAML is tolerated by rclpy but is a live footgun.
+# `text=auto` keeps binaries untouched while normalizing text to LF in the
+# repo; the per-type eol=lf lines pin the *checkout* byte stream to LF so
+# autocrlf cannot re-corrupt them.
+* text=auto
+*.py   text eol=lf
+*.yaml text eol=lf
+*.yml  text eol=lf
+*.sh   text eol=lf
