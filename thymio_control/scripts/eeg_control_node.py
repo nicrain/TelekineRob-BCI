@@ -35,11 +35,13 @@ class _AdapterArgs:
         lsl_stream_type: str,
         lsl_timeout: float,
         lsl_source_id: str,
+        dsp_debug_frames: int = 0,
     ):
         self.input = input_mode
         self.lsl_stream_type = lsl_stream_type
         self.lsl_timeout = lsl_timeout
         self.lsl_source_id = lsl_source_id
+        self.dsp_debug_frames = dsp_debug_frames
 
 
 class EegControlNode(Node):
@@ -63,6 +65,11 @@ class EegControlNode(Node):
         self.declare_parameter("lsl_stream_type", "EEG")
         self.declare_parameter("lsl_timeout", 8.0)
         self.declare_parameter("lsl_source_id", "")
+        # Diagnostic probe: >0 logs the first N DSP frames' signal RMS, raw
+        # band powers (source_unit²) and converted metrics so a zero-metric
+        # device can be pinned to a stage (data-not-arriving / frequency
+        # mapping / unit conversion). 0 = off (default, no overhead).
+        self.declare_parameter("dsp_debug_frames", 0)
         self.declare_parameter("role", "speed")
 
         # Output and control parameters
@@ -102,6 +109,7 @@ class EegControlNode(Node):
             lsl_stream_type=self.get_parameter("lsl_stream_type").value,
             lsl_timeout=float(self.get_parameter("lsl_timeout").value),
             lsl_source_id=self.get_parameter("lsl_source_id").value,
+            dsp_debug_frames=int(self.get_parameter("dsp_debug_frames").value),
         )
         self.adapter = build_adapter(adapter_args)
 

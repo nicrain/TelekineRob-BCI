@@ -67,6 +67,7 @@ def build_adapter(args: Any):
             stream_type=getattr(args, "lsl_stream_type", "EEG"),
             timeout=getattr(args, "lsl_timeout", 5.0),
             source_id=getattr(args, "lsl_source_id", "") or None,
+            debug_frames=int(getattr(args, "dsp_debug_frames", 0)),
         )
 
     raise RuntimeError(f"Unsupported input mode: {mode!r}")
