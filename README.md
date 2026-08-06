@@ -90,8 +90,8 @@ ros2 launch thymio_control experiment_core.launch.py use_sim:=false run_eeg:=tru
 ### Web GUI
 
 ```bash
-# 后端（真机实验需显式允许真实命令，见下方环境变量）
-cd web_gui/backend && source ../../.venv/bin/activate && WEB_GUI_ALLOW_REAL_COMMANDS=true python -m app.main
+# 后端（默认真实执行；设 WEB_GUI_ALLOW_REAL_COMMANDS=false 可切回 dry-run）
+cd web_gui/backend && source ../../.venv/bin/activate && python -m app.main
 
 # 前端
 cd web_gui/frontend && npm install && npm run dev
@@ -111,11 +111,11 @@ ros2 launch thymio_control experiment_core.launch.py use_sim:=true run_eeg:=true
 
 ## Web GUI 后端环境变量
 
-后端默认**锁紧**（控制真实机器人）：origin 白名单为本地 Vite、绑定 `127.0.0.1`、真实命令默认关闭。
+后端默认**锁紧网络**：origin 白名单为本地 Vite、绑定 `127.0.0.1`（真实命令默认开启，见下）。
 
 | 变量 | 默认 | 说明 |
 |---|---|---|
-| `WEB_GUI_ALLOW_REAL_COMMANDS` | `false` | 真实命令门禁。`false` → Start 是 dry-run、Stop 不 pkill 真实进程。**真机实验必须设 `true`** |
+| `WEB_GUI_ALLOW_REAL_COMMANDS` | `true` | 真实命令门禁。默认即真执行；设 `false` → Start 是 dry-run、Stop 不 pkill 真实进程。仅当主动绑 `0.0.0.0` 暴露网络时建议关闭 |
 | `WEB_GUI_HOST` | `127.0.0.1` | 绑定地址。设 `0.0.0.0` 暴露到局域网（建议同时配 token） |
 | `WEB_GUI_PORT` | `8010` | 绑定端口 |
 | `WEB_GUI_FRONTEND_ORIGIN` | `http://127.0.0.1:5173` | origin 白名单（本地 `localhost:5173`/`127.0.0.1:5173` 恒放行） |

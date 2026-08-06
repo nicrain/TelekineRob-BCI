@@ -27,12 +27,13 @@ def _real_commands_enabled() -> bool:
     """Whether this backend may act on real ROS/Gazebo processes.
 
     Single source of truth for the ``WEB_GUI_ALLOW_REAL_COMMANDS`` gate.
-    Defaults to **false** (mock/dry-run) — real commands must be explicitly
-    enabled by the operator. The same gate protects start (launch), stop
+    Defaults to **true** (real execution) so experiments don't repeat the
+    env var on every launch; set ``WEB_GUI_ALLOW_REAL_COMMANDS=false`` for a
+    mock/dry-run backend. The same gate protects start (launch), stop
     (blanket pkill) and startup/shutdown cleanup so mock mode never touches
     unrelated real processes.
     """
-    return os.getenv("WEB_GUI_ALLOW_REAL_COMMANDS", "false").lower() in {"1", "true", "yes"}
+    return os.getenv("WEB_GUI_ALLOW_REAL_COMMANDS", "true").lower() in {"1", "true", "yes"}
 
 
 def _build_launch_command(cfg: AppConfig) -> list[str]:

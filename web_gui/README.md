@@ -38,12 +38,14 @@ Frontend defaults to `http://localhost:5173`.
 
 ## Security & Environment Variables
 
-The backend controls a **physical robot**, so it now defaults to a locked-down
-posture. To run real commands you must explicitly opt in.
+The backend controls a **physical robot**, so its *network* posture is
+locked down by default (loopback bind + origin whitelist + optional control
+token). Real commands are **enabled by default**; set
+`WEB_GUI_ALLOW_REAL_COMMANDS=false` for a mock/dry-run backend.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `WEB_GUI_ALLOW_REAL_COMMANDS` | `false` | Master gate for real commands. `false` → `/api/system/start` is a **dry-run** (nothing launched) and `/api/system/stop` / shutdown cleanup never blanket-`pkill` ROS/Gazebo processes. Set to `true` for real experiments. |
+| `WEB_GUI_ALLOW_REAL_COMMANDS` | `true` | Master gate for real commands. Default is real execution; `false` → `/api/system/start` is a **dry-run** (nothing launched) and `/api/system/stop` / shutdown cleanup never blanket-`pkill` ROS/Gazebo processes. Set `false` only when you want a mock backend. |
 | `WEB_GUI_HOST` | `127.0.0.1` | Bind address. Loopback only by default — not reachable from the LAN. Set `0.0.0.0` to expose, then also set a token. |
 | `WEB_GUI_PORT` | `8010` | Bind port. |
 | `WEB_GUI_FRONTEND_ORIGIN` | `http://127.0.0.1:5173` | Origin whitelist for CORS + WebSocket. The local Vite origins (`localhost:5173` / `127.0.0.1:5173`) are always allowed. Set a remote origin (e.g. `https://eeg.zhaoyu.wang`) to allow access from a specific host; `"*"` re-disables the check (research only). |
@@ -52,7 +54,6 @@ posture. To run real commands you must explicitly opt in.
 Example — real experiment, LAN-exposed with a token:
 
 ```bash
-WEB_GUI_ALLOW_REAL_COMMANDS=true \
 WEB_GUI_HOST=0.0.0.0 \
 WEB_GUI_CONTROL_TOKEN=change-me \
 python -m app.main
@@ -91,5 +92,5 @@ frontend ←WebSocket→ backend ←rclpy→ ROS2 topics
 ## Process Lifecycle
 
 - **Startup**: loads config from YAML, inits RosBridge in background (no residual process cleanup)
-- **Stop button**: SIGTERM child processes; the blanket `pkill` of known ROS/Gazebo patterns only runs when `WEB_GUI_ALLOW_REAL_COMMANDS=true` (mock mode never touches real processes)
-- **Shutdown (Ctrl+C)**: same cleanup as Stop, gated on `WEB_GUI_ALLOW_REAL_COMMANDS`
+- **Stop button**: SIGTERM child processes; the blanket `pkill` of known ROS/Gazebo patterns runs by default and is only disabled by `WEB_GUI_ALLOW_REAL_COMMANDS=false` (mock mode never touches real processes)
+- **Shutdown (Ctrl+C)**: same cleanup as Stop, gated on `WEB_GUI_ALLOW_REAL_COMMANDS` (opt out with `false`)

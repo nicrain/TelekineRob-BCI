@@ -32,13 +32,14 @@ def test_launch_command_without_eeg_omits_role_and_device():
 
 
 # ---------------------------------------------------------------------------
-# allow_real gate (default OFF) — start / stop / cleanup must be symmetric
+# allow_real gate (default ON — opt out with =false) — start / stop / cleanup
+# must be symmetric
 # ---------------------------------------------------------------------------
 
 
-def test_real_commands_default_false(monkeypatch):
+def test_real_commands_default_true(monkeypatch):
     monkeypatch.delenv("WEB_GUI_ALLOW_REAL_COMMANDS", raising=False)
-    assert command_runner._real_commands_enabled() is False
+    assert command_runner._real_commands_enabled() is True
 
 
 def test_real_commands_enabled_when_env_set(monkeypatch):
@@ -46,15 +47,38 @@ def test_real_commands_enabled_when_env_set(monkeypatch):
     assert command_runner._real_commands_enabled() is True
 
 
-def test_start_system_dry_run_when_not_allowed(monkeypatch):
-    monkeypatch.delenv("WEB_GUI_ALLOW_REAL_COMMANDS", raising=False)
+def test_real_commands_disabled_when_env_false(monkeypatch):
+    monkeypatch.setenv("WEB_GUI_ALLOW_REAL_COMMANDS", "false")
+    assert command_runner._real_commands_enabled() is False
+
+
+def test_start_system_dry_run_when_explicitly_false(monkeypatch):
+    monkeypatch.setenv("WEB_GUI_ALLOW_REAL_COMMANDS", "false")
     result = start_system(AppConfig(), dry_run=False)
     assert result.dry_run is True
     assert "Dry-run" in result.detail
 
 
-def test_stop_system_mock_mode_does_not_pkill(monkeypatch):
+def test_start_system_default_true_reaches_spawn(monkeypatch):
+    """With the env unset (default true) a non-dry start must reach the
+    spawn path instead of being short-circuited to dry-run."""
     monkeypatch.delenv("WEB_GUI_ALLOW_REAL_COMMANDS", raising=False)
+    cfg = AppConfig()
+    cfg.launch.use_sim = False  # real robot, not Gazebo
+    spawned: list[list[str]] = []
+    monkeypatch.setattr(command_runner, "_spawn_ros_command", spawned.append)
+    monkeypatch.setattr(command_runner, "_stop_runtime_processes", lambda: None)
+    monkeypatch.setattr(command_runner, "set_runtime_state", lambda *_: None)
+
+    result = start_system(cfg, dry_run=False)
+
+    assert result.dry_run is False
+    assert "Real Thymio system started" in result.detail
+    assert spawned  # the launch command was actually handed to spawn
+
+
+def test_stop_system_mock_mode_does_not_pkill(monkeypatch):
+    monkeypatch.setenv("WEB_GUI_ALLOW_REAL_COMMANDS", "false")
     killed: list[bool] = []
     monkeypatch.setattr(command_runner, "_kill_ros_processes", lambda: killed.append(True))
     monkeypatch.setattr(command_runner, "_send_stop_to_thymio", lambda: None)
@@ -81,7 +105,7 @@ def test_stop_system_real_mode_pkills(monkeypatch):
 
 
 def test_cleanup_residual_skips_in_mock_mode(monkeypatch):
-    monkeypatch.delenv("WEB_GUI_ALLOW_REAL_COMMANDS", raising=False)
+    monkeypatch.setenv("WEB_GUI_ALLOW_REAL_COMMANDS", "false")
     killed: list[bool] = []
     monkeypatch.setattr(command_runner, "_kill_ros_processes", lambda: killed.append(True))
 
