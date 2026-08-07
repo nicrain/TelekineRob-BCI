@@ -101,7 +101,18 @@ class LauncherApp:
     # -- read endpoints --------------------------------------------------
 
     def status(self) -> dict:
+        # Reconcile before reporting so a bridge that died without an
+        # explicit disconnect shows red/grey, not a stale "connected" (§4:
+        # 状态显示反映真实系统).
+        self._reconcile_proc_health()
         return status_payload(self.state)
+
+    def _reconcile_proc_health(self) -> None:
+        for name, proc in list(self._device_procs.items()):
+            if proc.poll() is not None and self.state.devices[name] in (
+                DEVICE_CONNECTED, DEVICE_CONNECTING,
+            ):
+                self.state.set_device(name, DEVICE_ERROR, "桥进程已退出")
 
     def sidebar_config(self) -> dict:
         """Safe subset for ``GET /config`` (no command bodies)."""
@@ -234,13 +245,96 @@ class LauncherApp:
             self.state.set_system(SYSTEM_ERROR, friendly_error(exc, "重启 web 服务"))
             return {"ok": False, "message": self.state.system_msg}
 
-    # -- M4: device chain (implemented next) ------------------------------
+    # -- M4: device chain -------------------------------------------------
 
     def connect_device(self, name: str) -> dict:
-        raise NotImplementedError(NOT_IMPLEMENTED)
+        with self._lock:
+            if name not in self.config["devices"]:
+                return {"ok": False, "message": f"未知设备: {name}"}
+            if not can_connect_device(self.state):
+                return {"ok": False, "message": "系统未就绪，请先启动系统"}
+            dev = self.config["devices"][name]
+            if self.state.devices[name] in (DEVICE_CONNECTING, DEVICE_CONNECTED):
+                return {"ok": True, "message": f"{dev['label']} 已连接"}
+            self.state.set_device(name, DEVICE_CONNECTING, "连接中…")
+        try:
+            dev_type = dev["type"]
+            if dev_type == "bridge":
+                self._connect_bridge(name, dev)
+            elif dev_type == "usbipd":
+                self._connect_usbipd(name, dev)
+            else:
+                raise ValueError(f"未知设备类型: {dev_type!r}")
+            self.state.set_device(name, DEVICE_CONNECTED, "已连接")
+            return {"ok": True, "message": f"{dev['label']} 已连接"}
+        except Exception as exc:
+            self.state.set_device(
+                name, DEVICE_ERROR, friendly_error(exc, f"连接 {dev['label']}")
+            )
+            return {"ok": False, "message": self.state.device_msgs[name]}
+
+    def _connect_bridge(self, name: str, dev: dict) -> None:
+        """Run the Windows-side LSL bridge; fail if it dies during the
+        verify window or the optional verify_cmd does not pass."""
+        proc = self.executor.spawn(
+            build_bridge_command(dev["command"]), cwd=dev.get("cwd"),
+        )
+        self._device_procs[name] = proc
+        time.sleep(float(dev.get("verify_delay_sec", 5)))
+        if proc.poll() is not None:
+            raise RuntimeError("桥进程已退出，请确认设备已开机且未被占用")
+        verify = dev.get("verify_cmd")
+        if verify:
+            result = self.executor.run(build_bridge_command(verify), timeout=30)
+            if not result.ok():
+                raise RuntimeError("设备验证未通过，请检查设备连接")
+
+    def _connect_usbipd(self, name: str, dev: dict) -> None:
+        """Attach the Thymio USB device via usbipd, then verify inside WSL."""
+        result = self.executor.run(
+            build_usbipd_attach_cmd(dev["attach_cmd"]), timeout=30,
+        )
+        if not result.ok():
+            raise RuntimeError(
+                f"usbipd attach 失败（退出码 {result.exit_code}）"
+                f"{'：' + result.stderr.strip() if result.stderr.strip() else ''}"
+            )
+        time.sleep(float(dev.get("verify_delay_sec", 3)))
+        verify = dev.get("verify_cmd")
+        if verify:
+            vresult = self.executor.run(build_bridge_command(verify), timeout=30)
+            if not vresult.ok():
+                raise RuntimeError("设备验证未通过（ttyACM0 不可见）")
 
     def disconnect_device(self, name: str) -> dict:
-        raise NotImplementedError(NOT_IMPLEMENTED)
+        with self._lock:
+            if name not in self.config["devices"]:
+                return {"ok": False, "message": f"未知设备: {name}"}
+            dev = self.config["devices"][name]
+            if self.state.devices[name] == DEVICE_DISCONNECTED:
+                return {"ok": True, "message": f"{dev['label']} 已断开"}
+            self.state.set_device(name, DEVICE_DISCONNECTING, "断开中…")
+        try:
+            dev_type = dev["type"]
+            if dev_type == "bridge":
+                self._terminate_proc(self._device_procs.pop(name, None))
+            elif dev_type == "usbipd":
+                result = self.executor.run(
+                    build_usbipd_detach_cmd(dev["detach_cmd"]), timeout=30,
+                )
+                if not result.ok():
+                    raise RuntimeError(
+                        f"usbipd detach 失败（退出码 {result.exit_code}）"
+                    )
+            else:
+                raise ValueError(f"未知设备类型: {dev_type!r}")
+            self.state.set_device(name, DEVICE_DISCONNECTED, "")
+            return {"ok": True, "message": f"{dev['label']} 已断开"}
+        except Exception as exc:
+            self.state.set_device(
+                name, DEVICE_ERROR, friendly_error(exc, f"断开 {dev['label']}")
+            )
+            return {"ok": False, "message": self.state.device_msgs[name]}
 
     # -- default ready check ----------------------------------------------
 

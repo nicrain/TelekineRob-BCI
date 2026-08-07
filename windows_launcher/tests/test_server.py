@@ -88,9 +88,10 @@ def test_start_system_via_http(base_url):
     assert body["message"] == "系统已启动并就绪"
 
 
-def test_connect_stub_returns_not_implemented(base_url):
+def test_connect_when_system_stopped_via_http(base_url):
     status, body = _post(base_url, "/connect-device", {"device": "headband"})
-    assert body == {"ok": False, "message": "该功能尚未开通"}
+    assert status == 200
+    assert body == {"ok": False, "message": "系统未就绪，请先启动系统"}
 
 
 def test_unknown_path_404(base_url):
