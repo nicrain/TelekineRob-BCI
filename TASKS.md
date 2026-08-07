@@ -1,4 +1,4 @@
-# Task List — TelekineRob-BCI (feature/gtec-only)
+# Task List — TelekineRob-BCI (feature/double-gtec)
 
 ## ✅ Completed
 
@@ -42,7 +42,7 @@
 
 ## 🟢 Phase 3 — Dual-device
 
-> 实现完成（M1–M4，2026-08-04），待 WSL2 端到端验收（编译 + 视觉终验）。EegConfig2 缺口（P3.1 原注）已在 M1 补齐校准字段。
+> 实现完成（M1–M4，2026-08-04）。已验证通过(2026-08-07)：双设备真机跑通、校准出真值、断流安全停车、O4 Unicorn 桥自愈。EegConfig2 缺口（P3.1 原注）已在 M1 补齐校准字段。
 
 | # | Task | Depends on | Status |
 |---|---|---|---|
