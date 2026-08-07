@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>系统总控</title>
+<style>
+  :root {
+    --off:#9aa0a6; --busy:#f9ab00; --on:#188038; --err:#d93025;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html,body { height:100%; font-family:"Microsoft YaHei",system-ui,sans-serif; font-size:14px; color:#202124; }
+  #app { display:flex; height:100vh; }
+  /* ---------- sidebar ---------- */
+  #sidebar {
+    width:250px; min-width:250px; background:#f1f3f4; border-right:1px solid #dadce0;
+    display:flex; flex-direction:column; padding:14px 10px; gap:6px; overflow-y:auto;
+  }
+  #sidebar h1 { font-size:16px; margin-bottom:8px; }
+  .group-label { font-size:12px; color:#5f6368; margin:10px 0 4px; }
+  .item {
+    display:flex; align-items:center; gap:8px; padding:8px 10px;
+    background:#fff; border:1px solid #dadce0; border-radius:8px;
+  }
+  .dot { width:12px; height:12px; border-radius:50%; background:var(--off); flex:none; }
+  .dot.on   { background:var(--on); }
+  .dot.busy { background:var(--busy); animation:blink 1s infinite; }
+  .dot.err  { background:var(--err); }
+  .item .label { flex:1; }
+  .btn {
+    border:1px solid #dadce0; background:#fff; border-radius:6px;
+    padding:5px 10px; cursor:pointer; font-size:13px;
+  }
+  .btn:hover:not(:disabled) { background:#f8f9fa; }
+  .btn:disabled { opacity:.45; cursor:not-allowed; }
+  .btn.danger { color:var(--err); }
+  @keyframes blink { 50% { opacity:.35; } }
+  /* ---------- message bar ---------- */
+  #msg {
+    position:fixed; bottom:14px; left:270px; right:14px; z-index:20;
+    background:#e8f0fe; border:1px solid #aecbfa; border-radius:8px;
+    padding:10px 14px; display:none; font-size:13px;
+  }
+  #msg.error { background:#fce8e6; border-color:#f28b82; }
+  #msg .close { float:right; cursor:pointer; color:#5f6368; }
+  /* ---------- main ---------- */
+  #main { flex:1; display:flex; flex-direction:column; }
+  #mainbar {
+    display:flex; align-items:center; gap:10px; padding:8px 14px;
+    background:#fff; border-bottom:1px solid #dadce0; font-size:13px;
+  }
+  #mainbar a { color:#1a73e8; text-decoration:none; }
+  iframe { flex:1; border:none; width:100%; }
+  .placeholder { flex:1; display:flex; align-items:center; justify-content:center; color:#5f6368; }
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- ============ 侧边栏（默认结构；由 /config 动态重绘） ============ -->
+  <aside id="sidebar">
+    <h1>系统总控</h1>
+    <div class="group-label">系统状态</div>
+    <div class="item" id="item-system">
+      <span class="dot"></span><span class="label">系统状态</span>
+      <span class="sys-state">未连接</span>
+    </div>
+    <div class="group-label">设备连接</div>
+    <div id="devices-list"></div>
+    <div class="group-label">系统操作</div>
+    <div id="ops-list"></div>
+    <div class="group-label">日志</div>
+    <button class="btn" id="log-btn" disabled>查看日志</button>
+  </aside>
+
+  <!-- ============ 主区域：web GUI iframe ============ -->
+  <main id="main">
+    <div id="mainbar">
+      <span>实验界面</span>
+      <a id="open-new" href="http://localhost:5173" target="_blank">在新标签页打开</a>
+    </div>
+    <iframe id="frame" title="web GUI"></iframe>
+  </main>
+</div>
+
+<div id="msg"><span class="close" onclick="hideMsg()">✕</span><span id="msg-text"></span></div>
+
+<script>
+"use strict";
+
+const G = { config: null, status: null, webUrl: "http://localhost:5173" };
+
+/* ---------- 默认结构（file:// 直接打开也有可看骨架） ---------- */
+const DEFAULT_DEVICES = [
+  { id: "headband", label: "Headband",  type: "device" },
+  { id: "hybrid",   label: "HybridBlack", type: "device" },
+  { id: "thymio",   label: "Thymio",    type: "device" },
+];
+const DEFAULT_OPS = [
+  { id: "start-system", label: "启动系统",   type: "action" },
+  { id: "restart-web",  label: "重启 web 服务", type: "action" },
+  { id: "stop-system",  label: "关闭系统",   type: "action" },
+];
+
+/* ---------- 状态 → 样式 ---------- */
+function dotClass(st) {
+  const map = {
+    running: "on", connected: "on",
+    starting: "busy", stopping: "busy", connecting: "busy", disconnecting: "busy",
+    error: "err",
+  };
+  return map[st] || "";
+}
+function sysLabel(st) {
+  const map = { stopped: "已停止", starting: "启动中…", running: "运行中", stopping: "停止中…", error: "错误" };
+  return map[st] || st || "未连接";
+}
+function devLabel(st) {
+  const map = { disconnected: "未连接", connecting: "连接中…", connected: "已连接", disconnecting: "断开中…", error: "失败" };
+  return map[st] || st || "未连接";
+}
+function showMsg(text, isError) {
+  const m = document.getElementById("msg");
+  document.getElementById("msg-text").textContent = text;
+  m.className = isError ? "error" : "";
+  m.style.display = "block";
+}
+function hideMsg() { document.getElementById("msg").style.display = "none"; }
+
+/* ---------- API ---------- */
+async function api(path, body) {
+  const opts = { method: body ? "POST" : "GET", headers: body ? { "Content-Type": "application/json" } : {} };
+  if (body) opts.body = JSON.stringify(body);
+  const resp = await fetch(path, opts);
+  return resp.json();
+}
+
+/* ---------- 渲染 ---------- */
+function renderDevices() {
+  const list = document.getElementById("devices-list");
+  list.innerHTML = "";
+  const devices = (G.config && G.config.groups
+    ? G.config.groups.find(g => g.id === "devices")?.items || DEFAULT_DEVICES
+    : DEFAULT_DEVICES);
+  devices.forEach(d => {
+    const st = G.status ? (G.status.devices[d.id]?.state || "disconnected") : "disconnected";
+    const sysUp = G.status && ["running", "starting"].includes(G.status.system.state);
+    const div = document.createElement("div");
+    div.className = "item";
+    div.innerHTML =
+      `<span class="dot ${dotClass(st)}"></span>` +
+      `<span class="label">${d.label}</span>` +
+      `<button class="btn" data-id="${d.id}" data-on="${st === "connected"}">${st === "connected" ? "断开" : "连接"}</button>`;
+    const btn = div.querySelector("button");
+    btn.disabled = !sysUp;               // §1.3：系统未起 → 设备按钮全灰不可点
+    btn.onclick = () => toggleDevice(d.id, btn.dataset.on === "true");
+    list.appendChild(div);
+  });
+}
+
+function renderOps() {
+  const list = document.getElementById("ops-list");
+  list.innerHTML = "";
+  const ops = (G.config && G.config.groups
+    ? G.config.groups.find(g => g.id === "ops")?.items || DEFAULT_OPS
+    : DEFAULT_OPS);
+  ops.forEach(o => {
+    const btn = document.createElement("button");
+    btn.className = "btn" + (o.id === "stop-system" ? " danger" : "");
+    btn.textContent = o.label;
+    btn.id = "op-" + o.id;
+    btn.style.width = "100%";
+    btn.onclick = () => runAction(o.id);
+    list.appendChild(btn);
+  });
+}
+
+function renderSystem() {
+  const item = document.getElementById("item-system");
+  if (!G.status) return;
+  const s = G.status.system;
+  const dot = item.querySelector(".dot");
+  dot.className = "dot " + dotClass(s.state);
+  const lbl = item.querySelector(".sys-state");
+  lbl.textContent = sysLabel(s.state);
+  if (s.message) lbl.title = s.message;
+  const ops = G.status.system.state;
+  const startBtn = document.getElementById("op-start-system");
+  const stopBtn = document.getElementById("op-stop-system");
+  const restartBtn = document.getElementById("op-restart-web");
+  if (startBtn) startBtn.disabled = !["stopped", "error"].includes(ops);
+  if (stopBtn) stopBtn.disabled = !["running", "starting", "error"].includes(ops);
+  if (restartBtn) restartBtn.disabled = !["running", "error"].includes(ops);
+}
+
+/* ---------- 动作 ---------- */
+async function toggleDevice(id, currentlyOn) {
+  const path = currentlyOn ? "/disconnect-device" : "/connect-device";
+  const r = await api(path, { device: id });
+  showMsg(r.message || (r.ok ? "完成" : "失败"), !r.ok);
+}
+async function runAction(id) {
+  const path = { "start-system": "/start-system", "restart-web": "/restart-web", "stop-system": "/stop-system" }[id];
+  if (!path) return;
+  const r = await api(path);
+  showMsg(r.message || (r.ok ? "完成" : "失败"), !r.ok);
+  pollStatus();   // 立刻刷新一次
+}
+
+/* ---------- 轮询 ---------- */
+async function pollStatus() {
+  try {
+    G.status = await api("/status");
+  } catch {
+    showMsg("无法连接总控服务，请确认服务已启动", true);
+    return;
+  }
+  renderSystem(); renderDevices(); renderOps();
+}
+
+/* ---------- iframe（§5 #5 fallback：被拒则新标签打开） ---------- */
+function setupFrame() {
+  const frame = document.getElementById("frame");
+  const link = document.getElementById("open-new");
+  link.href = G.webUrl;
+  frame.src = G.webUrl;
+  frame.onload = () => { frame.style.display = "block"; };
+  frame.onerror = () => { frame.style.display = "none"; };  // 被 X-Frame-Options 拒绝时只剩链接
+}
+
+/* ---------- 启动 ---------- */
+async function init() {
+  setupFrame();
+  renderDevices(); renderOps();
+  try {
+    const cfg = await api("/config");
+    G.config = cfg;
+    G.webUrl = cfg.web_url || G.webUrl;
+    const log = cfg.log;
+    const logBtn = document.getElementById("log-btn");
+    if (log) { logBtn.textContent = log.label; logBtn.disabled = !log.placeholder; }
+    setupFrame();
+    renderDevices(); renderOps();
+  } catch { /* file:// 直接打开：用默认骨架 */ }
+  pollStatus();
+  setInterval(pollStatus, 1500);
+}
+init();
+</script>
+</body>
+</html>
