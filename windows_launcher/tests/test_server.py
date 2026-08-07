@@ -41,14 +41,24 @@ def _get(url, path):
         return resp.status, resp.read().decode("utf-8")
 
 
-def _post(url, path, payload=None):
+def _post(url, path, payload=None, origin=None):
     data = json.dumps(payload or {}).encode("utf-8")
+    headers = {"Content-Type": "application/json"}
+    if origin is not None:
+        headers["Origin"] = origin
     req = urllib.request.Request(
-        url + path, data=data, method="POST",
-        headers={"Content-Type": "application/json"},
+        url + path, data=data, method="POST", headers=headers,
     )
     with urllib.request.urlopen(req, timeout=5) as resp:
         return resp.status, json.loads(resp.read().decode("utf-8"))
+
+
+def _post_403(url, path, origin=None):
+    """POST expecting a 403 cross-origin rejection."""
+    with pytest.raises(urllib.error.HTTPError) as excinfo:
+        _post(url, path, origin=origin)
+    assert excinfo.value.code == 403
+    return json.loads(excinfo.value.read().decode("utf-8"))
 
 
 def test_get_root_returns_html(base_url):
@@ -82,22 +92,38 @@ def test_get_config_returns_sidebar(base_url):
 
 
 def test_start_system_via_http(base_url):
-    status, body = _post(base_url, "/start-system")
+    status, body = _post(base_url, "/start-system", origin=base_url)
     assert status == 200
     assert body["ok"] is True
     assert body["message"] == "系统已启动并就绪"
 
 
 def test_connect_when_system_stopped_via_http(base_url):
-    status, body = _post(base_url, "/connect-device", {"device": "headband"})
+    status, body = _post(
+        base_url, "/connect-device", {"device": "headband"}, origin=base_url,
+    )
     assert status == 200
     assert body == {"ok": False, "message": "系统未就绪，请先启动系统"}
 
 
 def test_unknown_path_404(base_url):
     with pytest.raises(urllib.error.HTTPError) as excinfo:
-        _post(base_url, "/nope")
+        _post(base_url, "/nope", origin=base_url)
     assert excinfo.value.code == 404
+
+
+def test_post_without_origin_rejected(base_url):
+    """Finding A: curl/script callers without Origin are denied."""
+    body = _post_403(base_url, "/start-system", origin=None)
+    assert body["message"] == "跨域请求被拒绝"
+
+
+def test_post_evil_origin_rejected(base_url):
+    """Finding A: an arbitrary webpage must not fire the action POSTs."""
+    body = _post_403(base_url, "/stop-system", origin="http://evil.example.com")
+    assert body["message"] == "跨域请求被拒绝"
+    body = _post_403(base_url, "/start-system", origin="http://evil.example.com")
+    assert body["message"] == "跨域请求被拒绝"
 
 
 def test_main_honours_config_path_arg(capsys):

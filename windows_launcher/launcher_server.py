@@ -99,6 +99,42 @@ class LauncherApp:
         self._web_procs: List[subprocess.Popen] = []
         self._device_procs: Dict[str, subprocess.Popen] = {}
 
+        # Origin whitelist for the action POSTs (finding A). The console
+        # page is same-origin, so its browser requests always carry one of
+        # the service's own origins (127.0.0.1 or localhost on the bound
+        # port); config may add more (e.g. a LAN address if host≠loopback).
+        host = config["service"].get("host", "127.0.0.1")
+        port = int(config["service"].get("port", 8020))
+        self._allowed_origins = set(config["service"].get("allowed_origins", [])) | {
+            f"http://127.0.0.1:{port}",
+            f"http://localhost:{port}",
+        }
+
+    def validate_origin(self, origin: str) -> bool:
+        """Reject POSTs from pages not served by this console (finding A).
+
+        Mirrors web_gui's ``_validate_origin``: http/https scheme + member
+        of the whitelist. Browsers always send ``Origin`` on POSTs, so an
+        arbitrary webpage can no longer fire /start-system etc. at the
+        loopback service (CSRF-style); curl/scripts without an Origin are
+        also rejected (defence-in-depth).
+        """
+        if not origin or not isinstance(origin, str):
+            return False
+        if not (origin.startswith("http://") or origin.startswith("https://")):
+            return False
+        return origin in self._allowed_origins
+
+    def register_port(self, port: int) -> None:
+        """Adopt the port the server actually bound.
+
+        Production binds the config port, so this is a no-op; tests bind an
+        ephemeral port and must still pass their own origin.
+        """
+        self._allowed_origins.update(
+            {f"http://127.0.0.1:{port}", f"http://localhost:{port}"}
+        )
+
     # -- read endpoints --------------------------------------------------
 
     def status(self) -> dict:
@@ -166,17 +202,24 @@ class LauncherApp:
             raise RuntimeError(f"WSL（{cfg['distro']}）未就绪（退出码 {result.exit_code}）")
 
     def _sync_files(self) -> None:
-        """Copy launcher + bridge files from WSL → Windows (§1.1 self-sync)."""
+        """Copy launcher + bridge files from WSL → Windows (§1.1 self-sync).
+
+        Machine-local ``config.json`` is excluded (finding C): the operator
+        fills it once on Windows and must not have it reverted to the WSL
+        repo's placeholder on every start-system.
+        """
         sync = self.config["sync"]
-        for d in sync["dirs"]:
-            src = sync["src_wsl_root"] + "\\" + d
-            dst = sync["dst_root"] + "\\" + d
+        for item in sync["items"]:
+            rel = item["src"]
+            src = sync["src_wsl_root"] + "\\" + rel
+            dst = sync["dst_root"] + "\\" + rel
             result = self.executor.run(
-                build_sync_cmd(sync["tool"], src, dst), timeout=60,
+                build_sync_cmd(sync["tool"], src, dst, item.get("exclude")),
+                timeout=60,
             )
             codes = tuple(sync.get("success_exit_codes", [0]))
             if not result.ok(codes):
-                raise RuntimeError(f"同步 {d} 失败（退出码 {result.exit_code}）")
+                raise RuntimeError(f"同步 {rel} 失败（退出码 {result.exit_code}）")
 
     def _spawn_web_services(self) -> None:
         for cmd in build_start_web_cmds(self.config):
@@ -363,6 +406,7 @@ class LauncherServer(ThreadingHTTPServer):
     def __init__(self, addr, app: LauncherApp) -> None:
         super().__init__(addr, Handler)
         self.app = app
+        app.register_port(self.server_address[1])
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -416,8 +460,15 @@ class Handler(BaseHTTPRequestHandler):
         return self._send_json({"ok": False, "message": "未知地址"}, code=404)
 
     def do_POST(self):
-        path = urlparse(self.path).path
         app = self.server.app
+        # Finding A: /start-system /stop-system /restart-web and the device
+        # POSTs are triggerable as CORS simple requests — any webpage could
+        # fire them at the loopback service. Reject cross-origin POSTs.
+        if not app.validate_origin(self.headers.get("Origin", "")):
+            return self._send_json(
+                {"ok": False, "message": "跨域请求被拒绝"}, code=403
+            )
+        path = urlparse(self.path).path
         try:
             if path == "/start-system":
                 result = app.start_system()

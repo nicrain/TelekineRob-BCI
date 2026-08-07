@@ -141,3 +141,4 @@ TelekineRob-BCI/
 | 日期 | 变更 | 影响 |
 |---|---|---|
 | 2026-08-07 | MVP M1–M6 实现完成。入口用 `last_url.txt` 传递端口（bat 不解析 JSON）；自同步目标用 `sync.dst_root`；usbipd busid 由用户填 config | 部署/填表说明见 `windows_launcher/README.md`；真机按 §4 验收 |
+| 2026-08-07 | 推送前修 3 条：**C**=config.json 排除出同步（默认工具改 robocopy，`/XF config.json`，退出码 0–7 均算成功）；**A**=action POST 加 Origin 白名单（同 web_gui `_validate_origin` 模式，自动含运行时端口 `127.0.0.1`/`localhost` 双拼写）；**D**=bat 启动前 `del last_url.txt` 防旧 URL | config.json 成机器本地配置不再被 WSL 覆盖；任意网页无法再触发启动/停止；启动不留旧地址 |

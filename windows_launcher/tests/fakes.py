@@ -50,7 +50,8 @@ class FakeExecutor:
         if head == ["wsl"] and tail == "echo ok":
             return CompletedCommand(0 if self.detect_ok else 1, "ok", "")
         if head in (["xcopy"], ["robocopy"]):
-            return CompletedCommand(0 if self.sync_ok else 4)
+            # robocopy: 0–7 are success, >=8 are real failures
+            return CompletedCommand(0 if self.sync_ok else 8)
         if head == ["wsl"] and "ttyACM0" in tail:
             return CompletedCommand(0 if self.verify_ok else 1, "ok" if self.verify_ok else "")
         if head == ["wsl"] and "pkill" in tail:

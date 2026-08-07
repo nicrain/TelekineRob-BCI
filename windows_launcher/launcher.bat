@@ -17,7 +17,9 @@ if errorlevel 1 (
     exit /b 1
 )
 
-rem --- 2) 启动控制服务（最小化窗口，日志留在那里） ---
+rem --- 2) 清掉上次残留地址，再启动控制服务（最小化窗口） ---
+rem    （若上次没写 last_url.txt，删不掉也只是忽略）
+del last_url.txt 2>nul
 start /min "" python launcher_server.py
 
 rem --- 3) 等服务把地址写进 last_url.txt，再开浏览器 ---

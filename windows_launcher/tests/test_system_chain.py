@@ -21,10 +21,13 @@ def test_start_system_success_sequence():
 
     assert result == {"ok": True, "message": "系统已启动并就绪"}
     assert app.state.system == "running"
-    # order: wsl detect → sync dir1 → sync dir2 → spawn backend/frontend
+    # order: wsl detect → sync windows_launcher → sync gtec_bridge → spawn
     assert ex.run_calls[0][-1].endswith("echo ok")
-    assert ex.run_calls[1][0] == "xcopy"
-    assert ex.run_calls[2][0] == "xcopy"
+    assert ex.run_calls[1][0] == "robocopy"
+    assert ex.run_calls[2][0] == "robocopy"
+    # finding C: config.json excluded only from the windows_launcher item
+    assert "config.json" in ex.run_calls[1]
+    assert "config.json" not in ex.run_calls[2]
     assert len(ex.spawn_calls) == 2
     assert "python -m app.main" in ex.spawn_calls[0][-1]
     assert "npm run dev" in ex.spawn_calls[1][-1]

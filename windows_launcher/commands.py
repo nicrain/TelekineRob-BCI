@@ -68,20 +68,39 @@ def build_wsl_cd_cmd(distro: str, repo_path: str, inner: str) -> List[str]:
     return ["wsl", "-d", distro, "-e", "bash", "-lc", f"cd {shlex_quote(repo_path)} && {inner}"]
 
 
-def build_sync_cmd(tool: str, src: str, dst: str) -> List[str]:
+def build_sync_cmd(
+    tool: str,
+    src: str,
+    dst: str,
+    exclude: Optional[List[str]] = None,
+) -> List[str]:
     """Copy a directory tree from WSL's ``\\wsl$`` share to a Windows dir.
 
-    ``src``/``dst`` are full paths (Windows or UNC).  ``tool`` is
-    configurable because the operator's machine may prefer ``robocopy``.
+    ``src``/``dst`` are full paths (Windows or UNC).  *exclude* lists file
+    names to skip (e.g. the machine-local ``config.json`` must not be
+    overwritten by the WSL repo's copy — finding C).
+
+    ``tool`` defaults to ``robocopy`` because it supports inline file
+    exclusion (``/XF``) and its exit codes 0–7 are all success; ``xcopy``
+    cannot exclude inline, so requesting excludes with it raises rather
+    than silently clobbering the local config.
     """
-    if tool == "xcopy":
-        return ["xcopy", "/E", "/I", "/Y", src, dst]
+    exclude = list(exclude or [])
     if tool == "robocopy":
-        return [
+        cmd = [
             "robocopy", src, dst, "/E", "/IS", "/IT",
             "/NFL", "/NDL", "/NJH", "/NJS", "/NP",
         ]
-    raise ValueError(f"未知同步工具: {tool!r} (支持 xcopy / robocopy)")
+        if exclude:
+            cmd += ["/XF", *exclude]
+        return cmd
+    if tool == "xcopy":
+        if exclude:
+            raise ValueError(
+                "xcopy 不支持排除文件；请在 config.json 的 sync.tool 改用 robocopy"
+            )
+        return ["xcopy", "/E", "/I", "/Y", src, dst]
+    raise ValueError(f"未知同步工具: {tool!r} (支持 robocopy / xcopy)")
 
 
 def build_start_web_cmds(config: dict) -> List[List[str]]:

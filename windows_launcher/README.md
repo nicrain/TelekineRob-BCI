@@ -16,12 +16,16 @@ windows_launcher/
 
 ## 首次部署（用户在真机做一次）
 
-1. **确认环境**：Windows 已装 Python 3（勾选 "Add Python to PATH"）；
+1. **把 `windows_launcher/` 从 WSL 仓库首次拷到 Windows 目标目录**（仅这一次；
+   之后的更新由「启动系统」自同步完成）。也可以在 WSL 里执行
+   `xcopy /E /I /Y \\wsl$\<distro>\home\robot\TelekineRob-BCI\windows_launcher <目标>`。
+2. **确认环境**：Windows 已装 Python 3（勾选 "Add Python to PATH"）；
    `wsl -l` 里发行版名；桥脚本依赖已装（`gpype` / `UnicornPy` / `pylsl`）。
-2. **填 `config.json`**（所有 `# 需要你确认/填写` 的项）：
+3. **填 Windows 侧的 `config.json`**（以下字段）：
 
    | 字段 | 含义 | 谁来填 |
    |---|---|---|
+   | `service.allowed_origins` | 额外的浏览器来源白名单（默认自动含本机 `127.0.0.1`/`localhost`+端口） | 一般不用动 |
    | `wsl.distro` | WSL 发行版名 | 确认（默认 `Ubuntu`） |
    | `wsl.repo_path` | WSL 内仓库路径 | 确认（默认 `/home/robot/TelekineRob-BCI`） |
    | `sync.src_wsl_root` | 同上的 Windows 侧 UNC 写法 | 确认 |
@@ -31,9 +35,13 @@ windows_launcher/
    | `web.backend_cmd` / `frontend_cmd` | WSL 内起前后端的 shell 命令 | 确认 |
    | `devices.*.verify_cmd` | 连上后的自检命令（null = 只查进程存活） | 可选 |
 
-3. **自同步**：每次点「启动系统」，launcher 会把 `windows_launcher/` +
-   `gtec_bridge/` 从 WSL 仓库拷到 `sync.dst_root`——**你永远不用碰 git**，
-   launcher 跑的是仓库最新版（本次双击用旧版，下次双击生效新版）。
+   ⚠️ **这个 config.json 是"机器本地配置"**：同步时被排除（`sync.items`
+   里 `windows_launcher` 排除 `config.json`），永远不会被 WSL 仓库版覆盖——
+   你填的 usbipd busid 等一直保留。WSL 仓库里的 config.json 只是出厂默认。
+4. **自同步**：每次点「启动系统」，launcher 用 `robocopy` 把
+   `windows_launcher/`（**不含 config.json**）+ `gtec_bridge/` 从 WSL 仓库
+   拷到 `sync.dst_root`——**你永远不用碰 git**，launcher 跑的是仓库最新版
+   （本次双击用旧版，下次双击生效新版）。
 
 ## 使用流程（操作者）
 

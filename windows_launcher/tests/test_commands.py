@@ -27,6 +27,21 @@ def test_sync_cmd_robocopy():
     assert cmd[0] == "robocopy"
 
 
+def test_sync_cmd_robocopy_excludes_config():
+    """Finding C: config.json must be excluded from the launcher sync."""
+    cmd = build_sync_cmd("robocopy", "src", "dst", exclude=["config.json"])
+    assert "/XF" in cmd
+    assert cmd[cmd.index("/XF") + 1] == "config.json"
+
+
+def test_sync_cmd_xcopy_with_exclude_raises():
+    """xcopy cannot exclude inline — raise rather than clobber local config."""
+    import pytest
+
+    with pytest.raises(ValueError, match="robocopy"):
+        build_sync_cmd("xcopy", "src", "dst", exclude=["config.json"])
+
+
 def test_sync_cmd_unknown_tool_raises():
     import pytest
 

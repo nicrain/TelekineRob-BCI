@@ -1,7 +1,8 @@
 {
   "service": {
     "host": "127.0.0.1",
-    "port": 8020
+    "port": 8020,
+    "allowed_origins": []
   },
 
   "wsl": {
@@ -11,11 +12,14 @@
   },
 
   "sync": {
-    "tool": "xcopy",
+    "tool": "robocopy",
     "src_wsl_root": "\\\\wsl$\\Ubuntu\\home\\robot\\TelekineRob-BCI",
     "dst_root": "C:\\Users\\Robot\\Desktop\\gpype_test\\TelekineRob-BCI",
-    "dirs": ["windows_launcher", "gtec_bridge"],
-    "success_exit_codes": [0, 1]
+    "items": [
+      { "src": "windows_launcher", "exclude": ["config.json"] },
+      { "src": "gtec_bridge", "exclude": [] }
+    ],
+    "success_exit_codes": [0, 1, 2, 3, 4, 5, 6, 7]
   },
 
   "web": {
