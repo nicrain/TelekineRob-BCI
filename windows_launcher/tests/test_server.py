@@ -112,6 +112,15 @@ def test_unknown_path_404(base_url):
     assert excinfo.value.code == 404
 
 
+def test_action_endpoints_are_post_only(base_url):
+    """Contract pin for the real-device bug: action endpoints must reject
+    GET (the frontend's bare api(path) became a GET and got 404 here)."""
+    for path in ("/start-system", "/stop-system", "/restart-web"):
+        with pytest.raises(urllib.error.HTTPError) as excinfo:
+            _get(base_url, path)
+        assert excinfo.value.code == 404
+
+
 def test_post_without_origin_rejected(base_url):
     """Finding A: curl/script callers without Origin are denied."""
     body = _post_403(base_url, "/start-system", origin=None)

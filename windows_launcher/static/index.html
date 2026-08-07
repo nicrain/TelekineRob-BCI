@@ -200,7 +200,9 @@ async function toggleDevice(id, currentlyOn) {
 async function runAction(id) {
   const path = { "start-system": "/start-system", "restart-web": "/restart-web", "stop-system": "/stop-system" }[id];
   if (!path) return;
-  const r = await api(path);
+  // 空 JSON body 强制走 POST：api() 以 body 有无选方法，裸 api(path) 会变成
+  // GET → 服务端只注册了 POST → 404 "未知地址"（真机点击才暴露的 bug）。
+  const r = await api(path, {});
   showMsg(r.message || (r.ok ? "完成" : "失败"), !r.ok);
   pollStatus();   // 立刻刷新一次
 }
