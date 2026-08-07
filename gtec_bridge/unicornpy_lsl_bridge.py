@@ -18,10 +18,6 @@ WSL2 counterpart (in existing launch config):
 
 Robustness
 ----------
-- ``GetData`` may return 0 scans on a poll (the API allows it). The loop
-  then *skips* the round instead of re-pushing the previous round's buffer,
-  which would alias stale samples into the control loop. The outlet only
-  ever sees new data.
 - A ``DeviceException`` (e.g. buffer overflow) no longer kills the bridge:
   the loop stops acquisition, reconnects with exponential backoff, and
   resumes streaming. First connect still fails fast with a troubleshooting
@@ -146,13 +142,15 @@ def main() -> int:
                 device.StartAcquisition(False)  # False = real EEG
                 print("[INFO] Streaming to LSL... Press Ctrl+C to stop.\n")
                 while True:
-                    n_scans = device.GetData(FRAME_LENGTH, buf, len(buf))
-                    if n_scans <= 0:
-                        # API allows empty polls. Re-pushing the previous
-                        # round's buffer would alias stale samples into the
-                        # control loop — skip; only new data reaches the
-                        # outlet.
-                        continue
+                    # UnicornPy's Python GetData is **void**: on success it
+                    # writes nScans fresh samples into buf, on failure it
+                    # raises DeviceException (caught below). The C API's
+                    # error code is not returned by the Python binding, so
+                    # there is nothing to test — do NOT re-add a return
+                    # check: void → None would TypeError on the first frame,
+                    # and a captured C code 0 (ErrorSuccess) would read as
+                    # "≤0" and silently drop every sample.
+                    device.GetData(FRAME_LENGTH, buf, len(buf))
                     data = np.frombuffer(buf, dtype=np.float32, count=n_channels)
                     outlet.push_sample(data[0:UnicornPy.EEGChannelsCount])
             except UnicornPy.DeviceException as exc:
