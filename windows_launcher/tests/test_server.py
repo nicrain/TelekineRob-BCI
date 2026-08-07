@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from config import load_config
+from fakes import FakeExecutor
 from launcher_server import LauncherApp, LauncherServer
 
 REPO_CONFIG = Path(__file__).resolve().parents[1] / "config.json"
@@ -19,7 +20,13 @@ REPO_CONFIG = Path(__file__).resolve().parents[1] / "config.json"
 @pytest.fixture()
 def base_url():
     cfg = load_config(REPO_CONFIG)
-    server = LauncherServer(("127.0.0.1", 0), LauncherApp(cfg))
+    # Fake executor + ready check: no real wsl/xcopy/web ever runs.
+    app = LauncherApp(
+        cfg,
+        executor=FakeExecutor(),
+        ready_check=lambda url, timeout: True,
+    )
+    server = LauncherServer(("127.0.0.1", 0), app)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
@@ -50,6 +57,14 @@ def test_get_root_returns_html(base_url):
     assert body.strip().startswith("<")
 
 
+def test_get_root_serves_console_page(base_url):
+    """M2: the served page must be the console (sidebar + iframe + poll)."""
+    status, body = _get(base_url, "/")
+    assert "系统总控" in body
+    assert "iframe" in body
+    assert "/status" in body and "/config" in body
+
+
 def test_get_status_initial_shape(base_url):
     status, body = _get(base_url, "/status")
     assert status == 200
@@ -66,10 +81,11 @@ def test_get_config_returns_sidebar(base_url):
     assert data["log"]["label"] == "查看日志"
 
 
-def test_action_stub_returns_not_implemented(base_url):
+def test_start_system_via_http(base_url):
     status, body = _post(base_url, "/start-system")
     assert status == 200
-    assert body == {"ok": False, "message": "该功能尚未开通"}
+    assert body["ok"] is True
+    assert body["message"] == "系统已启动并就绪"
 
 
 def test_connect_stub_returns_not_implemented(base_url):

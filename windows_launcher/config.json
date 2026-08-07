@@ -22,6 +22,7 @@
     "url": "http://localhost:5173",
     "backend_cmd": "cd web_gui/backend && (source .venv/bin/activate 2>/dev/null || true; python -m app.main) &",
     "frontend_cmd": "cd web_gui/frontend && (npm run dev) &",
+    "stop_cmd": "pkill -f 'app.main' ; pkill -f 'npm run dev' ; true",
     "ready_timeout_sec": 60
   },
 

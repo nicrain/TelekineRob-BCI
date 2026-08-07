@@ -31,6 +31,7 @@ from commands import (
     build_sync_cmd,
     build_usbipd_attach_cmd,
     build_usbipd_detach_cmd,
+    build_wsl_cd_cmd,
     build_wsl_detect_cmd,
 )
 from config import load_config
@@ -70,7 +71,9 @@ def friendly_error(exc: Exception, action: str = "") -> str:
         return prefix + "操作超时，请检查 WSL 或设备是否就绪"
     if isinstance(exc, (urllib.error.URLError, ConnectionError, TimeoutError)):
         return prefix + "网页服务连不上，请稍后再试"
-    if isinstance(exc, ValueError):
+    if isinstance(exc, (ValueError, RuntimeError)):
+        # Our own raised errors already carry a Chinese, operator-facing
+        # sentence — surface it verbatim (no stack).
         return prefix + str(exc)
     return prefix + f"发生错误（{type(exc).__name__}）"
 
@@ -121,16 +124,117 @@ class LauncherApp:
         except subprocess.TimeoutExpired:
             proc.kill()
 
-    # -- action stubs (implemented in M3 / M4) ---------------------------
+    # -- M3: system chain ------------------------------------------------
 
     def start_system(self) -> dict:
-        raise NotImplementedError(NOT_IMPLEMENTED)
+        """wsl 检测 → 同步 launcher+桥文件（自同步）→ 起前后端 → 就绪检测."""
+        with self._lock:
+            if not can_start_system(self.state):
+                return {"ok": True, "message": "系统已在运行或启动中"}
+            self.state.set_system(SYSTEM_STARTING, "正在启动…")
+        try:
+            self._detect_wsl()
+            self._sync_files()
+            self._spawn_web_services()
+            if not self._wait_ready(
+                self.config["web"]["url"],
+                float(self.config["web"].get("ready_timeout_sec", 60)),
+            ):
+                raise RuntimeError("网页服务未就绪（超时），请确认前端已启动")
+            self.state.set_system(SYSTEM_RUNNING, "系统已就绪")
+            return {"ok": True, "message": "系统已启动并就绪"}
+        except Exception as exc:
+            self.state.set_system(SYSTEM_ERROR, friendly_error(exc, "启动系统"))
+            return {"ok": False, "message": self.state.system_msg}
+
+    def _detect_wsl(self) -> None:
+        cfg = self.config["wsl"]
+        result = self.executor.run(build_wsl_detect_cmd(cfg["distro"]), timeout=30)
+        if not result.ok():
+            raise RuntimeError(f"WSL（{cfg['distro']}）未就绪（退出码 {result.exit_code}）")
+
+    def _sync_files(self) -> None:
+        """Copy launcher + bridge files from WSL → Windows (§1.1 self-sync)."""
+        sync = self.config["sync"]
+        for d in sync["dirs"]:
+            src = sync["src_wsl_root"] + "\\" + d
+            dst = sync["dst_root"] + "\\" + d
+            result = self.executor.run(
+                build_sync_cmd(sync["tool"], src, dst), timeout=60,
+            )
+            codes = tuple(sync.get("success_exit_codes", [0]))
+            if not result.ok(codes):
+                raise RuntimeError(f"同步 {d} 失败（退出码 {result.exit_code}）")
+
+    def _spawn_web_services(self) -> None:
+        for cmd in build_start_web_cmds(self.config):
+            self._web_procs.append(self.executor.spawn(cmd))
+
+    def _wait_ready(self, url: str, timeout: float) -> bool:
+        return self._ready_check(url, timeout)
 
     def stop_system(self) -> dict:
-        raise NotImplementedError(NOT_IMPLEMENTED)
+        """停桥进程 + 停 web 进程 + 停 WSL（§1.3 关闭流程）。"""
+        with self._lock:
+            if not can_stop_system(self.state):
+                return {"ok": True, "message": "系统已停止"}
+            self.state.set_system(SYSTEM_STOPPING, "正在停止…")
+        try:
+            for proc in self._device_procs.values():
+                self._terminate_proc(proc)
+            self._device_procs.clear()
+            for proc in self._web_procs:
+                self._terminate_proc(proc)
+            self._web_procs.clear()
+            if self.config["wsl"].get("stop_wsl", True):
+                try:
+                    self.executor.run(
+                        ["wsl", "--terminate", self.config["wsl"]["distro"]],
+                        timeout=30,
+                    )
+                except Exception:
+                    pass  # best-effort: WSL 可能已经关闭
+            self.state.set_system(SYSTEM_STOPPED, "系统已停止")
+            for name in self.state.devices:
+                self.state.set_device(name, DEVICE_DISCONNECTED, "")
+            return {"ok": True, "message": "系统已停止"}
+        except Exception as exc:
+            self.state.set_system(SYSTEM_ERROR, friendly_error(exc, "停止系统"))
+            return {"ok": False, "message": self.state.system_msg}
 
     def restart_web(self) -> dict:
-        raise NotImplementedError(NOT_IMPLEMENTED)
+        """停掉旧 web 进程（pkill）并重新拉起。"""
+        with self._lock:
+            if not can_stop_system(self.state):
+                return {"ok": False, "message": "系统未运行，无需重启 web 服务"}
+            self.state.set_system(SYSTEM_STARTING, "正在重启 web 服务…")
+        try:
+            stop_cmd = self.config["web"].get("stop_cmd")
+            if stop_cmd:
+                self.executor.run(
+                    build_wsl_cd_cmd(
+                        self.config["wsl"]["distro"],
+                        self.config["wsl"]["repo_path"],
+                        stop_cmd,
+                    ),
+                    timeout=30,
+                )
+            for proc in self._web_procs:
+                self._terminate_proc(proc)
+            self._web_procs.clear()
+            self._spawn_web_services()
+            if not self._wait_ready(
+                self.config["web"]["url"],
+                float(self.config["web"].get("ready_timeout_sec", 60)),
+            ):
+                raise RuntimeError("网页服务未就绪（超时），请确认前端已启动")
+            self.state.set_system(SYSTEM_RUNNING, "系统已就绪")
+            return {"ok": True, "message": "web 服务已重启"}
+        except Exception as exc:
+            self.state.set_system(SYSTEM_ERROR, friendly_error(exc, "重启 web 服务"))
+            return {"ok": False, "message": self.state.system_msg}
+
+    # -- M4: device chain (implemented next) ------------------------------
 
     def connect_device(self, name: str) -> dict:
         raise NotImplementedError(NOT_IMPLEMENTED)
