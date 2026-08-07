@@ -1,0 +1,83 @@
+{
+  "service": {
+    "host": "127.0.0.1",
+    "port": 8020
+  },
+
+  "wsl": {
+    "distro": "Ubuntu",
+    "repo_path": "/home/robot/TelekineRob-BCI",
+    "stop_wsl": true
+  },
+
+  "sync": {
+    "tool": "xcopy",
+    "src_wsl_root": "\\\\wsl$\\Ubuntu\\home\\robot\\TelekineRob-BCI",
+    "dst_root": "C:\\Users\\Robot\\Desktop\\gpype_test\\TelekineRob-BCI",
+    "dirs": ["windows_launcher", "gtec_bridge"],
+    "success_exit_codes": [0, 1]
+  },
+
+  "web": {
+    "url": "http://localhost:5173",
+    "backend_cmd": "cd web_gui/backend && (source .venv/bin/activate 2>/dev/null || true; python -m app.main) &",
+    "frontend_cmd": "cd web_gui/frontend && (npm run dev) &",
+    "ready_timeout_sec": 60
+  },
+
+  "devices": {
+    "headband": {
+      "label": "Headband",
+      "type": "bridge",
+      "command": "python gpype_lsl_bridge.py",
+      "cwd": "${sync.dst_root}\\gtec_bridge",
+      "verify_delay_sec": 5,
+      "verify_cmd": null
+    },
+    "hybrid": {
+      "label": "HybridBlack",
+      "type": "bridge",
+      "command": "python unicornpy_lsl_bridge.py",
+      "cwd": "${sync.dst_root}\\gtec_bridge",
+      "verify_delay_sec": 5,
+      "verify_cmd": null
+    },
+    "thymio": {
+      "label": "Thymio",
+      "type": "usbipd",
+      "attach_cmd": "usbipd attach --wsl=Ubuntu --busid=1-1",
+      "detach_cmd": "usbipd detach --busid=1-1",
+      "verify_cmd": "wsl -d Ubuntu -e bash -lc \"test -e /dev/ttyACM0 && echo ok\"",
+      "verify_delay_sec": 3
+    }
+  },
+
+  "sidebar": {
+    "groups": [
+      {
+        "id": "system",
+        "label": "系统状态",
+        "items": [{"id": "system-state", "type": "status", "label": "系统状态"}]
+      },
+      {
+        "id": "devices",
+        "label": "设备连接",
+        "items": [
+          {"id": "headband", "type": "device", "label": "Headband"},
+          {"id": "hybrid", "type": "device", "label": "HybridBlack"},
+          {"id": "thymio", "type": "device", "label": "Thymio"}
+        ]
+      },
+      {
+        "id": "ops",
+        "label": "系统操作",
+        "items": [
+          {"id": "start-system", "type": "action", "label": "启动系统"},
+          {"id": "restart-web", "type": "action", "label": "重启 web 服务"},
+          {"id": "stop-system", "type": "action", "label": "关闭系统"}
+        ]
+      }
+    ],
+    "log": {"id": "view-log", "type": "action", "label": "查看日志", "placeholder": true}
+  }
+}
