@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 import threading
 import time
 import urllib.error
@@ -438,7 +439,8 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main(argv: Optional[List[str]] = None) -> int:
-    config_path = Path(argv[1]) if argv else DEFAULT_CONFIG
+    # argv is the arg list WITHOUT the script name (callers pass sys.argv[1:]).
+    config_path = Path(argv[0]) if argv else DEFAULT_CONFIG
     try:
         config = load_config(config_path)
     except ValueError as exc:
@@ -448,8 +450,16 @@ def main(argv: Optional[List[str]] = None) -> int:
     host = config["service"].get("host", "127.0.0.1")
     port = int(config["service"].get("port", 8020))
     app = LauncherApp(config)
-    server = LauncherServer((host, port), app)
+    try:
+        server = LauncherServer((host, port), app)
+    except OSError as exc:
+        print(f"[ERROR] 无法启动服务（端口 {port} 可能已被占用）: {exc}")
+        return 1
     print(f"[INFO] O2 总控服务已启动: http://{host}:{port}/")
+    # Write the actual URL for launcher.bat to read — the bat never has to
+    # parse config.json (avoids batch quoting pain) and stays correct even
+    # if the operator changes the port.
+    (HERE / "last_url.txt").write_text(f"http://{host}:{port}/\n", encoding="utf-8")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
@@ -460,4 +470,4 @@ def main(argv: Optional[List[str]] = None) -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(main(sys.argv[1:]))

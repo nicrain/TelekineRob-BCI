@@ -36,3 +36,6 @@ Thumbs.db
 **/test.urdf
 CLAUDE.md
 AGENTS.md
+
+# O2 launcher runtime artifact (service writes its URL for launcher.bat)
+windows_launcher/last_url.txt

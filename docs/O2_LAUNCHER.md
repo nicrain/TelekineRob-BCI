@@ -88,7 +88,7 @@ TelekineRob-BCI/
 | M3 | 启动系统链路 | 起 WSL → 检测 → 同步 launcher+桥文件（自同步）→ 起前后端 → 就绪检测 → 解灰 | ✅ 2026-08-07 |
 | M4 | 设备连接链路 | 连/断 Headband/Hybrid（跑桥+验 LSL）/ Thymio（usbipd+验 ttyACM0） | ✅ 2026-08-07 |
 | M5 | 状态显示 | 设备/系统状态 + 人话错误 | ✅ 2026-08-07 |
-| M6 | 入口 | 双击图标（批处理/快捷方式：起服务+开浏览器） | ⬜ |
+| M6 | 入口 | 双击图标（批处理/快捷方式：起服务+开浏览器） | ✅ 2026-08-07 |
 
 ---
 
@@ -140,4 +140,4 @@ TelekineRob-BCI/
 
 | 日期 | 变更 | 影响 |
 |---|---|---|
-| （空） | | |
+| 2026-08-07 | MVP M1–M6 实现完成。入口用 `last_url.txt` 传递端口（bat 不解析 JSON）；自同步目标用 `sync.dst_root`；usbipd busid 由用户填 config | 部署/填表说明见 `windows_launcher/README.md`；真机按 §4 验收 |

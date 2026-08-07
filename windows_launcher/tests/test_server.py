@@ -98,3 +98,13 @@ def test_unknown_path_404(base_url):
     with pytest.raises(urllib.error.HTTPError) as excinfo:
         _post(base_url, "/nope")
     assert excinfo.value.code == 404
+
+
+def test_main_honours_config_path_arg(capsys):
+    """main(sys.argv[1:]) must read the first arg as the config path (the
+    argv slice means the path is argv[0], not argv[1])."""
+    from launcher_server import main
+
+    rc = main(["/nonexistent/o2_config.json"])
+    assert rc == 1
+    assert "配置文件不存在" in capsys.readouterr().out
