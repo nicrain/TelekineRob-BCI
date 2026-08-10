@@ -73,7 +73,7 @@ def test_get_root_returns_html(base_url):
 def test_get_root_serves_console_page(base_url):
     """M2: the served page must be the console (sidebar + iframe + poll)."""
     status, body = _get(base_url, "/")
-    assert "系统总控" in body
+    assert "System Control" in body
     assert "iframe" in body
     assert "/status" in body and "/config" in body
 
@@ -91,14 +91,14 @@ def test_get_config_returns_sidebar(base_url):
     status, body = _get(base_url, "/config")
     data = json.loads(body)
     assert data["groups"]
-    assert data["log"]["label"] == "查看日志"
+    assert data["log"]["label"] == "View Log"
 
 
 def test_start_system_via_http(base_url):
     status, body = _post(base_url, "/start-system", origin=base_url)
     assert status == 200
     assert body["ok"] is True
-    assert body["message"] == "系统已启动并就绪"
+    assert body["message"] == "System started and ready"
 
 
 def test_connect_when_system_stopped_via_http(base_url):
@@ -106,7 +106,7 @@ def test_connect_when_system_stopped_via_http(base_url):
         base_url, "/connect-device", {"device": "headband"}, origin=base_url,
     )
     assert status == 200
-    assert body == {"ok": False, "message": "系统未就绪，请先启动系统"}
+    assert body == {"ok": False, "message": "System not ready — start the system first"}
 
 
 def test_unknown_path_404(base_url):
@@ -127,15 +127,15 @@ def test_action_endpoints_are_post_only(base_url):
 def test_post_without_origin_rejected(base_url):
     """Finding A: curl/script callers without Origin are denied."""
     body = _post_403(base_url, "/start-system", origin=None)
-    assert body["message"] == "跨域请求被拒绝"
+    assert body["message"] == "Cross-origin request rejected"
 
 
 def test_post_evil_origin_rejected(base_url):
     """Finding A: an arbitrary webpage must not fire the action POSTs."""
     body = _post_403(base_url, "/stop-system", origin="http://evil.example.com")
-    assert body["message"] == "跨域请求被拒绝"
+    assert body["message"] == "Cross-origin request rejected"
     body = _post_403(base_url, "/start-system", origin="http://evil.example.com")
-    assert body["message"] == "跨域请求被拒绝"
+    assert body["message"] == "Cross-origin request rejected"
 
 
 def test_main_honours_config_path_arg(capsys, monkeypatch):
@@ -148,7 +148,7 @@ def test_main_honours_config_path_arg(capsys, monkeypatch):
     monkeypatch.setattr(launcher_server, "_setup_logging", lambda: None)
     rc = main(["/nonexistent/o2_config.json"])
     assert rc == 1
-    assert "配置文件不存在" in capsys.readouterr().out
+    assert "config file not found" in capsys.readouterr().out
 
 
 def test_pidfile_write_and_remove(tmp_path, monkeypatch):
@@ -173,6 +173,43 @@ def test_setup_logging_writes_file_when_stdout_none(tmp_path, monkeypatch):
     assert "hello-p1-log" in (tmp_path / "launcher_server.log").read_text(encoding="utf-8")
 
 
+def test_service_messages_are_english():
+    """P5: every user-facing {ok, message} value must be CJK-free."""
+    import re
+
+    cjk = re.compile(r"[一-鿿]")
+    cfg = load_config(REPO_CONFIG)
+    for dev in cfg["devices"].values():
+        dev["verify_delay_sec"] = 0
+    cfg["wsl"]["ready_timeout_sec"] = 1
+    cfg["wsl"]["ready_poll_sec"] = 0
+
+    def messages(app):
+        app._share_accessible = lambda: False
+        results = [
+            app.start_system(),       # WSL-not-ready error path
+            app.stop_system(),
+            app.restart_web(),
+            app.connect_device("headband"),
+            app.connect_device("nope"),
+            app.disconnect_device("thymio"),
+        ]
+        return [str(r.get("message", "")) for r in results]
+
+    all_msgs = messages(LauncherApp(cfg, executor=FakeExecutor(detect_ok=False), ready_check=lambda u, t: True))
+    # success paths too
+    ok_cfg = load_config(REPO_CONFIG)
+    for dev in ok_cfg["devices"].values():
+        dev["verify_delay_sec"] = 0
+    ok_app = LauncherApp(ok_cfg, executor=FakeExecutor(), ready_check=lambda u, t: True)
+    all_msgs += [ok_app.start_system()["message"], ok_app.connect_device("headband")["message"],
+                 ok_app.disconnect_device("headband")["message"], ok_app.stop_system()["message"]]
+    assert not cjk.search(" ".join(all_msgs)), all_msgs
+
+    err = launcher_server.friendly_error(RuntimeError("WSL (Ubuntu) not ready"), "Start System")
+    assert not cjk.search(err)
+
+
 def test_shutdown_endpoint_stops_server_and_removes_pidfile(tmp_path, monkeypatch):
     """P1: POST /shutdown → 200, pidfile removed, serve_forever actually stops."""
     monkeypatch.setattr(launcher_server, "PID_FILE", tmp_path / "pid")
@@ -189,7 +226,7 @@ def test_shutdown_endpoint_stops_server_and_removes_pidfile(tmp_path, monkeypatc
         base = f"http://127.0.0.1:{server.server_address[1]}"
         status, body = _post(base, "/shutdown", origin=base)
         assert status == 200
-        assert body == {"ok": True, "message": "总控服务已退出"}
+        assert body == {"ok": True, "message": "Launcher service exited"}
         assert not launcher_server.PID_FILE.exists()  # removed by the handler
         t.join(timeout=5)
         assert not t.is_alive()  # serve_forever returned (response already sent)

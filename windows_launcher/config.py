@@ -30,7 +30,7 @@ def _resolve_ref(ref: str, cfg: dict) -> Any:
         if isinstance(node, dict) and part in node:
             node = node[part]
         else:
-            raise ValueError(f"config.json 引用了不存在的字段: ${{{ref}}} (缺 {part!r})")
+            raise ValueError(f"config.json references a missing field: ${{{ref}}} (no {part!r})")
     return node
 
 
@@ -66,15 +66,15 @@ def load_config(path: str | Path) -> dict:
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:
-        raise ValueError(f"配置文件不存在: {path}")
+        raise ValueError(f"config file not found: {path}")
     except json.JSONDecodeError as exc:
-        raise ValueError(f"config.json 解析失败(JSON 语法错误): {exc}")
+        raise ValueError(f"config.json parse failed (JSON syntax error): {exc}")
 
     if not isinstance(raw, dict):
-        raise ValueError("config.json 顶层必须是对象 (键值对)")
+        raise ValueError("config.json top level must be an object")
 
     missing = [s for s in REQUIRED_SECTIONS if s not in raw]
     if missing:
-        raise ValueError(f"config.json 缺少必需字段: {', '.join(missing)}")
+        raise ValueError(f"config.json missing required sections: {', '.join(missing)}")
 
     return expand_config(raw)

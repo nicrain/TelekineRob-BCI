@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
 <meta charset="utf-8">
-<title>系统总控</title>
+<title>System Control</title>
 <style>
   /* Ferrari-inspired dark theme — mirrors web_gui/src/styles.css tokens */
   @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
@@ -84,29 +84,31 @@
 </head>
 <body>
 <div id="app">
-  <!-- ============ 侧边栏（默认结构；由 /config 动态重绘） ============ -->
+  <!-- ============ Sidebar (default skeleton; re-rendered from /config) ============ -->
   <aside id="sidebar">
-    <h1>系统总控</h1>
-    <div class="group-label">系统状态</div>
+    <h1>System Control</h1>
+    <div class="group-label">Status</div>
     <div class="item" id="item-system">
-      <span class="dot"></span><span class="label">系统状态</span>
-      <span class="sys-state">未连接</span>
+      <span class="dot"></span><span class="label">System State</span>
+      <span class="sys-state">Not Connected</span>
     </div>
-    <div class="group-label">设备连接</div>
+    <div class="group-label">Devices</div>
     <div id="devices-list"></div>
-    <div class="group-label">系统操作</div>
+    <div class="group-label">Operations</div>
     <div id="ops-list"></div>
-    <div class="group-label">日志</div>
-    <button class="btn" id="log-btn" disabled>查看日志</button>
+    <div class="group-label">Log</div>
+    <button class="btn" id="log-btn" disabled>View Log</button>
   </aside>
 
-  <!-- ============ 主区域：web GUI iframe ============ -->
+  <!-- ============ Main: web GUI iframe ============ -->
   <main id="main">
     <div id="mainbar">
-      <!-- P2: 折叠按钮放 mainbar（静态块，轮询重渲染不碰它） -->
-      <button id="collapse-btn" class="btn" onclick="toggleSidebar()" title="收起/展开侧边栏">«</button>
-      <span>实验界面</span>
-      <a id="open-new" href="http://localhost:5173" target="_blank">在新标签页打开</a>
+      <!-- P2: collapse button lives in the static #mainbar -->
+      <button id="collapse-btn" class="btn" onclick="toggleSidebar()" title="Collapse / expand sidebar">«</button>
+      <span>Experiment</span>
+      <!-- P5: refresh the (cross-origin) web GUI iframe -->
+      <button id="refresh-btn" class="btn" onclick="refreshFrame()" title="Reload the web GUI">↻ Refresh</button>
+      <a id="open-new" href="http://localhost:5173" target="_blank">Open in new tab</a>
     </div>
     <iframe id="frame" title="web GUI"></iframe>
   </main>
@@ -119,22 +121,23 @@
 
 const G = { config: null, status: null, webUrl: "http://localhost:5173", prevRunning: false };
 
-/* ---------- 默认结构（file:// 直接打开也有可看骨架） ---------- */
+/* ---------- Default skeleton (file:// preview still looks sane) ---------- */
 const DEFAULT_DEVICES = [
-  { id: "headband", label: "Headband",  type: "device" },
-  { id: "hybrid",   label: "HybridBlack", type: "device" },
-  { id: "thymio",   label: "Thymio",    type: "device" },
+  { id: "headband", label: "Headband",     type: "device" },
+  { id: "hybrid",   label: "HybridBlack",  type: "device" },
+  { id: "thymio",   label: "Thymio",       type: "device" },
 ];
 const DEFAULT_OPS = [
-  { id: "start-system", label: "启动系统",   type: "action" },
-  { id: "restart-web",  label: "重启 web 服务", type: "action" },
-  { id: "stop-system",  label: "关闭系统",   type: "action" },
-  { id: "exit",         label: "退出总控",   type: "action" },
+  { id: "start-system", label: "Start System",  type: "action" },
+  { id: "restart-web",  label: "Restart Web",   type: "action" },
+  { id: "stop-system",  label: "Stop System",   type: "action" },
+  { id: "exit",         label: "Exit Launcher", type: "action" },
 ];
 
-/* ---------- 侧边栏折叠（P2） ---------- */
-/* 折叠态挂在 #sidebar 的 class 上、按钮在 #mainbar 里 —— 两者都不在
-   renderDevices/renderOps 的重渲染容器内，1.5s 轮询不会复位。 */
+/* ---------- Sidebar collapse (P2) ---------- */
+/* The fold lives on #sidebar's class and the button in #mainbar — neither
+   is inside the renderDevices/renderOps re-render containers, so the 1.5s
+   poll never resets it. */
 function sidebarCollapsed() {
   return localStorage.getItem("launcherSidebarCollapsed") === "1";
 }
@@ -150,7 +153,7 @@ function toggleSidebar() {
   document.getElementById("collapse-btn").textContent = collapsed ? "»" : "«";
 }
 
-/* ---------- 状态 → 样式 ---------- */
+/* ---------- State → style ---------- */
 function dotClass(st) {
   const map = {
     running: "on", connected: "on",
@@ -160,12 +163,12 @@ function dotClass(st) {
   return map[st] || "";
 }
 function sysLabel(st) {
-  const map = { stopped: "已停止", starting: "启动中…", running: "运行中", stopping: "停止中…", error: "错误" };
-  return map[st] || st || "未连接";
+  const map = { stopped: "Stopped", starting: "Starting…", running: "Running", stopping: "Stopping…", error: "Error" };
+  return map[st] || st || "Not Connected";
 }
 function devLabel(st) {
-  const map = { disconnected: "未连接", connecting: "连接中…", connected: "已连接", disconnecting: "断开中…", error: "失败" };
-  return map[st] || st || "未连接";
+  const map = { disconnected: "Not Connected", connecting: "Connecting…", connected: "Connected", disconnecting: "Disconnecting…", error: "Failed" };
+  return map[st] || st || "Not Connected";
 }
 function showMsg(text, isError) {
   const m = document.getElementById("msg");
@@ -183,7 +186,7 @@ async function api(path, body) {
   return resp.json();
 }
 
-/* ---------- 渲染 ---------- */
+/* ---------- Render ---------- */
 function renderDevices() {
   const list = document.getElementById("devices-list");
   list.innerHTML = "";
@@ -198,9 +201,9 @@ function renderDevices() {
     div.innerHTML =
       `<span class="dot ${dotClass(st)}"></span>` +
       `<span class="label">${d.label}</span>` +
-      `<button class="btn" data-id="${d.id}" data-on="${st === "connected"}">${st === "connected" ? "断开" : "连接"}</button>`;
+      `<button class="btn" data-id="${d.id}" data-on="${st === "connected"}">${st === "connected" ? "Disconnect" : "Connect"}</button>`;
     const btn = div.querySelector("button");
-    btn.disabled = !sysUp;               // §1.3：系统未起 → 设备按钮全灰不可点
+    btn.disabled = !sysUp;               // §1.3: devices locked until system is up
     btn.onclick = () => toggleDevice(d.id, btn.dataset.on === "true");
     list.appendChild(div);
   });
@@ -241,56 +244,62 @@ function renderSystem() {
   if (restartBtn) restartBtn.disabled = !["running", "error"].includes(ops);
 }
 
-/* ---------- 动作 ---------- */
+/* ---------- Actions ---------- */
 async function toggleDevice(id, currentlyOn) {
   const path = currentlyOn ? "/disconnect-device" : "/connect-device";
   const r = await api(path, { device: id });
-  showMsg(r.message || (r.ok ? "完成" : "失败"), !r.ok);
+  showMsg(r.message || (r.ok ? "Done" : "Failed"), !r.ok);
 }
 async function runAction(id) {
   const path = { "start-system": "/start-system", "restart-web": "/restart-web", "stop-system": "/stop-system", "exit": "/shutdown" }[id];
   if (!path) return;
-  // 空 JSON body 强制走 POST：api() 以 body 有无选方法，裸 api(path) 会变成
-  // GET → 服务端只注册了 POST → 404 "未知地址"（真机点击才暴露的 bug）。
+  // Empty JSON body forces POST: api() picks the method by body presence,
+  // so a bare api(path) would send GET → the server only has POST routes
+  // → 404 "Unknown path".
   const r = await api(path, {});
-  showMsg(r.message || (r.ok ? "完成" : "失败"), !r.ok);
-  pollStatus();   // 立刻刷新一次
+  showMsg(r.message || (r.ok ? "Done" : "Failed"), !r.ok);
+  pollStatus();   // refresh immediately
 }
 
-/* ---------- 轮询 ---------- */
+/* ---------- Polling ---------- */
 async function pollStatus() {
   try {
     G.status = await api("/status");
   } catch {
-    showMsg("无法连接总控服务，请确认服务已启动", true);
+    showMsg("Cannot reach the control service — is it running?", true);
     return;
   }
   renderSystem(); renderDevices(); renderOps();
-  // ① 启动成功后自动加载 web GUI：检测 非running → running 转换，强制 iframe 重载
-  //    （ready-check 确认前端就绪后才置 running，所以只在 running 时重载；把 starting
-  //     也算运行态会在前端未就绪时过早加载，且 running 到达时 prevRunning 已为 true
-  //     不再触发——重蹈手动刷新的覆辙。）
+  // Auto-load the web GUI after startup: detect the non-running → running
+  // transition and force-reload the iframe (running only — the launcher's
+  // ready-check confirms the frontend is up before setting running, so
+  // reloading during starting would hit a dead frontend and never re-fire).
   const running = G.status && G.status.system.state === "running";
   if (running && !G.prevRunning) {
-    const frame = document.getElementById("frame");
-    frame.src = "about:blank";   // 清空，强制重新加载
-    frame.src = G.webUrl;        // 重新指向，此时前端已就绪
-    frame.style.display = "block";
+    refreshFrame();
   }
   G.prevRunning = running;
 }
 
-/* ---------- iframe（§5 #5 fallback：被拒则新标签打开） ---------- */
+/* ---------- iframe (cross-origin safe reload + §5 fallback) ---------- */
+function refreshFrame() {
+  // The web GUI is cross-origin (5173 vs the control service), so
+  // contentWindow.location.reload() would throw — re-point src instead.
+  const frame = document.getElementById("frame");
+  frame.src = "about:blank";   // clear, force a fresh load
+  frame.src = G.webUrl;        // re-point (works whether the GUI is up or not)
+  frame.style.display = "block";
+}
 function setupFrame() {
   const frame = document.getElementById("frame");
   const link = document.getElementById("open-new");
   link.href = G.webUrl;
   frame.src = G.webUrl;
   frame.onload = () => { frame.style.display = "block"; };
-  frame.onerror = () => { frame.style.display = "none"; };  // 被 X-Frame-Options 拒绝时只剩链接
+  frame.onerror = () => { frame.style.display = "none"; };  // X-Frame-Options refusal → link only
 }
 
-/* ---------- 启动 ---------- */
+/* ---------- Init ---------- */
 async function init() {
   applySidebarState();
   setupFrame();
@@ -304,7 +313,7 @@ async function init() {
     if (log) { logBtn.textContent = log.label; logBtn.disabled = !log.placeholder; }
     setupFrame();
     renderDevices(); renderOps();
-  } catch { /* file:// 直接打开：用默认骨架 */ }
+  } catch { /* file:// preview: keep the default skeleton */ }
   pollStatus();
   setInterval(pollStatus, 1500);
 }

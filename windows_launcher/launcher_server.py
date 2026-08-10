@@ -61,7 +61,7 @@ DEFAULT_CONFIG = HERE / "config.json"
 LOG_FILE = HERE / "launcher_server.log"
 PID_FILE = HERE / "launcher_server.pid"
 
-NOT_IMPLEMENTED = "该功能尚未开通"
+NOT_IMPLEMENTED = "Not implemented yet"
 
 
 def _setup_logging() -> None:
@@ -113,19 +113,19 @@ def remove_pidfile() -> None:
 # --- Human-readable errors ---------------------------------------------
 
 def friendly_error(exc: Exception, action: str = "") -> str:
-    """Map an exception to one Chinese sentence — no stack trace (§4)."""
-    prefix = f"{action}：" if action else ""
+    """Map an exception to one English sentence — no stack trace (§4)."""
+    prefix = f"{action}: " if action else ""
     if isinstance(exc, FileNotFoundError):
-        return prefix + "找不到要执行的程序，请确认已安装并加入 PATH"
+        return prefix + "command not found — check it is installed and on PATH"
     if isinstance(exc, subprocess.TimeoutExpired):
-        return prefix + "操作超时，请检查 WSL 或设备是否就绪"
+        return prefix + "operation timed out — check WSL / device readiness"
     if isinstance(exc, (urllib.error.URLError, ConnectionError, TimeoutError)):
-        return prefix + "网页服务连不上，请稍后再试"
+        return prefix + "web service unreachable — try again later"
     if isinstance(exc, (ValueError, RuntimeError)):
-        # Our own raised errors already carry a Chinese, operator-facing
+        # Our own raised errors already carry an English, operator-facing
         # sentence — surface it verbatim (no stack).
         return prefix + str(exc)
-    return prefix + f"发生错误（{type(exc).__name__}）"
+    return prefix + f"an error occurred ({type(exc).__name__})"
 
 
 # --- App ------------------------------------------------------------------
@@ -198,7 +198,7 @@ class LauncherApp:
             if proc.poll() is not None and self.state.devices[name] in (
                 DEVICE_CONNECTED, DEVICE_CONNECTING,
             ):
-                self.state.set_device(name, DEVICE_ERROR, "桥进程已退出")
+                self.state.set_device(name, DEVICE_ERROR, "bridge process exited")
 
     def sidebar_config(self) -> dict:
         """Safe subset for ``GET /config`` (no command bodies)."""
@@ -227,8 +227,8 @@ class LauncherApp:
         """wsl 检测 → 同步 launcher+桥文件（自同步）→ 起前后端 → 就绪检测."""
         with self._lock:
             if not can_start_system(self.state):
-                return {"ok": True, "message": "系统已在运行或启动中"}
-            self.state.set_system(SYSTEM_STARTING, "正在启动…")
+                return {"ok": True, "message": "System already starting or running"}
+            self.state.set_system(SYSTEM_STARTING, "Starting…")
         try:
             self._detect_wsl()
             self._sync_files()
@@ -237,11 +237,11 @@ class LauncherApp:
                 self.config["web"]["url"],
                 float(self.config["web"].get("ready_timeout_sec", 60)),
             ):
-                raise RuntimeError("网页服务未就绪（超时），请确认前端已启动")
-            self.state.set_system(SYSTEM_RUNNING, "系统已就绪")
-            return {"ok": True, "message": "系统已启动并就绪"}
+                raise RuntimeError("web service not ready (timeout) — check the frontend")
+            self.state.set_system(SYSTEM_RUNNING, "System ready")
+            return {"ok": True, "message": "System started and ready"}
         except Exception as exc:
-            self.state.set_system(SYSTEM_ERROR, friendly_error(exc, "启动系统"))
+            self.state.set_system(SYSTEM_ERROR, friendly_error(exc, "Start System"))
             return {"ok": False, "message": self.state.system_msg}
 
     def _detect_wsl(self) -> None:
@@ -274,8 +274,8 @@ class LauncherApp:
                 return
             time.sleep(interval)
         raise RuntimeError(
-            f"WSL（{cfg['distro']}）未完全就绪：systemd/共享在 "
-            f"{timeout:.0f}s 内未就绪，请检查 WSL 是否正常启动"
+            f"WSL ({cfg['distro']}) not ready: systemd/share not up within "
+            f"{timeout:.0f}s — check WSL"
         )
 
     def _share_accessible(self) -> bool:
@@ -300,7 +300,7 @@ class LauncherApp:
             )
             codes = tuple(sync.get("success_exit_codes", [0]))
             if not result.ok(codes):
-                raise RuntimeError(f"同步 {rel} 失败（退出码 {result.exit_code}）")
+                raise RuntimeError(f"sync of {rel} failed (exit {result.exit_code})")
 
     def _spawn_web_services(self) -> None:
         for cmd in build_start_web_cmds(self.config):
@@ -313,8 +313,8 @@ class LauncherApp:
         """停桥进程 + 停 web 进程 + 停 WSL（§1.3 关闭流程）。"""
         with self._lock:
             if not can_stop_system(self.state):
-                return {"ok": True, "message": "系统已停止"}
-            self.state.set_system(SYSTEM_STOPPING, "正在停止…")
+                return {"ok": True, "message": "System stopped"}
+            self.state.set_system(SYSTEM_STOPPING, "Stopping…")
         try:
             for proc in self._device_procs.values():
                 self._terminate_proc(proc)
@@ -329,21 +329,21 @@ class LauncherApp:
                         timeout=30,
                     )
                 except Exception:
-                    pass  # best-effort: WSL 可能已经关闭
-            self.state.set_system(SYSTEM_STOPPED, "系统已停止")
+                    pass  # best-effort: WSL may already be down
+            self.state.set_system(SYSTEM_STOPPED, "System stopped")
             for name in self.state.devices:
                 self.state.set_device(name, DEVICE_DISCONNECTED, "")
-            return {"ok": True, "message": "系统已停止"}
+            return {"ok": True, "message": "System stopped"}
         except Exception as exc:
-            self.state.set_system(SYSTEM_ERROR, friendly_error(exc, "停止系统"))
+            self.state.set_system(SYSTEM_ERROR, friendly_error(exc, "Stop System"))
             return {"ok": False, "message": self.state.system_msg}
 
     def restart_web(self) -> dict:
         """停掉旧 web 进程（pkill）并重新拉起。"""
         with self._lock:
             if not can_stop_system(self.state):
-                return {"ok": False, "message": "系统未运行，无需重启 web 服务"}
-            self.state.set_system(SYSTEM_STARTING, "正在重启 web 服务…")
+                return {"ok": False, "message": "System not running — nothing to restart"}
+            self.state.set_system(SYSTEM_STARTING, "Restarting web services…")
         try:
             stop_cmd = self.config["web"].get("stop_cmd")
             if stop_cmd:
@@ -363,11 +363,11 @@ class LauncherApp:
                 self.config["web"]["url"],
                 float(self.config["web"].get("ready_timeout_sec", 60)),
             ):
-                raise RuntimeError("网页服务未就绪（超时），请确认前端已启动")
-            self.state.set_system(SYSTEM_RUNNING, "系统已就绪")
-            return {"ok": True, "message": "web 服务已重启"}
+                raise RuntimeError("web service not ready (timeout) — check the frontend")
+            self.state.set_system(SYSTEM_RUNNING, "System ready")
+            return {"ok": True, "message": "Web services restarted"}
         except Exception as exc:
-            self.state.set_system(SYSTEM_ERROR, friendly_error(exc, "重启 web 服务"))
+            self.state.set_system(SYSTEM_ERROR, friendly_error(exc, "Restart Web"))
             return {"ok": False, "message": self.state.system_msg}
 
     # -- M4: device chain -------------------------------------------------
@@ -375,13 +375,13 @@ class LauncherApp:
     def connect_device(self, name: str) -> dict:
         with self._lock:
             if name not in self.config["devices"]:
-                return {"ok": False, "message": f"未知设备: {name}"}
+                return {"ok": False, "message": f"Unknown device: {name}"}
             if not can_connect_device(self.state):
-                return {"ok": False, "message": "系统未就绪，请先启动系统"}
+                return {"ok": False, "message": "System not ready — start the system first"}
             dev = self.config["devices"][name]
             if self.state.devices[name] in (DEVICE_CONNECTING, DEVICE_CONNECTED):
-                return {"ok": True, "message": f"{dev['label']} 已连接"}
-            self.state.set_device(name, DEVICE_CONNECTING, "连接中…")
+                return {"ok": True, "message": f"{dev['label']} connected"}
+            self.state.set_device(name, DEVICE_CONNECTING, "Connecting…")
         try:
             dev_type = dev["type"]
             if dev_type == "bridge":
@@ -389,12 +389,12 @@ class LauncherApp:
             elif dev_type == "usbipd":
                 self._connect_usbipd(name, dev)
             else:
-                raise ValueError(f"未知设备类型: {dev_type!r}")
-            self.state.set_device(name, DEVICE_CONNECTED, "已连接")
-            return {"ok": True, "message": f"{dev['label']} 已连接"}
+                raise ValueError(f"Unknown device type: {dev_type!r}")
+            self.state.set_device(name, DEVICE_CONNECTED, "Connected")
+            return {"ok": True, "message": f"{dev['label']} connected"}
         except Exception as exc:
             self.state.set_device(
-                name, DEVICE_ERROR, friendly_error(exc, f"连接 {dev['label']}")
+                name, DEVICE_ERROR, friendly_error(exc, f"Connect {dev['label']}")
             )
             return {"ok": False, "message": self.state.device_msgs[name]}
 
@@ -407,12 +407,12 @@ class LauncherApp:
         self._device_procs[name] = proc
         time.sleep(float(dev.get("verify_delay_sec", 5)))
         if proc.poll() is not None:
-            raise RuntimeError("桥进程已退出，请确认设备已开机且未被占用")
+            raise RuntimeError("bridge process exited — check the device is on and not in use")
         verify = dev.get("verify_cmd")
         if verify:
             result = self.executor.run(build_bridge_command(verify), timeout=30)
             if not result.ok():
-                raise RuntimeError("设备验证未通过，请检查设备连接")
+                raise RuntimeError("device verification failed — check the connection")
 
     def _connect_usbipd(self, name: str, dev: dict) -> None:
         """Attach the Thymio USB device via usbipd, then verify inside WSL."""
@@ -421,24 +421,24 @@ class LauncherApp:
         )
         if not result.ok():
             raise RuntimeError(
-                f"usbipd attach 失败（退出码 {result.exit_code}）"
-                f"{'：' + result.stderr.strip() if result.stderr.strip() else ''}"
+                f"usbipd attach failed (exit {result.exit_code})"
+                f"{': ' + result.stderr.strip() if result.stderr.strip() else ''}"
             )
         time.sleep(float(dev.get("verify_delay_sec", 3)))
         verify = dev.get("verify_cmd")
         if verify:
             vresult = self.executor.run(build_bridge_command(verify), timeout=30)
             if not vresult.ok():
-                raise RuntimeError("设备验证未通过（ttyACM0 不可见）")
+                raise RuntimeError("device verification failed (ttyACM0 not visible)")
 
     def disconnect_device(self, name: str) -> dict:
         with self._lock:
             if name not in self.config["devices"]:
-                return {"ok": False, "message": f"未知设备: {name}"}
+                return {"ok": False, "message": f"Unknown device: {name}"}
             dev = self.config["devices"][name]
             if self.state.devices[name] == DEVICE_DISCONNECTED:
-                return {"ok": True, "message": f"{dev['label']} 已断开"}
-            self.state.set_device(name, DEVICE_DISCONNECTING, "断开中…")
+                return {"ok": True, "message": f"{dev['label']} disconnected"}
+            self.state.set_device(name, DEVICE_DISCONNECTING, "Disconnecting…")
         try:
             dev_type = dev["type"]
             if dev_type == "bridge":
@@ -449,15 +449,15 @@ class LauncherApp:
                 )
                 if not result.ok():
                     raise RuntimeError(
-                        f"usbipd detach 失败（退出码 {result.exit_code}）"
+                        f"usbipd detach failed (exit {result.exit_code})"
                     )
             else:
-                raise ValueError(f"未知设备类型: {dev_type!r}")
+                raise ValueError(f"Unknown device type: {dev_type!r}")
             self.state.set_device(name, DEVICE_DISCONNECTED, "")
-            return {"ok": True, "message": f"{dev['label']} 已断开"}
+            return {"ok": True, "message": f"{dev['label']} disconnected"}
         except Exception as exc:
             self.state.set_device(
-                name, DEVICE_ERROR, friendly_error(exc, f"断开 {dev['label']}")
+                name, DEVICE_ERROR, friendly_error(exc, f"Disconnect {dev['label']}")
             )
             return {"ok": False, "message": self.state.device_msgs[name]}
 
@@ -532,13 +532,13 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
             except FileNotFoundError:
-                html = "<html><body><h1>总控页未就绪</h1></body></html>"
+                html = "<html><body><h1>Control page not ready</h1></body></html>"
             return self._send_html(html)
         if path == "/status":
             return self._send_json(self.server.app.status())
         if path == "/config":
             return self._send_json(self.server.app.sidebar_config())
-        return self._send_json({"ok": False, "message": "未知地址"}, code=404)
+        return self._send_json({"ok": False, "message": "Unknown path"}, code=404)
 
     def do_POST(self):
         app = self.server.app
@@ -547,7 +547,7 @@ class Handler(BaseHTTPRequestHandler):
         # fire them at the loopback service. Reject cross-origin POSTs.
         if not app.validate_origin(self.headers.get("Origin", "")):
             return self._send_json(
-                {"ok": False, "message": "跨域请求被拒绝"}, code=403
+                {"ok": False, "message": "Cross-origin request rejected"}, code=403
             )
         path = urlparse(self.path).path
         try:
@@ -568,9 +568,9 @@ class Handler(BaseHTTPRequestHandler):
                 # drop the response.
                 remove_pidfile()
                 threading.Thread(target=self.server.shutdown, daemon=True).start()
-                return self._send_json({"ok": True, "message": "总控服务已退出"})
+                return self._send_json({"ok": True, "message": "Launcher service exited"})
             else:
-                return self._send_json({"ok": False, "message": "未知接口"}, code=404)
+                return self._send_json({"ok": False, "message": "Unknown endpoint"}, code=404)
         except NotImplementedError as exc:
             result = {"ok": False, "message": str(exc)}
         except Exception as exc:  # noqa: BLE001 — operator-facing guard
@@ -594,9 +594,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     try:
         server = LauncherServer((host, port), app)
     except OSError as exc:
-        print(f"[ERROR] 无法启动服务（端口 {port} 可能已被占用）: {exc}")
+        print(f"[ERROR] cannot start service (port {port} may be in use): {exc}")
         return 1
-    print(f"[INFO] O2 总控服务已启动: http://{host}:{port}/")
+    print(f"[INFO] Launcher service started: http://{host}:{port}/")
     # Write the actual URL for launcher.bat to read — the bat never has to
     # parse config.json (avoids batch quoting pain) and stays correct even
     # if the operator changes the port.

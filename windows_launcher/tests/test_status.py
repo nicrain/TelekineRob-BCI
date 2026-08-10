@@ -33,12 +33,12 @@ def test_status_flags_dead_bridge_as_error():
     payload = app.status()
 
     assert payload["devices"]["headband"]["state"] == "error"
-    assert payload["devices"]["headband"]["message"] == "桥进程已退出"
+    assert payload["devices"]["headband"]["message"] == "bridge process exited"
 
 
 def test_status_system_running_message_present():
     app = _make_app()
     payload = app.status()
     assert payload["system"]["state"] == "running"
-    assert payload["system"]["message"] == "系统已就绪"
+    assert payload["system"]["message"] == "System ready"
     assert set(payload["devices"]) == {"headband", "hybrid", "thymio"}

@@ -34,24 +34,24 @@ def test_backend_cmd_sources_ros2_absolutely():
 
 
 def test_missing_config_file_raises(tmp_path: Path):
-    with pytest.raises(ValueError, match="配置文件不存在"):
+    with pytest.raises(ValueError, match="config file not found"):
         load_config(tmp_path / "nope.json")
 
 
 def test_invalid_json_raises(tmp_path: Path):
     bad = tmp_path / "config.json"
     bad.write_text("{ not json", encoding="utf-8")
-    with pytest.raises(ValueError, match="解析失败"):
+    with pytest.raises(ValueError, match="parse failed"):
         load_config(bad)
 
 
 def test_missing_section_raises(tmp_path: Path):
     bad = tmp_path / "config.json"
     bad.write_text(json.dumps({"service": {"port": 8020}}), encoding="utf-8")
-    with pytest.raises(ValueError, match="缺少必需字段"):
+    with pytest.raises(ValueError, match="missing required sections"):
         load_config(bad)
 
 
 def test_unknown_template_ref_raises():
-    with pytest.raises(ValueError, match="不存在的字段"):
+    with pytest.raises(ValueError, match="references a missing field"):
         expand_config({"a": {"b": "${nope.missing}"}})

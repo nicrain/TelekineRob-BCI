@@ -25,7 +25,7 @@ def test_connect_bridge_success():
     app, ex = _make_app()
     result = app.connect_device("headband")
 
-    assert result == {"ok": True, "message": "Headband 已连接"}
+    assert result == {"ok": True, "message": "Headband connected"}
     assert app.state.devices["headband"] == "connected"
     assert "headband" in app._device_procs
     # The bridge is the LAST spawn (start_system spawned the 2 web services
@@ -49,7 +49,7 @@ def test_connect_bridge_dies_during_verify():
     result = app.connect_device("headband")
 
     assert result["ok"] is False
-    assert "桥进程已退出" in result["message"]
+    assert "bridge process exited" in result["message"]
     assert app.state.devices["headband"] == "error"
 
 
@@ -57,7 +57,7 @@ def test_connect_usbipd_success():
     app, ex = _make_app()
     result = app.connect_device("thymio")
 
-    assert result == {"ok": True, "message": "Thymio 已连接"}
+    assert result == {"ok": True, "message": "Thymio connected"}
     assert app.state.devices["thymio"] == "connected"
     # attach ran, then the WSL ttyACM0 verify
     assert any(c[0] == "usbipd" and "attach" in c for c in ex.run_calls)
@@ -69,7 +69,7 @@ def test_connect_usbipd_attach_fails():
     result = app.connect_device("thymio")
 
     assert result["ok"] is False
-    assert "usbipd attach 失败" in result["message"]
+    assert "usbipd attach failed" in result["message"]
     assert app.state.devices["thymio"] == "error"
 
 
@@ -81,12 +81,12 @@ def test_connect_when_system_stopped_rejected():
     # NOTE: no start_system() → system stays stopped
     result = app.connect_device("headband")
 
-    assert result == {"ok": False, "message": "系统未就绪，请先启动系统"}
+    assert result == {"ok": False, "message": "System not ready — start the system first"}
 
 
 def test_connect_unknown_device():
     app, _ = _make_app()
-    assert app.connect_device("nope") == {"ok": False, "message": "未知设备: nope"}
+    assert app.connect_device("nope") == {"ok": False, "message": "Unknown device: nope"}
 
 
 def test_connect_idempotent_no_second_spawn():
@@ -107,7 +107,7 @@ def test_disconnect_bridge_terminates():
 
     result = app.disconnect_device("headband")
 
-    assert result == {"ok": True, "message": "Headband 已断开"}
+    assert result == {"ok": True, "message": "Headband disconnected"}
     assert app.state.devices["headband"] == "disconnected"
     assert "headband" not in app._device_procs
     assert proc.poll() is not None  # terminated
@@ -124,4 +124,4 @@ def test_disconnect_usbipd_runs_detach():
 
 def test_disconnect_when_already_disconnected_idempotent():
     app, _ = _make_app()
-    assert app.disconnect_device("thymio") == {"ok": True, "message": "Thymio 已断开"}
+    assert app.disconnect_device("thymio") == {"ok": True, "message": "Thymio disconnected"}

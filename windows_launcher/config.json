@@ -63,12 +63,12 @@
     "groups": [
       {
         "id": "system",
-        "label": "系统状态",
-        "items": [{"id": "system-state", "type": "status", "label": "系统状态"}]
+        "label": "Status",
+        "items": [{"id": "system-state", "type": "status", "label": "System State"}]
       },
       {
         "id": "devices",
-        "label": "设备连接",
+        "label": "Devices",
         "items": [
           {"id": "headband", "type": "device", "label": "Headband"},
           {"id": "hybrid", "type": "device", "label": "HybridBlack"},
@@ -77,15 +77,15 @@
       },
       {
         "id": "ops",
-        "label": "系统操作",
+        "label": "Operations",
         "items": [
-          {"id": "start-system", "type": "action", "label": "启动系统"},
-          {"id": "restart-web", "type": "action", "label": "重启 web 服务"},
-          {"id": "stop-system", "type": "action", "label": "关闭系统"},
-          {"id": "exit", "type": "action", "label": "退出总控"}
+          {"id": "start-system", "type": "action", "label": "Start System"},
+          {"id": "restart-web", "type": "action", "label": "Restart Web"},
+          {"id": "stop-system", "type": "action", "label": "Stop System"},
+          {"id": "exit", "type": "action", "label": "Exit Launcher"}
         ]
       }
     ],
-    "log": {"id": "view-log", "type": "action", "label": "查看日志", "placeholder": true}
+    "log": {"id": "view-log", "type": "action", "label": "View Log", "placeholder": true}
   }
 }

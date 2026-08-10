@@ -23,7 +23,7 @@ def test_start_system_success_sequence():
     app, ex = _make_app()
     result = app.start_system()
 
-    assert result == {"ok": True, "message": "系统已启动并就绪"}
+    assert result == {"ok": True, "message": "System started and ready"}
     assert app.state.system == "running"
     # order: wsl readiness (systemctl) → sync windows_launcher → gtec_bridge
     assert "is-system-running" in ex.run_calls[0][-1]
@@ -52,7 +52,7 @@ def test_start_system_ready_timeout_reports_error():
     result = app.start_system()
 
     assert result["ok"] is False
-    assert "未就绪" in result["message"]
+    assert "not ready" in result["message"]
     assert app.state.system == "error"
 
 
@@ -61,7 +61,7 @@ def test_start_system_sync_failure_reports_error():
     result = app.start_system()
 
     assert result["ok"] is False
-    assert "同步" in result["message"]
+    assert "sync of" in result["message"]
     assert app.state.system == "error"
 
 
@@ -72,7 +72,7 @@ def test_start_system_idempotent():
 
     second = app.start_system()
 
-    assert second == {"ok": True, "message": "系统已在运行或启动中"}
+    assert second == {"ok": True, "message": "System already starting or running"}
     assert len(ex.run_calls) == run_before  # no re-work
 
 
@@ -94,7 +94,7 @@ def test_stop_system_terminates_wsl_and_resets_devices():
 def test_stop_system_idempotent_when_already_stopped():
     app, _ = _make_app()
     result = app.stop_system()
-    assert result == {"ok": True, "message": "系统已停止"}
+    assert result == {"ok": True, "message": "System stopped"}
 
 
 def test_restart_web_respawns_services():
@@ -147,6 +147,6 @@ def test_start_system_wsl_not_ready_times_out():
     app._share_accessible = lambda: False
     result = app.start_system()
     assert result["ok"] is False
-    assert "未完全就绪" in result["message"]
+    assert "not ready" in result["message"]
     assert "WSL" in result["message"]
     assert ex.spawn_calls == []

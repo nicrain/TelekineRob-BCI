@@ -52,7 +52,7 @@ def _tokenize_windows(cmd: str) -> List[str]:
     if cur:
         tokens.append("".join(cur))
     if in_quotes:
-        raise ValueError(f"命令的引号不配对: {cmd!r}")
+        raise ValueError(f"unbalanced quotes in command: {cmd!r}")
     return tokens
 
 
@@ -102,10 +102,10 @@ def build_sync_cmd(
     if tool == "xcopy":
         if exclude:
             raise ValueError(
-                "xcopy 不支持排除文件；请在 config.json 的 sync.tool 改用 robocopy"
+                "xcopy cannot exclude files — use robocopy for sync.tool in config.json"
             )
         return ["xcopy", "/E", "/I", "/Y", src, dst]
-    raise ValueError(f"未知同步工具: {tool!r} (支持 robocopy / xcopy)")
+    raise ValueError(f"unknown sync tool: {tool!r} (supported: robocopy / xcopy)")
 
 
 def build_start_web_cmds(config: dict) -> List[List[str]]:

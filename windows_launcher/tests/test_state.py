@@ -59,8 +59,8 @@ def test_can_stop_from_up_states():
 
 def test_status_payload_shape():
     s = _state()
-    s.set_system(SYSTEM_RUNNING, "系统已就绪")
-    s.set_device("headband", DEVICE_CONNECTED, "已连接")
+    s.set_system(SYSTEM_RUNNING, "System ready")
+    s.set_device("headband", DEVICE_CONNECTED, "Connected")
     payload = status_payload(s)
-    assert payload["system"] == {"state": SYSTEM_RUNNING, "message": "系统已就绪"}
-    assert payload["devices"]["headband"] == {"state": DEVICE_CONNECTED, "message": "已连接"}
+    assert payload["system"] == {"state": SYSTEM_RUNNING, "message": "System ready"}
+    assert payload["devices"]["headband"] == {"state": DEVICE_CONNECTED, "message": "Connected"}

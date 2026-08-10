@@ -45,7 +45,7 @@ def test_sync_cmd_xcopy_with_exclude_raises():
 def test_sync_cmd_unknown_tool_raises():
     import pytest
 
-    with pytest.raises(ValueError, match="未知同步工具"):
+    with pytest.raises(ValueError, match="unknown sync tool"):
         build_sync_cmd("cp", "src", "dst")
 
 

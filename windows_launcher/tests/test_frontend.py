@@ -2,13 +2,15 @@
 
 Real-device bug: action buttons called ``api(path)`` with no body, so the
 ``api()`` helper (body ? POST : GET) issued a GET → the server only has POST
-routes → 404 "未知地址". These tests pin the fix in the shipped HTML so a
+routes → 404 "Unknown path". These tests pin the fix in the shipped HTML so a
 future "bare api()" reversion is caught without a browser.
 """
+import json
 import re
 from pathlib import Path
 
 INDEX = Path(__file__).resolve().parents[1] / "static" / "index.html"
+CONFIG = Path(__file__).resolve().parents[1] / "config.json"
 
 
 def _extract_function(name: str) -> str:
@@ -74,3 +76,24 @@ def test_ferrari_theme_tokens():
     assert "--radius:2px" in html             # razor
     assert "'IBM Plex Mono'" in html          # mono label font
     assert "--f-ok:#03904A" in html and "--f-warn:#F13A2C" in html
+
+
+def test_refresh_button_reloads_iframe():
+    """P5: mainbar has a Refresh button that re-points frame.src (the web
+    GUI is cross-origin, so contentWindow.location.reload() would throw)."""
+    html = INDEX.read_text(encoding="utf-8")
+    assert 'id="refresh-btn"' in html
+    assert "refreshFrame" in html
+    assert 'frame.src = "about:blank"' in html
+    assert "frame.src = G.webUrl" in html
+    # the cross-origin-unsafe reload pattern must not appear as code
+    assert "frame.contentWindow" not in html
+
+
+def test_user_visible_layer_has_no_cjk():
+    """P5: the shipped page and config labels must be CJK-free (English UI)."""
+    cjk = re.compile(r"[一-鿿]")
+    html = INDEX.read_text(encoding="utf-8")
+    assert not cjk.search(html), "index.html has residual CJK"
+    cfg = json.loads(CONFIG.read_text(encoding="utf-8"))
+    assert not cjk.search(json.dumps(cfg, ensure_ascii=False)), "config.json has residual CJK"
