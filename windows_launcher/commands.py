@@ -126,6 +126,21 @@ def build_usbipd_detach_cmd(template: str) -> List[str]:
     return _tokenize_windows(template)
 
 
+def build_python_script_cmd(python_cmd: str, script: str) -> List[str]:
+    """Build ``[python_cmd, script]``.
+
+    P8c: ``python_cmd`` is machine-local config (a venv python, possibly a
+    path with spaces), so it is tokenized; the script is appended verbatim.
+    Used for both the bridge commands and the LSL probe.
+    """
+    return _tokenize_windows(python_cmd) + [script]
+
+
+def build_ide_open_cmd(open_cmd: str) -> List[str]:
+    """Tokenize a configured open-in-IDE command (P8d, machine-local)."""
+    return _tokenize_windows(open_cmd)
+
+
 def build_bridge_command(command: str) -> List[str]:
     """Tokenize a device command (e.g. ``python gpype_lsl_bridge.py``)."""
     return _tokenize_windows(command)
@@ -164,8 +179,14 @@ class Executor:
     ) -> CompletedCommand:
         return self._run_one(cmd, timeout=timeout, cwd=cwd)
 
-    def spawn(self, cmd: List[str], *, cwd: Optional[str] = None) -> subprocess.Popen:
-        return self._spawn_fn(cmd, cwd=cwd)
+    def spawn(
+        self,
+        cmd: List[str],
+        *,
+        cwd: Optional[str] = None,
+        log_file: Optional[str] = None,
+    ) -> subprocess.Popen:
+        return self._spawn_fn(cmd, cwd=cwd, log_file=log_file)
 
     # -- defaults (real execution) --------------------------------------
 
@@ -180,13 +201,13 @@ class Executor:
         )
         return CompletedCommand(proc.returncode, proc.stdout, proc.stderr)
 
-    def _default_spawn(self, cmd, cwd) -> subprocess.Popen:
-        # Long-running processes: discard output so the pipe can't fill and
-        # deadlock; the operator watches the device/service state instead.
-        # Same CREATE_NO_WINDOW as run_one — the web wsl.exe stays foreground
-        # and tracked, it just no longer pops a console window.
+    def _default_spawn(self, cmd, cwd, log_file=None) -> subprocess.Popen:
+        # P8a: with a per-device log_file, the bridge's stdout/stderr go to
+        # disk (appended) so a failure is diagnosable instead of vanishing
+        # into DEVNULL. Otherwise output is discarded to avoid pipe
+        # deadlock. Same CREATE_NO_WINDOW as run_one (P4).
+        out = open(log_file, "a", encoding="utf-8", buffering=1) if log_file else subprocess.DEVNULL
         return subprocess.Popen(
-            cmd, cwd=cwd,
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            cmd, cwd=cwd, stdout=out, stderr=out,
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )

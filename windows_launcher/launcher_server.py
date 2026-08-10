@@ -29,6 +29,8 @@ from urllib.parse import urlparse
 from commands import (
     Executor,
     build_bridge_command,
+    build_ide_open_cmd,
+    build_python_script_cmd,
     build_start_web_cmds,
     build_sync_cmd,
     build_usbipd_attach_cmd,
@@ -56,6 +58,7 @@ from state import (
 )
 
 HERE = Path(__file__).resolve().parent
+LSL_PROBE = HERE / "lsl_probe.py"
 STATIC_DIR = HERE / "static"
 DEFAULT_CONFIG = HERE / "config.json"
 LOG_FILE = HERE / "launcher_server.log"
@@ -147,6 +150,10 @@ class LauncherApp:
         self._lock = threading.RLock()
         self._web_procs: List[subprocess.Popen] = []
         self._device_procs: Dict[str, subprocess.Popen] = {}
+        # IDE-mode devices run no launcher process — LSL presence is their
+        # truth. The reconcile probe is throttled (avoid a subprocess every
+        # 1.5 s poll) via this per-device last-check timestamp (P8d).
+        self._last_lsl_check: Dict[str, float] = {}
 
         # Origin whitelist for the action POSTs (finding A). The console
         # page is same-origin, so its browser requests always carry one of
@@ -194,8 +201,20 @@ class LauncherApp:
         return status_payload(self.state)
 
     def _reconcile_proc_health(self) -> None:
-        for name, proc in list(self._device_procs.items()):
-            if proc.poll() is not None and self.state.devices[name] in (
+        now = time.time()
+        for name, dev in self.config["devices"].items():
+            # IDE mode (P8d): no launcher process — the LSL stream is the
+            # truth. If it disappears the device falls back to grey.
+            if dev.get("connect_mode") == "open_in_ide":
+                if self.state.devices[name] == DEVICE_CONNECTED:
+                    if now - self._last_lsl_check.get(name, 0.0) >= 10.0:
+                        self._last_lsl_check[name] = now
+                        if not self._lsl_found(dev):
+                            self.state.set_device(name, DEVICE_DISCONNECTED, "")
+                continue
+            # spawn mode: reconcile on process health (existing behaviour).
+            proc = self._device_procs.get(name)
+            if proc is not None and proc.poll() is not None and self.state.devices[name] in (
                 DEVICE_CONNECTED, DEVICE_CONNECTING,
             ):
                 self.state.set_device(name, DEVICE_ERROR, "bridge process exited")
@@ -383,6 +402,10 @@ class LauncherApp:
                 return {"ok": True, "message": f"{dev['label']} connected"}
             self.state.set_device(name, DEVICE_CONNECTING, "Connecting…")
         try:
+            if dev.get("connect_mode") == "open_in_ide":
+                # P8d: returns immediately with the "press Run" prompt; the
+                # LSL wait runs in a background thread.
+                return self._connect_open_in_ide(name, dev)
             dev_type = dev["type"]
             if dev_type == "bridge":
                 self._connect_bridge(name, dev)
@@ -399,20 +422,93 @@ class LauncherApp:
             return {"ok": False, "message": self.state.device_msgs[name]}
 
     def _connect_bridge(self, name: str, dev: dict) -> None:
-        """Run the Windows-side LSL bridge; fail if it dies during the
-        verify window or the optional verify_cmd does not pass."""
-        proc = self.executor.spawn(
-            build_bridge_command(dev["command"]), cwd=dev.get("cwd"),
-        )
+        """Spawn the LSL bridge and verify by stream, not by process (P8b):
+        green means the LSL stream is actually up. Timeout → terminate the
+        bridge and fail with a human message."""
+        cmd = build_python_script_cmd(dev.get("python_cmd", "python"), dev["script"])
+        log_path = self._bridge_log_path(name)
+        try:
+            with open(log_path, "a", encoding="utf-8") as fh:
+                fh.write(
+                    f"\n--- {time.strftime('%Y-%m-%d %H:%M:%S')} "
+                    f"connect {name}: {' '.join(cmd)}\n"
+                )
+        except OSError:
+            pass  # best-effort: the spawn still redirects to the log
+        proc = self.executor.spawn(cmd, cwd=dev.get("cwd"), log_file=str(log_path))
         self._device_procs[name] = proc
-        time.sleep(float(dev.get("verify_delay_sec", 5)))
-        if proc.poll() is not None:
-            raise RuntimeError("bridge process exited — check the device is on and not in use")
-        verify = dev.get("verify_cmd")
-        if verify:
-            result = self.executor.run(build_bridge_command(verify), timeout=30)
-            if not result.ok():
-                raise RuntimeError("device verification failed — check the connection")
+        if not self._wait_for_lsl(dev):
+            self._terminate_proc(proc)
+            raise RuntimeError("no LSL stream — check device is on")
+
+    def _connect_open_in_ide(self, name: str, dev: dict) -> dict:
+        """P8d: open the bridge script in the operator's IDE and wait for
+        the LSL stream in the background (they press Run themselves)."""
+        self._open_script(dev)
+        self.state.set_device(name, DEVICE_CONNECTING, "waiting for LSL stream")
+        timeout = float(dev.get("verify_timeout_sec", 30))
+        poll = float(dev.get("verify_poll_sec", 2))
+        threading.Thread(
+            target=self._wait_lsl_background,
+            args=(name, dev, timeout, poll),
+            daemon=True,
+        ).start()
+        return {"ok": True, "message": "Bridge script opened in VS Code — press Run (F5) there to start it"}
+
+    def _open_script(self, dev: dict) -> None:
+        """Run the configured open-in-IDE command; fall back to the default
+        opener (start) when `code` isn't on PATH (P8d)."""
+        open_cmd = dev.get("open_cmd")
+        if not open_cmd:
+            raise RuntimeError("connect_mode 'open_in_ide' needs an open_cmd")
+        try:
+            self.executor.run(build_ide_open_cmd(open_cmd), timeout=10)
+        except FileNotFoundError:
+            fallback = dev.get("open_fallback_cmd")
+            if not fallback:
+                raise
+            self.executor.run(build_ide_open_cmd(fallback), timeout=10)
+
+    def _wait_lsl_background(self, name: str, dev: dict, timeout: float, poll: float) -> None:
+        if self._wait_for_lsl(dev, timeout, poll):
+            self.state.set_device(name, DEVICE_CONNECTED, "Connected")
+        else:
+            self.state.set_device(
+                name, DEVICE_ERROR,
+                "no LSL stream — check device is on; in VS Code press Run (F5)",
+            )
+
+    # -- LSL stream verification (P8b) -----------------------------------
+
+    def _bridge_log_path(self, name: str) -> Path:
+        return HERE / f"bridge_{name}.log"
+
+    def _wait_for_lsl(self, dev: dict, timeout: float | None = None, poll: float | None = None) -> bool:
+        """Poll the LSL probe until the device's stream resolves or timeout."""
+        timeout = float(dev.get("verify_timeout_sec", 20)) if timeout is None else timeout
+        poll = float(dev.get("verify_poll_sec", 2)) if poll is None else poll
+        deadline = time.time() + timeout
+        while True:
+            if self._lsl_found(dev):
+                return True
+            if time.time() >= deadline:
+                return False
+            time.sleep(poll)
+
+    def _lsl_found(self, dev: dict) -> bool:
+        """Run the probe under the DEVICE's python_cmd (venv has pylsl); the
+        launcher itself stays zero-dependency."""
+        cmd = (
+            build_python_script_cmd(dev.get("python_cmd", "python"), str(LSL_PROBE))
+            + [dev.get("lsl_source_id", ""), "1"]
+        )
+        try:
+            result = self.executor.run(cmd, timeout=10)
+            # Line-exact match: "found" vs "not-found" (a substring check
+            # would treat "not-found" as found — it ends with "found").
+            return "found" in (result.stdout or "").splitlines()
+        except Exception:
+            return False
 
     def _connect_usbipd(self, name: str, dev: dict) -> None:
         """Attach the Thymio USB device via usbipd, then verify inside WSL."""
@@ -440,6 +536,11 @@ class LauncherApp:
                 return {"ok": True, "message": f"{dev['label']} disconnected"}
             self.state.set_device(name, DEVICE_DISCONNECTING, "Disconnecting…")
         try:
+            if dev.get("connect_mode") == "open_in_ide":
+                # P8d: we cannot terminate a bridge running in VS Code —
+                # reset the state and tell the operator to stop it there.
+                self.state.set_device(name, DEVICE_DISCONNECTED, "")
+                return {"ok": True, "message": "Stop the bridge in VS Code"}
             dev_type = dev["type"]
             if dev_type == "bridge":
                 self._terminate_proc(self._device_procs.pop(name, None))

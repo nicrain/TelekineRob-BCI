@@ -37,5 +37,7 @@ Thumbs.db
 CLAUDE.md
 AGENTS.md
 
-# O2 launcher runtime artifact (service writes its URL for launcher.bat)
+# O2 launcher runtime artifacts (service log, per-device bridge logs, URL)
 windows_launcher/last_url.txt
+windows_launcher/launcher_server.log
+windows_launcher/bridge_*.log

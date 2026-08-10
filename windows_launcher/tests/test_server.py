@@ -180,7 +180,8 @@ def test_service_messages_are_english():
     cjk = re.compile(r"[一-鿿]")
     cfg = load_config(REPO_CONFIG)
     for dev in cfg["devices"].values():
-        dev["verify_delay_sec"] = 0
+        dev["verify_timeout_sec"] = 0
+        dev["verify_poll_sec"] = 0
     cfg["wsl"]["ready_timeout_sec"] = 1
     cfg["wsl"]["ready_poll_sec"] = 0
 
@@ -200,7 +201,8 @@ def test_service_messages_are_english():
     # success paths too
     ok_cfg = load_config(REPO_CONFIG)
     for dev in ok_cfg["devices"].values():
-        dev["verify_delay_sec"] = 0
+        dev["verify_timeout_sec"] = 0
+        dev["verify_poll_sec"] = 0
     ok_app = LauncherApp(ok_cfg, executor=FakeExecutor(), ready_check=lambda u, t: True)
     all_msgs += [ok_app.start_system()["message"], ok_app.connect_device("headband")["message"],
                  ok_app.disconnect_device("headband")["message"], ok_app.stop_system()["message"]]

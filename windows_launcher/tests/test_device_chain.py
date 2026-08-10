@@ -1,20 +1,21 @@
 """M4 device chain — connect/disconnect bridges + usbipd with fake executor."""
 from pathlib import Path
 
+import launcher_server
+from commands import CompletedCommand, build_python_script_cmd
 from config import load_config
 from fakes import FakeExecutor
 from launcher_server import LauncherApp
 
 REPO_CONFIG = Path(__file__).resolve().parents[1] / "config.json"
 
-VERIFY_WSL = 'wsl -d Ubuntu -e bash -lc "test -e /dev/ttyACM0 && echo ok"'
-
 
 def _make_app(ex=None):
     cfg = load_config(REPO_CONFIG)
-    # Tests must not sleep: zero the verify delays in every device config.
+    # Tests must not sleep: zero the LSL verify timeout/poll for every device.
     for dev in cfg["devices"].values():
-        dev["verify_delay_sec"] = 0
+        dev["verify_timeout_sec"] = 0
+        dev["verify_poll_sec"] = 0
     ex = ex or FakeExecutor()
     app = LauncherApp(cfg, executor=ex, ready_check=lambda url, t: True)
     assert app.start_system()["ok"] is True  # system running → can connect
@@ -22,35 +23,37 @@ def _make_app(ex=None):
 
 
 def test_connect_bridge_success():
+    """P8b: spawn mode (hybrid) — bridge up + LSL stream resolves → green."""
     app, ex = _make_app()
-    result = app.connect_device("headband")
+    result = app.connect_device("hybrid")
 
-    assert result == {"ok": True, "message": "Headband connected"}
-    assert app.state.devices["headband"] == "connected"
-    assert "headband" in app._device_procs
+    assert result == {"ok": True, "message": "HybridBlack connected"}
+    assert app.state.devices["hybrid"] == "connected"
+    assert "hybrid" in app._device_procs
     # The bridge is the LAST spawn (start_system spawned the 2 web services
-    # first); command tokenized + cwd derived from ${sync.dst_root}.
+    # first); command is [python_cmd, script], cwd derived from ${sync.dst_root}.
     assert ex.spawn_calls[-1][0] == "python"
-    assert ex.spawn_calls[-1][1] == "gpype_lsl_bridge.py"
+    assert ex.spawn_calls[-1][1] == "unicornpy_lsl_bridge.py"
     assert ex.spawn_cwds[-1].endswith("gtec_bridge")
 
 
-def test_connect_bridge_runs_verify_cmd_when_configured():
+def test_connect_bridge_probes_lsl_stream():
+    """P8b: connect runs the LSL probe — green means the stream resolved,
+    not that the process stayed alive."""
     app, ex = _make_app()
-    app.config["devices"]["headband"]["verify_cmd"] = VERIFY_WSL
-
-    assert app.connect_device("headband")["ok"] is True
-
-    assert any("ttyACM0" in c[-1] for c in ex.run_calls)
+    assert app.connect_device("hybrid")["ok"] is True
+    assert any(any("lsl_probe.py" in part for part in c) for c in ex.run_calls)
 
 
-def test_connect_bridge_dies_during_verify():
-    app, _ = _make_app(FakeExecutor(bridge_alive=False))
-    result = app.connect_device("headband")
+def test_connect_bridge_fails_when_no_lsl_stream():
+    """P8b: device off → probe never finds the stream → timeout + error,
+    no false green."""
+    app, _ = _make_app(FakeExecutor(lsl_found=False))
+    result = app.connect_device("hybrid")
 
     assert result["ok"] is False
-    assert "bridge process exited" in result["message"]
-    assert app.state.devices["headband"] == "error"
+    assert "no LSL stream" in result["message"]
+    assert app.state.devices["hybrid"] == "error"
 
 
 def test_connect_usbipd_success():
@@ -76,7 +79,8 @@ def test_connect_usbipd_attach_fails():
 def test_connect_when_system_stopped_rejected():
     cfg = load_config(REPO_CONFIG)
     for dev in cfg["devices"].values():
-        dev["verify_delay_sec"] = 0
+        dev["verify_timeout_sec"] = 0
+        dev["verify_poll_sec"] = 0
     app = LauncherApp(cfg, executor=FakeExecutor(), ready_check=lambda u, t: True)
     # NOTE: no start_system() → system stays stopped
     result = app.connect_device("headband")
@@ -91,10 +95,10 @@ def test_connect_unknown_device():
 
 def test_connect_idempotent_no_second_spawn():
     app, ex = _make_app()
-    assert app.connect_device("headband")["ok"] is True
+    assert app.connect_device("hybrid")["ok"] is True
     spawn_before = len(ex.spawn_calls)
 
-    second = app.connect_device("headband")
+    second = app.connect_device("hybrid")
 
     assert second["ok"] is True
     assert len(ex.spawn_calls) == spawn_before
@@ -102,14 +106,14 @@ def test_connect_idempotent_no_second_spawn():
 
 def test_disconnect_bridge_terminates():
     app, ex = _make_app()
-    app.connect_device("headband")
-    proc = app._device_procs["headband"]
+    app.connect_device("hybrid")
+    proc = app._device_procs["hybrid"]
 
-    result = app.disconnect_device("headband")
+    result = app.disconnect_device("hybrid")
 
-    assert result == {"ok": True, "message": "Headband disconnected"}
-    assert app.state.devices["headband"] == "disconnected"
-    assert "headband" not in app._device_procs
+    assert result == {"ok": True, "message": "HybridBlack disconnected"}
+    assert app.state.devices["hybrid"] == "disconnected"
+    assert "hybrid" not in app._device_procs
     assert proc.poll() is not None  # terminated
 
 
@@ -125,3 +129,79 @@ def test_disconnect_usbipd_runs_detach():
 def test_disconnect_when_already_disconnected_idempotent():
     app, _ = _make_app()
     assert app.disconnect_device("thymio") == {"ok": True, "message": "Thymio disconnected"}
+
+
+# --- P8d: open_in_ide mode (headband) ------------------------------------
+
+def test_connect_open_in_ide_opens_script_and_prompts():
+    """connect runs open_cmd (VS Code CLI) and returns the press-Run prompt;
+    the state is 'waiting for LSL stream' (busy) until the probe lands."""
+    app, ex = _make_app()
+    result = app.connect_device("headband")
+
+    assert result["ok"] is True
+    assert "press Run (F5)" in result["message"]
+    assert any(c[0] == "code" for c in ex.run_calls)  # VS Code CLI open
+    assert app.state.devices["headband"] in ("connecting", "connected")
+
+
+def test_wait_lsl_background_sets_connected():
+    app, _ = _make_app()  # lsl_found=True
+    app.state.set_device("headband", "connecting", "waiting for LSL stream")
+    app._wait_lsl_background("headband", app.config["devices"]["headband"], 0, 0)
+    assert app.state.devices["headband"] == "connected"
+
+
+def test_wait_lsl_background_times_out_to_error():
+    app, _ = _make_app(FakeExecutor(lsl_found=False))
+    app.state.set_device("headband", "connecting", "waiting for LSL stream")
+    app._wait_lsl_background("headband", app.config["devices"]["headband"], 0, 0)
+    assert app.state.devices["headband"] == "error"
+    assert "no LSL stream" in app.state.device_msgs["headband"]
+
+
+def test_open_in_ide_falls_back_when_code_missing():
+    """code not on PATH → the configured default-opener fallback runs."""
+    app, ex = _make_app()
+    dev = app.config["devices"]["headband"]
+    original_run = ex.run
+
+    def run(cmd, **kw):
+        if cmd and cmd[0] == "code":
+            raise FileNotFoundError("code")
+        return original_run(cmd, **kw)
+
+    ex.run = run
+    app._open_script(dev)
+
+    assert any(c[0] == "cmd" and "start" in c for c in ex.run_calls)
+
+
+def test_disconnect_ide_returns_vscode_message():
+    """We cannot stop a bridge running in VS Code — reset + prompt."""
+    app, _ = _make_app()
+    app.state.set_device("headband", "connected", "Connected")
+    result = app.disconnect_device("headband")
+
+    assert result == {"ok": True, "message": "Stop the bridge in VS Code"}
+    assert app.state.devices["headband"] == "disconnected"
+
+
+# --- P8a / P8c -----------------------------------------------------------
+
+def test_connect_bridge_logs_to_file(tmp_path, monkeypatch):
+    """The spawned bridge's output is redirected to bridge_<device>.log."""
+    monkeypatch.setattr(launcher_server, "HERE", tmp_path)
+    app, ex = _make_app()
+    app.connect_device("hybrid")
+
+    assert ex.spawn_logs[-1]  # a log path was passed to spawn
+    assert str(ex.spawn_logs[-1]).endswith("bridge_hybrid.log")
+    assert "connect hybrid" in (tmp_path / "bridge_hybrid.log").read_text(encoding="utf-8")
+
+
+def test_bridge_command_uses_python_cmd():
+    """python_cmd is machine-local config — a venv path is used as-is."""
+    cmd = build_python_script_cmd(r"C:\venvs\robot\python.exe", "unicornpy_lsl_bridge.py")
+    assert cmd == [r"C:\venvs\robot\python.exe", "unicornpy_lsl_bridge.py"]
+    assert build_python_script_cmd("python", "x.py") == ["python", "x.py"]

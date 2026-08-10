@@ -34,6 +34,9 @@ windows_launcher/
    | `devices.thymio.detach_cmd` | usbipd detach 命令 | 填 |
    | `web.backend_cmd` / `frontend_cmd` | WSL 内起前后端的 shell 命令（**前台**执行，日志落 `/tmp/launcher_*.log`；后端 venv 默认仓库根 `.venv`，若缺依赖改 `web_gui/backend/.venv`） | 确认/可调 |
    | `devices.*.verify_cmd` | 连上后的自检命令（null = 只查进程存活） | 可选 |
+   | `devices.*.python_cmd` | 跑桥/探针的 Python（机器本地 venv 路径，默认 `python`） | 填 venv 路径 |
+   | `devices.*.lsl_source_id` | LSL 流 source_id——连接**真验证**用（绿 = 有流，不是进程活着） | 确认（`gtec_bci_core4` / `gtec_hybrid_black`） |
+   | `devices.headband.connect_mode` | `open_in_ide` = launcher 打开脚本、操作者在 VS Code 点 Run（g.Pype 免费版授权闸门） | 已设默认 |
 
    ⚠️ **这个 config.json 是"机器本地配置"**：同步时被排除（`sync.items`
    里 `windows_launcher` 排除 `config.json`），永远不会被 WSL 仓库版覆盖——

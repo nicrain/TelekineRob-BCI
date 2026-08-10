@@ -92,7 +92,7 @@ def test_executor_run_uses_injected_fn():
 def test_executor_spawn_uses_injected_fn():
     ex = Executor()
     marker = object()
-    ex.set_spawn(lambda cmd, cwd: marker)
+    ex.set_spawn(lambda cmd, cwd, log_file=None: marker)
     assert ex.spawn(["python", "bridge.py"]) is marker
 
 
