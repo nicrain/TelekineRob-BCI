@@ -22,14 +22,16 @@
     --radius:2px;   /* razor */
   }
 
-  /* P6: light board mirrors web_gui's [data-theme="light"] palette */
+  /* P6: light board mirrors web_gui's [data-theme="light"] palette.
+     P7-②: ok/warn/info are NOT overridden here — web_gui's light block
+     doesn't override them either, so both sides fall back to :root's
+     #03904A/#F13A2C/#4C98B9 and stay value-identical. */
   [data-theme="light"] {
     --f-red:#C41E13; --f-red-dark:#A01409;
     --f-black:#EFECE8; --f-near-black:#FAF8F5;
     --f-surface:#FAF8F5; --f-input-bg:#FFFFFF;
     --f-border-subtle:#E8E4DF; --f-border-strong:#D6D2CC; --f-border-mid:#D6D2CC;
     --f-text-primary:#181818; --f-text-secondary:#666666;
-    --f-ok:#1A7A3A; --f-warn:#C5221F; --f-info:#1769AA;
     --f-hover-bg:rgba(24,24,24,0.06);
     --f-status-off:#D6D2CC;
   }
@@ -130,8 +132,9 @@
     <div id="mainbar">
       <!-- P2: collapse button lives in the static #mainbar -->
       <button id="collapse-btn" class="btn" onclick="toggleSidebar()" title="Collapse / expand sidebar">«</button>
-      <span>Experiment</span>
       <!-- P5: refresh the (cross-origin) web GUI iframe -->
+      <!-- P7-⑤: the static "Experiment" label was removed — mainbar is just
+           [↻ Refresh] [☾] [Open in new tab] + the collapse chevron. -->
       <button id="refresh-btn" class="btn" onclick="refreshFrame()" title="Reload the web GUI">↻ Refresh</button>
       <!-- P6: light/dark theme toggle, synced with the web GUI via postMessage -->
       <button id="theme-btn" class="btn" onclick="toggleTheme()" title="Toggle light/dark theme">☾</button>
@@ -355,7 +358,8 @@ function updateMainArea() {
       dot.className = "dot busy";
       title.textContent = st === "starting" ? "Starting System…" : "Stopping System…";
     } else {
-      dot.className = "dot";
+      // P7-①: the error branch shows a red (err) dot, not the grey off dot.
+      dot.className = st === "error" ? "dot err" : "dot";
       title.textContent = st === "error" ? "System Error" : "System Offline";
     }
   }
@@ -365,6 +369,9 @@ function updateMainArea() {
 function refreshFrame() {
   // The web GUI is cross-origin (5173 vs the control service), so
   // contentWindow.location.reload() would throw — re-point src instead.
+  // P7-③: guard on running — pointing the iframe at a dead frontend would
+  // flash the browser's error page (the "no crying-face" hole).
+  if (!G.status || G.status.system.state !== "running") return;
   const frame = document.getElementById("frame");
   frame.src = "about:blank";   // clear, force a fresh load
   frame.src = webUrlWithTheme(G.webUrl, currentTheme());

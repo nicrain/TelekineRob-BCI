@@ -88,6 +88,9 @@ def test_refresh_button_reloads_iframe():
     assert "refreshFrame" in html
     assert 'frame.src = "about:blank"' in html
     assert "frame.src = webUrlWithTheme(G.webUrl, currentTheme())" in html  # themed reload
+    # P7-③: Refresh is guarded on running — pointing the iframe at a dead
+    # frontend would flash the browser's error page.
+    assert 'G.status.system.state !== "running") return;' in html
     # the cross-origin-UNSAFE reload pattern must not appear as code
     # (frame.contentWindow.postMessage is fine — it's location.reload() that throws)
     assert "frame.contentWindow.location.reload()" not in html
@@ -122,6 +125,11 @@ def test_light_theme_tokens_present():
     assert "--f-text-secondary:#666666" in html
     assert "--f-red:#C41E13" in html
     assert "--f-status-off:#D6D2CC" in html
+    # P7-②: ok/warn/info are NOT overridden in light — they fall back to
+    # :root's #03904A/#F13A2C/#4C98B9, value-identical to web_gui's dots.
+    assert "--f-ok:#1A7A3A" not in html
+    assert "--f-warn:#C5221F" not in html
+    assert "--f-info:#1769AA" not in html
 
 
 def test_placeholder_markers_and_show_hide():
@@ -137,6 +145,16 @@ def test_placeholder_markers_and_show_hide():
     assert "Never pre-load the web GUI at init" in html
     assert 'frame.src = "about:blank"' in html
     assert "frame.style.display = \"none\"" in html
+    # P7-①: the placeholder's error branch uses a red (err) dot, not grey
+    assert 'st === "error" ? "dot err" : "dot"' in html
+
+
+def test_mainbar_has_no_experiment_label():
+    """P7-⑤: the static "Experiment" span is gone from mainbar."""
+    html = INDEX.read_text(encoding="utf-8")
+    assert "<span>Experiment</span>" not in html
+    assert 'id="refresh-btn"' in html
+    assert 'id="theme-btn"' in html
 
 
 def test_weburl_with_theme_concat_bounds():
