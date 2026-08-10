@@ -52,6 +52,9 @@ windows_launcher/
    再点变「断开」→ 变灰。
 4. 在 web GUI 里：配置设备 → 校准 → 点 Start 跑实验。
 5. 点「**关闭系统**」→ 桥进程、web 进程、WSL 全部停干净。
+6. 用完点「**退出总控**」→ 关闭控制服务（无窗口运行，日志在 `launcher_server.log`）。这**不影响** WSL 侧实验——它只是编排层。
+
+> **无窗口 + 幂等**：双击 `launcher.bat` 用 `pythonw` 无窗口启动（无 pythonw 时回退最小化窗口）；若旧实例还活着会自动先杀掉再起新版（`launcher_server.pid` + 命令行校验），所以每次双击 = 单实例 + 最新代码 + 一个浏览器标签。
 
 ## 真机验收（对照 docs/O2_LAUNCHER.md §4）
 
@@ -75,7 +78,7 @@ windows_launcher/
 | 连 Thymio 报 usbipd 失败 | busid 是否正确；终端管理员权限试 `usbipd bind --busid=…` |
 | 连桥报"桥进程已退出" | 设备是否开机、是否被别的程序占用、桥依赖是否装齐 |
 | 网页服务连不上 | WSL 内手动 `npm run dev` 试；config `web.url` 端口是否对；前后端日志在 WSL `/tmp/launcher_backend.log` / `/tmp/launcher_frontend.log` |
-| 总控页打不开 | 看最小化窗口日志；`last_url.txt` 是否生成 |
+| 总控页打不开 | 看 `launcher_server.log`（控制服务日志，同目录）；`last_url.txt` 是否生成 |
 
 ## 开发 / 测试（macOS 也可）
 

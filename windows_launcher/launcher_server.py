@@ -58,8 +58,56 @@ from state import (
 HERE = Path(__file__).resolve().parent
 STATIC_DIR = HERE / "static"
 DEFAULT_CONFIG = HERE / "config.json"
+LOG_FILE = HERE / "launcher_server.log"
+PID_FILE = HERE / "launcher_server.pid"
 
 NOT_IMPLEMENTED = "该功能尚未开通"
+
+
+def _setup_logging() -> None:
+    """Route stdout/stderr to ``launcher_server.log`` and echo to the console.
+
+    Under ``pythonw`` (windowless, P1) there is no console — ``sys.stdout``
+    is None — so without this every ``print()`` in the service would raise
+    and the logs would vanish with the window. The tee writes the log file
+    always and mirrors to the console when one exists, so the existing
+    ``print()`` calls stay untouched.
+    """
+    console = sys.stdout
+    file_handle = open(LOG_FILE, "a", encoding="utf-8", buffering=1)
+
+    class _Tee:
+        def write(self, data: str) -> int:
+            file_handle.write(data)
+            if console is not None:
+                try:
+                    console.write(data)
+                except Exception:
+                    pass
+            return len(data)
+
+        def flush(self) -> None:
+            file_handle.flush()
+            if console is not None:
+                try:
+                    console.flush()
+                except Exception:
+                    pass
+
+    sys.stdout = sys.stderr = _Tee()
+
+
+def write_pidfile() -> None:
+    """Record this service's PID so launcher.bat can replace it (P1)."""
+    PID_FILE.write_text(str(os.getpid()), encoding="utf-8")
+
+
+def remove_pidfile() -> None:
+    """Best-effort pidfile cleanup (never raises)."""
+    try:
+        PID_FILE.unlink()
+    except OSError:
+        pass
 
 
 # --- Human-readable errors ---------------------------------------------
@@ -513,6 +561,14 @@ class Handler(BaseHTTPRequestHandler):
                 result = app.connect_device(self._read_json().get("device", ""))
             elif path == "/disconnect-device":
                 result = app.disconnect_device(self._read_json().get("device", ""))
+            elif path == "/shutdown":
+                # P1: windowless service needs an explicit stop. Delete the
+                # pidfile, reply 200, then stop serve_forever from a worker
+                # thread — calling server.shutdown() here would deadlock and
+                # drop the response.
+                remove_pidfile()
+                threading.Thread(target=self.server.shutdown, daemon=True).start()
+                return self._send_json({"ok": True, "message": "总控服务已退出"})
             else:
                 return self._send_json({"ok": False, "message": "未知接口"}, code=404)
         except NotImplementedError as exc:
@@ -525,6 +581,7 @@ class Handler(BaseHTTPRequestHandler):
 def main(argv: Optional[List[str]] = None) -> int:
     # argv is the arg list WITHOUT the script name (callers pass sys.argv[1:]).
     config_path = Path(argv[0]) if argv else DEFAULT_CONFIG
+    _setup_logging()  # P1: tee to launcher_server.log even under pythonw
     try:
         config = load_config(config_path)
     except ValueError as exc:
@@ -544,12 +601,14 @@ def main(argv: Optional[List[str]] = None) -> int:
     # parse config.json (avoids batch quoting pain) and stays correct even
     # if the operator changes the port.
     (HERE / "last_url.txt").write_text(f"http://{host}:{port}/\n", encoding="utf-8")
+    write_pidfile()  # P1: bat 用它在下次双击时幂等替换
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
         server.server_close()
+        remove_pidfile()
     return 0
 
 

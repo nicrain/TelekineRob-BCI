@@ -4,12 +4,15 @@ No real subprocesses: in M1 the action endpoints still raise
 NotImplementedError, and the executor is never reached.
 """
 import json
+import os
+import sys
 import threading
 import urllib.request
 from pathlib import Path
 
 import pytest
 
+import launcher_server
 from config import load_config
 from fakes import FakeExecutor
 from launcher_server import LauncherApp, LauncherServer
@@ -135,11 +138,60 @@ def test_post_evil_origin_rejected(base_url):
     assert body["message"] == "跨域请求被拒绝"
 
 
-def test_main_honours_config_path_arg(capsys):
+def test_main_honours_config_path_arg(capsys, monkeypatch):
     """main(sys.argv[1:]) must read the first arg as the config path (the
     argv slice means the path is argv[0], not argv[1])."""
     from launcher_server import main
 
+    # Don't let main()'s real _setup_logging rewire sys.stdout / write the
+    # repo log file during the test.
+    monkeypatch.setattr(launcher_server, "_setup_logging", lambda: None)
     rc = main(["/nonexistent/o2_config.json"])
     assert rc == 1
     assert "配置文件不存在" in capsys.readouterr().out
+
+
+def test_pidfile_write_and_remove(tmp_path, monkeypatch):
+    """P1: pidfile lifecycle — write on start, remove on shutdown, idempotent."""
+    monkeypatch.setattr(launcher_server, "PID_FILE", tmp_path / "pid")
+    launcher_server.write_pidfile()
+    assert launcher_server.PID_FILE.exists()
+    assert launcher_server.PID_FILE.read_text(encoding="utf-8") == str(os.getpid())
+
+    launcher_server.remove_pidfile()
+    assert not launcher_server.PID_FILE.exists()
+    launcher_server.remove_pidfile()  # idempotent, never raises
+
+
+def test_setup_logging_writes_file_when_stdout_none(tmp_path, monkeypatch):
+    """P1: under pythonw sys.stdout is None — print() must still reach the
+    launcher_server.log file (tee)."""
+    monkeypatch.setattr(launcher_server, "LOG_FILE", tmp_path / "launcher_server.log")
+    monkeypatch.setattr(sys, "stdout", None)
+    launcher_server._setup_logging()
+    print("hello-p1-log", flush=True)
+    assert "hello-p1-log" in (tmp_path / "launcher_server.log").read_text(encoding="utf-8")
+
+
+def test_shutdown_endpoint_stops_server_and_removes_pidfile(tmp_path, monkeypatch):
+    """P1: POST /shutdown → 200, pidfile removed, serve_forever actually stops."""
+    monkeypatch.setattr(launcher_server, "PID_FILE", tmp_path / "pid")
+    launcher_server.write_pidfile()
+
+    cfg = load_config(REPO_CONFIG)
+    server = LauncherServer(
+        ("127.0.0.1", 0),
+        LauncherApp(cfg, executor=FakeExecutor(), ready_check=lambda u, t: True),
+    )
+    t = threading.Thread(target=server.serve_forever, daemon=True)
+    t.start()
+    try:
+        base = f"http://127.0.0.1:{server.server_address[1]}"
+        status, body = _post(base, "/shutdown", origin=base)
+        assert status == 200
+        assert body == {"ok": True, "message": "总控服务已退出"}
+        assert not launcher_server.PID_FILE.exists()  # removed by the handler
+        t.join(timeout=5)
+        assert not t.is_alive()  # serve_forever returned (response already sent)
+    finally:
+        server.server_close()
