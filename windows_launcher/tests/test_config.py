@@ -23,6 +23,16 @@ def test_template_expansion_resolves_cwd():
     )
 
 
+def test_backend_cmd_sources_ros2_absolutely():
+    """② ${wsl.repo_path} expands to the absolute repo path in the ROS2
+    colcon source — the bash -lc context has no ROS2 env otherwise."""
+    cfg = load_config(REPO_CONFIG)
+    cmd = cfg["web"]["backend_cmd"]
+    assert "source /opt/ros/kilted/setup.bash" in cmd
+    assert cfg["wsl"]["repo_path"] + "/install/setup.bash" in cmd
+    assert "${wsl.repo_path}" not in cmd  # fully expanded
+
+
 def test_missing_config_file_raises(tmp_path: Path):
     with pytest.raises(ValueError, match="配置文件不存在"):
         load_config(tmp_path / "nope.json")

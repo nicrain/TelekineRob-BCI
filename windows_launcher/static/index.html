@@ -86,7 +86,7 @@
 <script>
 "use strict";
 
-const G = { config: null, status: null, webUrl: "http://localhost:5173" };
+const G = { config: null, status: null, webUrl: "http://localhost:5173", prevRunning: false };
 
 /* ---------- 默认结构（file:// 直接打开也有可看骨架） ---------- */
 const DEFAULT_DEVICES = [
@@ -216,6 +216,18 @@ async function pollStatus() {
     return;
   }
   renderSystem(); renderDevices(); renderOps();
+  // ① 启动成功后自动加载 web GUI：检测 非running → running 转换，强制 iframe 重载
+  //    （ready-check 确认前端就绪后才置 running，所以只在 running 时重载；把 starting
+  //     也算运行态会在前端未就绪时过早加载，且 running 到达时 prevRunning 已为 true
+  //     不再触发——重蹈手动刷新的覆辙。）
+  const running = G.status && G.status.system.state === "running";
+  if (running && !G.prevRunning) {
+    const frame = document.getElementById("frame");
+    frame.src = "about:blank";   // 清空，强制重新加载
+    frame.src = G.webUrl;        // 重新指向，此时前端已就绪
+    frame.style.display = "block";
+  }
+  G.prevRunning = running;
 }
 
 /* ---------- iframe（§5 #5 fallback：被拒则新标签打开） ---------- */

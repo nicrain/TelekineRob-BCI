@@ -38,3 +38,14 @@ def test_api_helper_picks_post_by_body():
     read-only GETs /status and /config)."""
     html = INDEX.read_text(encoding="utf-8")
     assert "method: body ? \"POST\" : \"GET\"" in html
+
+
+def test_poll_status_reloads_iframe_on_running_transition():
+    """① After startup the web GUI must auto-load: pollStatus reloads the
+    iframe on the non-running → running transition. Triggering on running
+    (not starting) so the frontend is already up (ready-check confirmed)."""
+    html = INDEX.read_text(encoding="utf-8")
+    assert "prevRunning" in html
+    assert 'G.status.system.state === "running"' in html
+    assert 'frame.src = "about:blank"' in html
+    assert "G.prevRunning = running;" in html
