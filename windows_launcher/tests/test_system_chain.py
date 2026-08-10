@@ -112,11 +112,23 @@ def test_restart_web_respawns_services():
 
 
 def test_start_system_accepts_degraded_systemd():
-    """systemctl is-system-running = degraded still means Ubuntu booted."""
+    """O31: real systemd reports degraded with exit code 1 — the OUTPUT is
+    authoritative, so degraded@exit1 must still mean "booted and ready"."""
     app, _ = _make_app(systemd_state="degraded")
     result = app.start_system()
     assert result["ok"] is True
     assert app.state.system == "running"
+
+
+def test_start_system_survives_hanging_probe():
+    """O32: a single probe that times out must not abort the poll — the
+    loop keeps polling and succeeds once a later probe answers."""
+    app, _ = _make_app(hang_probes=2)
+    result = app.start_system()
+    assert result["ok"] is True
+    assert app.state.system == "running"
+    # the two hanging probes were still issued before the success
+    assert sum("is-system-running" in c[-1] for c in app.executor.run_calls) >= 3
 
 
 def test_start_system_falls_back_to_wsl_share_access():

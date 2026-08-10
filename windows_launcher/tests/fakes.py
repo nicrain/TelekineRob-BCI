@@ -1,5 +1,7 @@
 """Shared fakes for launcher tests — no real subprocesses ever run."""
 
+import subprocess
+
 from commands import CompletedCommand
 
 
@@ -30,6 +32,7 @@ class FakeExecutor:
         *,
         detect_ok: bool = True,
         systemd_state: str = "running",
+        hang_probes: int = 0,
         sync_ok: bool = True,
         verify_ok: bool = True,
         bridge_alive: bool = True,
@@ -41,6 +44,7 @@ class FakeExecutor:
         self.procs: list[FakeProc] = []
         self.detect_ok = detect_ok
         self.systemd_state = systemd_state
+        self.hang_probes = hang_probes
         self.sync_ok = sync_ok
         self.verify_ok = verify_ok
         self.bridge_alive = bridge_alive
@@ -50,8 +54,17 @@ class FakeExecutor:
         self.run_calls.append(cmd)
         head, tail = cmd[:1], cmd[-1]
         if head == ["wsl"] and "is-system-running" in tail:
-            state = self.systemd_state if self.detect_ok else "starting"
-            return CompletedCommand(0 if self.detect_ok else 1, state, "")
+            if self.hang_probes > 0:
+                # O32: model a probe that hangs/times out.
+                self.hang_probes -= 1
+                raise subprocess.TimeoutExpired(cmd, timeout)
+            if not self.detect_ok:
+                return CompletedCommand(1, "starting", "")
+            # O31: real systemd reports "degraded" with exit code 1 — the
+            # fake models reality so the test doesn't mask the mismatch.
+            if self.systemd_state == "degraded":
+                return CompletedCommand(1, "degraded", "")
+            return CompletedCommand(0, "running", "")
         if head in (["xcopy"], ["robocopy"]):
             # robocopy: 0–7 are success, >=8 are real failures
             return CompletedCommand(0 if self.sync_ok else 8)

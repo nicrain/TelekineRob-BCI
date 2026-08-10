@@ -211,10 +211,17 @@ class LauncherApp:
         deadline = time.time() + timeout
         cmd = build_wsl_system_running_cmd(cfg["distro"])
         while time.time() < deadline:
-            result = self.executor.run(cmd, timeout=10)
-            state = (result.stdout + result.stderr).strip()
-            if result.ok() and state in ("running", "degraded"):
-                return
+            # O31: the OUTPUT is authoritative — real systemd reports
+            # "degraded" with exit code 1, so gating on result.ok() (0 only)
+            # would never accept it. O32: a single probe timing out must not
+            # abort the whole poll — keep polling until the total deadline.
+            try:
+                result = self.executor.run(cmd, timeout=10)
+                state = (result.stdout + result.stderr).strip()
+                if state in ("running", "degraded"):
+                    return
+            except Exception:
+                pass
             if self._share_accessible():
                 return
             time.sleep(interval)
