@@ -32,7 +32,7 @@ windows_launcher/
    | `sync.dst_root` | 同步目标目录（launcher+桥文件拷到这） | 确认（默认桌面 `gpype_test\TelekineRob-BCI`） |
    | `devices.thymio.attach_cmd` | **usbipd attach 命令**（含 busid，只有你知道） | **必须填** |
    | `devices.thymio.detach_cmd` | usbipd detach 命令 | 填 |
-   | `web.backend_cmd` / `frontend_cmd` | WSL 内起前后端的 shell 命令 | 确认 |
+   | `web.backend_cmd` / `frontend_cmd` | WSL 内起前后端的 shell 命令（**前台**执行，日志落 `/tmp/launcher_*.log`；后端 venv 默认仓库根 `.venv`，若缺依赖改 `web_gui/backend/.venv`） | 确认/可调 |
    | `devices.*.verify_cmd` | 连上后的自检命令（null = 只查进程存活） | 可选 |
 
    ⚠️ **这个 config.json 是"机器本地配置"**：同步时被排除（`sync.items`
