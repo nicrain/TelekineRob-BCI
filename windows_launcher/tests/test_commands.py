@@ -94,3 +94,39 @@ def test_executor_spawn_uses_injected_fn():
     marker = object()
     ex.set_spawn(lambda cmd, cwd: marker)
     assert ex.spawn(["python", "bridge.py"]) is marker
+
+
+def test_default_run_one_passes_creationflags(monkeypatch):
+    """P4: the default one-shot path must hand CREATE_NO_WINDOW (or 0 on
+    POSIX) to subprocess.run — no cmd window flashes for probes/sync/etc."""
+    import subprocess
+
+    calls = []
+
+    class _FakeRun:
+        def __call__(self, *args, **kwargs):
+            calls.append(kwargs)
+            p = type("P", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+            return p
+
+    monkeypatch.setattr(subprocess, "run", _FakeRun())
+    Executor()._default_run_one(["cmd"], timeout=5, cwd=None)
+
+    assert calls[0].get("creationflags") == getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
+
+def test_default_spawn_passes_creationflags(monkeypatch):
+    """P4: the default spawn path (bridge + web wsl.exe) must also suppress
+    the new console window."""
+    import subprocess
+
+    calls = []
+
+    class _FakePopen:
+        def __init__(self, *args, **kwargs):
+            calls.append(kwargs)
+
+    monkeypatch.setattr(subprocess, "Popen", _FakePopen)
+    Executor()._default_spawn(["cmd"], cwd=None)
+
+    assert calls[0].get("creationflags") == getattr(subprocess, "CREATE_NO_WINDOW", 0)

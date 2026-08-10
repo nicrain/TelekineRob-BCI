@@ -170,15 +170,23 @@ class Executor:
     # -- defaults (real execution) --------------------------------------
 
     def _default_run_one(self, cmd, timeout, cwd) -> CompletedCommand:
+        # P4: the service runs under pythonw (no console), and on Windows a
+        # console-less parent's children each open their own cmd window.
+        # CREATE_NO_WINDOW suppresses that for probes/sync/usbipd/bridges;
+        # POSIX has no such flag, so getattr(..., 0) degrades to the default.
         proc = subprocess.run(
             cmd, capture_output=True, text=True, timeout=timeout, cwd=cwd,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
         return CompletedCommand(proc.returncode, proc.stdout, proc.stderr)
 
     def _default_spawn(self, cmd, cwd) -> subprocess.Popen:
         # Long-running processes: discard output so the pipe can't fill and
         # deadlock; the operator watches the device/service state instead.
+        # Same CREATE_NO_WINDOW as run_one — the web wsl.exe stays foreground
+        # and tracked, it just no longer pops a console window.
         return subprocess.Popen(
             cmd, cwd=cwd,
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
