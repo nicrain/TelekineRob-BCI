@@ -4,7 +4,8 @@
 <meta charset="utf-8">
 <title>System Control</title>
 <style>
-  /* Ferrari-inspired dark theme — mirrors web_gui/src/styles.css tokens */
+  /* Ferrari-inspired theme — mirrors web_gui/src/styles.css tokens.
+     :root is the dark board; [data-theme="light"] overrides it. */
   @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
 
   :root {
@@ -19,6 +20,18 @@
     --font-display:'Space Grotesk',Arial,Helvetica,sans-serif;
     --font-mono:'IBM Plex Mono','Courier New',monospace;
     --radius:2px;   /* razor */
+  }
+
+  /* P6: light board mirrors web_gui's [data-theme="light"] palette */
+  [data-theme="light"] {
+    --f-red:#C41E13; --f-red-dark:#A01409;
+    --f-black:#EFECE8; --f-near-black:#FAF8F5;
+    --f-surface:#FAF8F5; --f-input-bg:#FFFFFF;
+    --f-border-subtle:#E8E4DF; --f-border-strong:#D6D2CC; --f-border-mid:#D6D2CC;
+    --f-text-primary:#181818; --f-text-secondary:#666666;
+    --f-ok:#1A7A3A; --f-warn:#C5221F; --f-info:#1769AA;
+    --f-hover-bg:rgba(24,24,24,0.06);
+    --f-status-off:#D6D2CC;
   }
 
   * { box-sizing:border-box; margin:0; padding:0; }
@@ -66,7 +79,7 @@
     background:var(--f-near-black); border:1px solid var(--f-info); border-radius:var(--radius);
     padding:10px 14px; display:none; font-size:13px; color:var(--f-text-primary);
   }
-  #msg.error { border-color:var(--f-warn); color:var(--f-warn); background:#1a0c0c; }
+  #msg.error { border-color:var(--f-warn); color:var(--f-warn); background:var(--f-input-bg); }
   #msg .close { float:right; cursor:pointer; color:var(--f-text-secondary); }
 
   /* ---------- main ---------- */
@@ -78,8 +91,20 @@
   #mainbar a { color:var(--f-info); text-decoration:none; }
   #mainbar a:hover { text-decoration:underline; }
   #collapse-btn { flex:none; min-width:32px; }
-  iframe { flex:1; border:none; width:100%; }
+  iframe { flex:1; border:none; width:100%; display:none; }
   .placeholder { flex:1; display:flex; align-items:center; justify-content:center; color:var(--f-text-secondary); }
+
+  /* ---------- main-area placeholder (P6) ---------- */
+  #placeholder {
+    flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:14px; background:var(--f-black); color:var(--f-text-secondary); text-align:center; padding:20px;
+  }
+  #placeholder .dot { width:18px; height:18px; }
+  #placeholder-title {
+    font-family:var(--font-mono); font-size:15px; letter-spacing:1px; text-transform:uppercase;
+    color:var(--f-text-primary);
+  }
+  #placeholder-hint { font-size:13px; max-width:440px; }
 </style>
 </head>
 <body>
@@ -100,7 +125,7 @@
     <button class="btn" id="log-btn" disabled>View Log</button>
   </aside>
 
-  <!-- ============ Main: web GUI iframe ============ -->
+  <!-- ============ Main: web GUI iframe + offline placeholder ============ -->
   <main id="main">
     <div id="mainbar">
       <!-- P2: collapse button lives in the static #mainbar -->
@@ -108,7 +133,15 @@
       <span>Experiment</span>
       <!-- P5: refresh the (cross-origin) web GUI iframe -->
       <button id="refresh-btn" class="btn" onclick="refreshFrame()" title="Reload the web GUI">↻ Refresh</button>
+      <!-- P6: light/dark theme toggle, synced with the web GUI via postMessage -->
+      <button id="theme-btn" class="btn" onclick="toggleTheme()" title="Toggle light/dark theme">☾</button>
       <a id="open-new" href="http://localhost:5173" target="_blank">Open in new tab</a>
+    </div>
+    <!-- P6: elegant placeholder while the system is offline / starting -->
+    <div id="placeholder">
+      <span id="placeholder-dot" class="dot"></span>
+      <div id="placeholder-title">System Offline</div>
+      <div id="placeholder-hint">Start the system from the sidebar to load the experiment interface.</div>
     </div>
     <iframe id="frame" title="web GUI"></iframe>
   </main>
@@ -133,6 +166,32 @@ const DEFAULT_OPS = [
   { id: "stop-system",  label: "Stop System",   type: "action" },
   { id: "exit",         label: "Exit Launcher", type: "action" },
 ];
+
+/* ---------- Theme (P6: synced with the web GUI across origins) ---------- */
+/* URL concat is a pure function so the ?/& boundary is unit-testable. */
+function webUrlWithTheme(url, theme) {
+  const sep = url.includes("?") ? "&" : "?";
+  return url + sep + "theme=" + theme;
+}
+function currentTheme() {
+  const t = document.documentElement.dataset.theme || localStorage.getItem("theme") || "dark";
+  return t === "light" ? "light" : "dark";
+}
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  localStorage.setItem("theme", theme);
+  const btn = document.getElementById("theme-btn");
+  if (btn) btn.textContent = theme === "dark" ? "☾" : "☀";
+  document.getElementById("open-new").href = webUrlWithTheme(G.webUrl, theme);
+  // Live-sync the embedded web GUI (cross-origin postMessage).
+  const frame = document.getElementById("frame");
+  if (frame.src && frame.src !== "about:blank") {
+    frame.contentWindow.postMessage({ type: "set-theme", theme }, "*");
+  }
+}
+function toggleTheme() {
+  applyTheme(currentTheme() === "dark" ? "light" : "dark");
+}
 
 /* ---------- Sidebar collapse (P2) ---------- */
 /* The fold lives on #sidebar's class and the button in #mainbar — neither
@@ -270,15 +329,36 @@ async function pollStatus() {
     return;
   }
   renderSystem(); renderDevices(); renderOps();
-  // Auto-load the web GUI after startup: detect the non-running → running
-  // transition and force-reload the iframe (running only — the launcher's
-  // ready-check confirms the frontend is up before setting running, so
-  // reloading during starting would hit a dead frontend and never re-fire).
-  const running = G.status && G.status.system.state === "running";
-  if (running && !G.prevRunning) {
-    refreshFrame();
+  updateMainArea();
+  G.prevRunning = G.status.system.state === "running";
+}
+
+/* ---------- Main area (P6): placeholder ↔ iframe by system state ---------- */
+function updateMainArea() {
+  const st = G.status.system.state;
+  const frame = document.getElementById("frame");
+  const ph = document.getElementById("placeholder");
+  if (st === "running") {
+    // Load the iframe only on the non-running → running transition (the
+    // launcher's ready-check confirms the frontend is up by then), themed.
+    if (!G.prevRunning) {
+      frame.src = webUrlWithTheme(G.webUrl, currentTheme());
+      frame.style.display = "block";
+    }
+    ph.style.display = "none";
+  } else {
+    frame.style.display = "none";
+    ph.style.display = "flex";
+    const dot = document.getElementById("placeholder-dot");
+    const title = document.getElementById("placeholder-title");
+    if (st === "starting" || st === "stopping") {
+      dot.className = "dot busy";
+      title.textContent = st === "starting" ? "Starting System…" : "Stopping System…";
+    } else {
+      dot.className = "dot";
+      title.textContent = st === "error" ? "System Error" : "System Offline";
+    }
   }
-  G.prevRunning = running;
 }
 
 /* ---------- iframe (cross-origin safe reload + §5 fallback) ---------- */
@@ -287,20 +367,38 @@ function refreshFrame() {
   // contentWindow.location.reload() would throw — re-point src instead.
   const frame = document.getElementById("frame");
   frame.src = "about:blank";   // clear, force a fresh load
-  frame.src = G.webUrl;        // re-point (works whether the GUI is up or not)
+  frame.src = webUrlWithTheme(G.webUrl, currentTheme());
   frame.style.display = "block";
 }
 function setupFrame() {
   const frame = document.getElementById("frame");
   const link = document.getElementById("open-new");
-  link.href = G.webUrl;
-  frame.src = G.webUrl;
-  frame.onload = () => { frame.style.display = "block"; };
+  link.href = webUrlWithTheme(G.webUrl, currentTheme());
+  // Never pre-load the web GUI at init — a dead frontend would render the
+  // browser's native error page in the main area (the offline placeholder
+  // is shown instead until the system runs).
+  frame.src = "about:blank";
+  frame.style.display = "none";
+  frame.onload = () => {
+    if (G.status && G.status.system.state === "running") frame.style.display = "block";
+  };
   frame.onerror = () => { frame.style.display = "none"; };  // X-Frame-Options refusal → link only
 }
 
+/* ---------- Theme sync from the web GUI (P6, cross-origin) ---------- */
+window.addEventListener("message", (event) => {
+  const d = event.data;
+  if (d && d.type === "set-theme" && (d.theme === "dark" || d.theme === "light")) {
+    // Echo from the embedded GUI. React's same-state bail prevents loops:
+    // applying the same theme here re-broadcasts once, the GUI receives an
+    // identical theme, setTheme bails, and the exchange stops.
+    applyTheme(d.theme);
+  }
+});
+
 /* ---------- Init ---------- */
 async function init() {
+  applyTheme(currentTheme());
   applySidebarState();
   setupFrame();
   renderDevices(); renderOps();
@@ -311,6 +409,7 @@ async function init() {
     const log = cfg.log;
     const logBtn = document.getElementById("log-btn");
     if (log) { logBtn.textContent = log.label; logBtn.disabled = !log.placeholder; }
+    applyTheme(currentTheme());   // re-point the new-tab link with the real url
     setupFrame();
     renderDevices(); renderOps();
   } catch { /* file:// preview: keep the default skeleton */ }

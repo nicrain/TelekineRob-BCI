@@ -44,15 +44,17 @@ def test_api_helper_picks_post_by_body():
     assert "method: body ? \"POST\" : \"GET\"" in html
 
 
-def test_poll_status_reloads_iframe_on_running_transition():
-    """① After startup the web GUI must auto-load: pollStatus reloads the
-    iframe on the non-running → running transition. Triggering on running
-    (not starting) so the frontend is already up (ready-check confirmed)."""
+def test_poll_status_loads_iframe_on_running_transition():
+    """① After startup the web GUI auto-loads: pollStatus drives
+    updateMainArea, which loads the themed iframe on the non-running →
+    running transition. Running only, because the launcher's ready-check
+    confirms the frontend is up before setting running."""
     html = INDEX.read_text(encoding="utf-8")
     assert "prevRunning" in html
+    assert "updateMainArea()" in html
     assert 'G.status.system.state === "running"' in html
-    assert 'frame.src = "about:blank"' in html
-    assert "G.prevRunning = running;" in html
+    assert 'G.prevRunning = G.status.system.state === "running";' in html
+    assert "frame.src = webUrlWithTheme(G.webUrl, currentTheme())" in html
 
 
 def test_sidebar_collapse_markers():
@@ -85,9 +87,10 @@ def test_refresh_button_reloads_iframe():
     assert 'id="refresh-btn"' in html
     assert "refreshFrame" in html
     assert 'frame.src = "about:blank"' in html
-    assert "frame.src = G.webUrl" in html
-    # the cross-origin-unsafe reload pattern must not appear as code
-    assert "frame.contentWindow" not in html
+    assert "frame.src = webUrlWithTheme(G.webUrl, currentTheme())" in html  # themed reload
+    # the cross-origin-UNSAFE reload pattern must not appear as code
+    # (frame.contentWindow.postMessage is fine — it's location.reload() that throws)
+    assert "frame.contentWindow.location.reload()" not in html
 
 
 def test_user_visible_layer_has_no_cjk():
@@ -97,3 +100,67 @@ def test_user_visible_layer_has_no_cjk():
     assert not cjk.search(html), "index.html has residual CJK"
     cfg = json.loads(CONFIG.read_text(encoding="utf-8"))
     assert not cjk.search(json.dumps(cfg, ensure_ascii=False)), "config.json has residual CJK"
+
+
+def test_theme_toggle_and_cross_origin_sync_markers():
+    """P6-①: theme toggle button, data-theme application, localStorage, and
+    the cross-origin postMessage broadcast + listener."""
+    html = INDEX.read_text(encoding="utf-8")
+    assert 'id="theme-btn"' in html
+    assert "toggleTheme" in html
+    assert "document.documentElement.dataset.theme" in html
+    assert 'type: "set-theme"' in html              # broadcast
+    assert 'd.type === "set-theme"' in html         # listener
+    assert "contentWindow.postMessage" in html
+
+
+def test_light_theme_tokens_present():
+    """P6-①: the [data-theme=light] Ferrari board mirrors web_gui."""
+    html = INDEX.read_text(encoding="utf-8")
+    assert '[data-theme="light"]' in html
+    assert "--f-text-primary:#181818" in html
+    assert "--f-text-secondary:#666666" in html
+    assert "--f-red:#C41E13" in html
+    assert "--f-status-off:#D6D2CC" in html
+
+
+def test_placeholder_markers_and_show_hide():
+    """P6-②: main-area placeholder exists and toggles with the iframe per
+    system state (no browser error page when the frontend is down)."""
+    html = INDEX.read_text(encoding="utf-8")
+    assert 'id="placeholder"' in html
+    assert "System Offline" in html
+    assert "Starting System…" in html
+    assert "updateMainArea" in html
+    assert "Start the system from the sidebar to load the experiment interface." in html
+    # iframe is never pre-loaded at init (the crying-face error page source)
+    assert "Never pre-load the web GUI at init" in html
+    assert 'frame.src = "about:blank"' in html
+    assert "frame.style.display = \"none\"" in html
+
+
+def test_weburl_with_theme_concat_bounds():
+    """P6-①: the ?theme= URL concat pure function — the ? vs & boundary
+    (extracted from the shipped page and executed under Node)."""
+    import subprocess
+
+    html = INDEX.read_text(encoding="utf-8")
+    m = re.search(r"function webUrlWithTheme\(url, theme\) \{.*?\n\}", html, re.DOTALL)
+    assert m, "webUrlWithTheme not found in index.html"
+    fn = m.group(0)
+    script = fn + """
+const cases = [
+  ["http://localhost:5173", "dark",  "http://localhost:5173?theme=dark"],
+  ["http://localhost:5173", "light", "http://localhost:5173?theme=light"],
+  ["http://localhost:5173/?x=1", "dark", "http://localhost:5173/?x=1&theme=dark"],
+  ["http://localhost:5173?x=1", "dark", "http://localhost:5173?x=1&theme=dark"],
+];
+for (const [url, theme, want] of cases) {
+  const got = webUrlWithTheme(url, theme);
+  if (got !== want) { console.error("FAIL", url, theme, "got", got, "want", want); process.exit(1); }
+}
+console.log("webUrlWithTheme OK");
+"""
+    r = subprocess.run(["node", "-e", script], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    assert "OK" in r.stdout

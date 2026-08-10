@@ -719,7 +719,13 @@ export default function App() {
   const [outputMode, setOutputMode]         = useState('thymio_simu');
   const [thymioDevice, setThymioDevice]     = useState('ser:device=/dev/ttyACM0');
   const [running, setRunning]               = useState(false);
-  const [theme, setTheme]                   = useState(() => localStorage.getItem('theme') || 'dark');
+  // P6: ?theme= query param wins (set by the launcher iframe URL), then
+  // localStorage, then dark — keeps the embedded page aligned on first load.
+  const [theme, setTheme]                   = useState(() => {
+    const urlTheme = new URLSearchParams(window.location.search).get('theme');
+    if (urlTheme === 'dark' || urlTheme === 'light') return urlTheme;
+    return localStorage.getItem('theme') || 'dark';
+  });
   // role refs so the WS onmessage closure always sees the current roles
   // without reopening the socket when they change.
   const role1Ref = useRef(role1);
@@ -743,11 +749,26 @@ export default function App() {
   /* ── System status (ROS2 + Thymio) ──────────────────── */
   const [systemStatus, setSystemStatus] = useState({ ros_available: false, thymio_connected: false });
 
-  /* ── Sync theme to <html> ──────────────────────────── */
+  /* ── Sync theme to <html> + broadcast to the launcher (P6) ── */
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem('theme', theme);
+    // Cross-origin live sync with the embedding launcher. When opened
+    // standalone (new tab) parent === self, so this is a harmless no-op.
+    window.parent.postMessage({ type: 'set-theme', theme }, '*');
   }, [theme]);
+
+  /* ── Listen for theme changes pushed by the launcher (P6) ── */
+  useEffect(() => {
+    const onMessage = (event) => {
+      const d = event.data;
+      if (d && d.type === 'set-theme' && (d.theme === 'dark' || d.theme === 'light')) {
+        setTheme(d.theme);
+      }
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, []);
 
   const wsRef = useRef(null);
   const teleopWsRef = useRef(null);
