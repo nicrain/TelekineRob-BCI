@@ -142,3 +142,4 @@ TelekineRob-BCI/
 |---|---|---|
 | 2026-08-07 | MVP M1–M6 实现完成。入口用 `last_url.txt` 传递端口（bat 不解析 JSON）；自同步目标用 `sync.dst_root`；usbipd busid 由用户填 config | 部署/填表说明见 `windows_launcher/README.md`；真机按 §4 验收 |
 | 2026-08-07 | 推送前修 3 条：**C**=config.json 排除出同步（默认工具改 robocopy，`/XF config.json`，退出码 0–7 均算成功）；**A**=action POST 加 Origin 白名单（同 web_gui `_validate_origin` 模式，自动含运行时端口 `127.0.0.1`/`localhost` 双拼写）；**D**=bat 启动前 `del last_url.txt` 防旧 URL | config.json 成机器本地配置不再被 WSL 覆盖；任意网页无法再触发启动/停止；启动不留旧地址 |
+| 2026-08-07 | 真机修 2 条：① WSL 就绪检测 `echo ok` → 轮询 `systemctl is-system-running`（`running`/`degraded` 或 `\\wsl$\` 可访问即就绪）+ 超时人话报错；② web 命令 `&` → `nohup … > /tmp/launcher_*.log 2>&1 & disown`（防 wsl 退出 SIGHUP 杀后台，日志落盘可诊断） | config 默认已改；**真机用户侧 config.json 需手动同步**（非同步项，不会被自同步覆盖） |

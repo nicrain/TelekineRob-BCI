@@ -6,13 +6,13 @@ from commands import (
     build_start_web_cmds,
     build_sync_cmd,
     build_usbipd_attach_cmd,
-    build_wsl_detect_cmd,
+    build_wsl_system_running_cmd,
 )
 
 
-def test_wsl_detect_cmd_shape():
-    assert build_wsl_detect_cmd("Ubuntu") == [
-        "wsl", "-d", "Ubuntu", "-e", "bash", "-lc", "echo ok",
+def test_wsl_system_running_cmd_shape():
+    assert build_wsl_system_running_cmd("Ubuntu") == [
+        "wsl", "-d", "Ubuntu", "-e", "bash", "-lc", "systemctl is-system-running",
     ]
 
 

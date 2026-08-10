@@ -74,7 +74,7 @@ windows_launcher/
 | 启动系统报"WSL 未就绪" | `wsl -l` 确认发行版名与 config 一致 |
 | 连 Thymio 报 usbipd 失败 | busid 是否正确；终端管理员权限试 `usbipd bind --busid=…` |
 | 连桥报"桥进程已退出" | 设备是否开机、是否被别的程序占用、桥依赖是否装齐 |
-| 网页服务连不上 | WSL 内手动 `npm run dev` 试；config `web.url` 端口是否对 |
+| 网页服务连不上 | WSL 内手动 `npm run dev` 试；config `web.url` 端口是否对；前后端日志在 WSL `/tmp/launcher_backend.log` / `/tmp/launcher_frontend.log` |
 | 总控页打不开 | 看最小化窗口日志；`last_url.txt` 是否生成 |
 
 ## 开发 / 测试（macOS 也可）

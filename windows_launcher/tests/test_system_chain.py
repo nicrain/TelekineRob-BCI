@@ -8,9 +8,13 @@ from launcher_server import LauncherApp
 REPO_CONFIG = Path(__file__).resolve().parents[1] / "config.json"
 
 
-def _make_app(*, ready=True, detect_ok=True, sync_ok=True):
+def _make_app(*, ready=True, detect_ok=True, sync_ok=True, **kw):
     cfg = load_config(REPO_CONFIG)
-    ex = FakeExecutor(detect_ok=detect_ok, sync_ok=sync_ok)
+    # Tests must not sleep for the real WSL-boot timeout: ~1s deadline,
+    # zero poll interval.
+    cfg["wsl"]["ready_timeout_sec"] = 1
+    cfg["wsl"]["ready_poll_sec"] = 0
+    ex = FakeExecutor(detect_ok=detect_ok, sync_ok=sync_ok, **kw)
     app = LauncherApp(cfg, executor=ex, ready_check=lambda url, t: ready)
     return app, ex
 
@@ -21,8 +25,8 @@ def test_start_system_success_sequence():
 
     assert result == {"ok": True, "message": "系统已启动并就绪"}
     assert app.state.system == "running"
-    # order: wsl detect → sync windows_launcher → sync gtec_bridge → spawn
-    assert ex.run_calls[0][-1].endswith("echo ok")
+    # order: wsl readiness (systemctl) → sync windows_launcher → gtec_bridge
+    assert "is-system-running" in ex.run_calls[0][-1]
     assert ex.run_calls[1][0] == "robocopy"
     assert ex.run_calls[2][0] == "robocopy"
     # finding C: config.json excluded only from the windows_launcher item
@@ -105,3 +109,32 @@ def test_restart_web_respawns_services():
     assert len(ex.spawn_calls) == spawn_before + 2
     # stop_cmd (pkill) ran inside WSL before respawning
     assert any("pkill" in c[-1] for c in ex.run_calls)
+
+
+def test_start_system_accepts_degraded_systemd():
+    """systemctl is-system-running = degraded still means Ubuntu booted."""
+    app, _ = _make_app(systemd_state="degraded")
+    result = app.start_system()
+    assert result["ok"] is True
+    assert app.state.system == "running"
+
+
+def test_start_system_falls_back_to_wsl_share_access():
+    """No systemd (or not up yet) → the \\\\wsl$ share being reachable is
+    enough for readiness."""
+    app, _ = _make_app(detect_ok=False)
+    app._share_accessible = lambda: True  # \\wsl$ repo share becomes reachable
+    result = app.start_system()
+    assert result["ok"] is True
+    assert app.state.system == "running"
+
+
+def test_start_system_wsl_not_ready_times_out():
+    """systemctl keeps saying 'starting' and the share never appears."""
+    app, ex = _make_app(detect_ok=False)
+    app._share_accessible = lambda: False
+    result = app.start_system()
+    assert result["ok"] is False
+    assert "未完全就绪" in result["message"]
+    assert "WSL" in result["message"]
+    assert ex.spawn_calls == []

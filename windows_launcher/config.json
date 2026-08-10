@@ -8,7 +8,9 @@
   "wsl": {
     "distro": "Ubuntu",
     "repo_path": "/home/robot/TelekineRob-BCI",
-    "stop_wsl": true
+    "stop_wsl": true,
+    "ready_timeout_sec": 60,
+    "ready_poll_sec": 2
   },
 
   "sync": {
@@ -24,8 +26,8 @@
 
   "web": {
     "url": "http://localhost:5173",
-    "backend_cmd": "cd web_gui/backend && (source .venv/bin/activate 2>/dev/null || true; python -m app.main) &",
-    "frontend_cmd": "cd web_gui/frontend && (npm run dev) &",
+    "backend_cmd": "cd web_gui/backend || exit 1; nohup python -m app.main > /tmp/launcher_backend.log 2>&1 & disown",
+    "frontend_cmd": "cd web_gui/frontend || exit 1; nohup npm run dev > /tmp/launcher_frontend.log 2>&1 & disown",
     "stop_cmd": "pkill -f 'app.main' ; pkill -f 'npm run dev' ; true",
     "ready_timeout_sec": 60
   },

@@ -14,6 +14,7 @@ Then open http://127.0.0.1:8020/ (or the port from config.json).
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import threading
@@ -33,7 +34,7 @@ from commands import (
     build_usbipd_attach_cmd,
     build_usbipd_detach_cmd,
     build_wsl_cd_cmd,
-    build_wsl_detect_cmd,
+    build_wsl_system_running_cmd,
 )
 from config import load_config
 from state import (
@@ -196,10 +197,35 @@ class LauncherApp:
             return {"ok": False, "message": self.state.system_msg}
 
     def _detect_wsl(self) -> None:
+        """Poll until Ubuntu is actually ready, not just spawned.
+
+        ``echo ok`` only proves the binary ran — the ``\\wsl$`` share and
+        systemd may still be booting, and every later step (sync, web
+        spawn) would fail. Accept ``systemctl is-system-running`` =
+        running/degraded, or the ``\\wsl$`` share being reachable (covers
+        WSL setups without systemd). Timeout → one-line Chinese error.
+        """
         cfg = self.config["wsl"]
-        result = self.executor.run(build_wsl_detect_cmd(cfg["distro"]), timeout=30)
-        if not result.ok():
-            raise RuntimeError(f"WSL（{cfg['distro']}）未就绪（退出码 {result.exit_code}）")
+        timeout = float(cfg.get("ready_timeout_sec", 60))
+        interval = float(cfg.get("ready_poll_sec", 2))
+        deadline = time.time() + timeout
+        cmd = build_wsl_system_running_cmd(cfg["distro"])
+        while time.time() < deadline:
+            result = self.executor.run(cmd, timeout=10)
+            state = (result.stdout + result.stderr).strip()
+            if result.ok() and state in ("running", "degraded"):
+                return
+            if self._share_accessible():
+                return
+            time.sleep(interval)
+        raise RuntimeError(
+            f"WSL（{cfg['distro']}）未完全就绪：systemd/共享在 "
+            f"{timeout:.0f}s 内未就绪，请检查 WSL 是否正常启动"
+        )
+
+    def _share_accessible(self) -> bool:
+        """Windows-side probe of the ``\\wsl$`` repo share."""
+        return os.path.exists(self.config["sync"]["src_wsl_root"])
 
     def _sync_files(self) -> None:
         """Copy launcher + bridge files from WSL → Windows (§1.1 self-sync).

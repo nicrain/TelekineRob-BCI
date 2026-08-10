@@ -29,6 +29,7 @@ class FakeExecutor:
         self,
         *,
         detect_ok: bool = True,
+        systemd_state: str = "running",
         sync_ok: bool = True,
         verify_ok: bool = True,
         bridge_alive: bool = True,
@@ -39,6 +40,7 @@ class FakeExecutor:
         self.spawn_cwds: list = []
         self.procs: list[FakeProc] = []
         self.detect_ok = detect_ok
+        self.systemd_state = systemd_state
         self.sync_ok = sync_ok
         self.verify_ok = verify_ok
         self.bridge_alive = bridge_alive
@@ -47,8 +49,9 @@ class FakeExecutor:
     def run(self, cmd, *, timeout, cwd=None) -> CompletedCommand:
         self.run_calls.append(cmd)
         head, tail = cmd[:1], cmd[-1]
-        if head == ["wsl"] and tail == "echo ok":
-            return CompletedCommand(0 if self.detect_ok else 1, "ok", "")
+        if head == ["wsl"] and "is-system-running" in tail:
+            state = self.systemd_state if self.detect_ok else "starting"
+            return CompletedCommand(0 if self.detect_ok else 1, state, "")
         if head in (["xcopy"], ["robocopy"]):
             # robocopy: 0–7 are success, >=8 are real failures
             return CompletedCommand(0 if self.sync_ok else 8)

@@ -58,9 +58,14 @@ def _tokenize_windows(cmd: str) -> List[str]:
 
 # --- Pure builders ------------------------------------------------------
 
-def build_wsl_detect_cmd(distro: str) -> List[str]:
-    """Probe WSL: run ``echo ok`` and check the exit code."""
-    return ["wsl", "-d", distro, "-e", "bash", "-lc", "echo ok"]
+def build_wsl_system_running_cmd(distro: str) -> List[str]:
+    """Probe WSL systemd readiness: ``systemctl is-system-running``.
+
+    Deeper than a bare ``echo ok`` (which only proves the binary spawned):
+    returns ``running`` / ``degraded`` once Ubuntu has actually booted and
+    the ``\\wsl$`` share + services the chain depends on are up (finding).
+    """
+    return ["wsl", "-d", distro, "-e", "bash", "-lc", "systemctl is-system-running"]
 
 
 def build_wsl_cd_cmd(distro: str, repo_path: str, inner: str) -> List[str]:
