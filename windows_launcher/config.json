@@ -81,7 +81,8 @@
         "items": [
           {"id": "start-system", "type": "action", "label": "启动系统"},
           {"id": "restart-web", "type": "action", "label": "重启 web 服务"},
-          {"id": "stop-system", "type": "action", "label": "关闭系统"}
+          {"id": "stop-system", "type": "action", "label": "关闭系统"},
+          {"id": "exit", "type": "action", "label": "退出总控"}
         ]
       }
     ],

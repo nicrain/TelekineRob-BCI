@@ -4,53 +4,82 @@
 <meta charset="utf-8">
 <title>系统总控</title>
 <style>
+  /* Ferrari-inspired dark theme — mirrors web_gui/src/styles.css tokens */
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
   :root {
-    --off:#9aa0a6; --busy:#f9ab00; --on:#188038; --err:#d93025;
+    --f-red:#DA291C; --f-red-dark:#B01E0A;
+    --f-black:#000000; --f-near-black:#181818;
+    --f-surface:#1e1e1e; --f-input-bg:#0c0c0c;
+    --f-border-subtle:#1a1a1a; --f-border-strong:#2a2a2a; --f-border-mid:#333333;
+    --f-text-primary:#FFFFFF; --f-text-secondary:#969696;
+    --f-ok:#03904A; --f-warn:#F13A2C; --f-info:#4C98B9;
+    --f-hover-bg:rgba(255,255,255,0.08);
+    --f-status-off:#3a3a3a;
+    --font-display:'Space Grotesk',Arial,Helvetica,sans-serif;
+    --font-mono:'IBM Plex Mono','Courier New',monospace;
+    --radius:2px;   /* razor */
   }
+
   * { box-sizing:border-box; margin:0; padding:0; }
-  html,body { height:100%; font-family:"Microsoft YaHei",system-ui,sans-serif; font-size:14px; color:#202124; }
+  html,body { height:100%; font-family:var(--font-display); font-size:14px; color:var(--f-text-primary); background:var(--f-black); }
   #app { display:flex; height:100vh; }
-  /* ---------- sidebar ---------- */
+
+  /* ---------- sidebar (P2: collapsible) ---------- */
   #sidebar {
-    width:250px; min-width:250px; background:#f1f3f4; border-right:1px solid #dadce0;
+    width:250px; min-width:250px; background:var(--f-black); border-right:1px solid var(--f-border-strong);
     display:flex; flex-direction:column; padding:14px 10px; gap:6px; overflow-y:auto;
+    transition:width .2s ease, min-width .2s ease, padding .2s ease;
   }
-  #sidebar h1 { font-size:16px; margin-bottom:8px; }
-  .group-label { font-size:12px; color:#5f6368; margin:10px 0 4px; }
+  #sidebar.collapsed { width:0; min-width:0; padding:0; border-right:none; overflow:hidden; }
+  #sidebar h1 {
+    font-family:var(--font-mono); font-size:13px; letter-spacing:2px; text-transform:uppercase;
+    color:var(--f-text-primary); margin-bottom:8px;
+  }
+  .group-label {
+    font-family:var(--font-mono); font-size:10px; letter-spacing:2px; text-transform:uppercase;
+    color:var(--f-text-secondary); margin:10px 0 4px;
+  }
   .item {
     display:flex; align-items:center; gap:8px; padding:8px 10px;
-    background:#fff; border:1px solid #dadce0; border-radius:8px;
+    background:var(--f-surface); border:1px solid var(--f-border-strong); border-radius:var(--radius);
   }
-  .dot { width:12px; height:12px; border-radius:50%; background:var(--off); flex:none; }
-  .dot.on   { background:var(--on); }
-  .dot.busy { background:var(--busy); animation:blink 1s infinite; }
-  .dot.err  { background:var(--err); }
+  .dot { width:12px; height:12px; border-radius:50%; background:var(--f-status-off); flex:none; }
+  .dot.on   { background:var(--f-ok); }
+  .dot.busy { background:var(--f-warn); animation:blink 1s infinite; }
+  .dot.err  { background:var(--f-warn); }
   .item .label { flex:1; }
   .btn {
-    border:1px solid #dadce0; background:#fff; border-radius:6px;
-    padding:5px 10px; cursor:pointer; font-size:13px;
+    border:1px solid var(--f-border-mid); background:transparent; color:var(--f-text-primary);
+    border-radius:var(--radius); padding:5px 10px; cursor:pointer;
+    font-family:var(--font-display); font-size:13px;
   }
-  .btn:hover:not(:disabled) { background:#f8f9fa; }
-  .btn:disabled { opacity:.45; cursor:not-allowed; }
-  .btn.danger { color:var(--err); }
+  .btn:hover:not(:disabled) { background:var(--f-hover-bg); border-color:var(--f-text-secondary); }
+  .btn:disabled { opacity:.4; cursor:not-allowed; }
+  .btn.danger { color:var(--f-red); border-color:var(--f-red-dark); }
+  .btn.danger:hover:not(:disabled) { background:rgba(218,41,28,.12); }
   @keyframes blink { 50% { opacity:.35; } }
+
   /* ---------- message bar ---------- */
   #msg {
     position:fixed; bottom:14px; left:270px; right:14px; z-index:20;
-    background:#e8f0fe; border:1px solid #aecbfa; border-radius:8px;
-    padding:10px 14px; display:none; font-size:13px;
+    background:var(--f-near-black); border:1px solid var(--f-info); border-radius:var(--radius);
+    padding:10px 14px; display:none; font-size:13px; color:var(--f-text-primary);
   }
-  #msg.error { background:#fce8e6; border-color:#f28b82; }
-  #msg .close { float:right; cursor:pointer; color:#5f6368; }
+  #msg.error { border-color:var(--f-warn); color:var(--f-warn); background:#1a0c0c; }
+  #msg .close { float:right; cursor:pointer; color:var(--f-text-secondary); }
+
   /* ---------- main ---------- */
   #main { flex:1; display:flex; flex-direction:column; }
   #mainbar {
     display:flex; align-items:center; gap:10px; padding:8px 14px;
-    background:#fff; border-bottom:1px solid #dadce0; font-size:13px;
+    background:var(--f-black); border-bottom:1px solid var(--f-border-strong); font-size:13px;
   }
-  #mainbar a { color:#1a73e8; text-decoration:none; }
+  #mainbar a { color:var(--f-info); text-decoration:none; }
+  #mainbar a:hover { text-decoration:underline; }
+  #collapse-btn { flex:none; min-width:32px; }
   iframe { flex:1; border:none; width:100%; }
-  .placeholder { flex:1; display:flex; align-items:center; justify-content:center; color:#5f6368; }
+  .placeholder { flex:1; display:flex; align-items:center; justify-content:center; color:var(--f-text-secondary); }
 </style>
 </head>
 <body>
@@ -74,6 +103,8 @@
   <!-- ============ 主区域：web GUI iframe ============ -->
   <main id="main">
     <div id="mainbar">
+      <!-- P2: 折叠按钮放 mainbar（静态块，轮询重渲染不碰它） -->
+      <button id="collapse-btn" class="btn" onclick="toggleSidebar()" title="收起/展开侧边栏">«</button>
       <span>实验界面</span>
       <a id="open-new" href="http://localhost:5173" target="_blank">在新标签页打开</a>
     </div>
@@ -98,7 +129,26 @@ const DEFAULT_OPS = [
   { id: "start-system", label: "启动系统",   type: "action" },
   { id: "restart-web",  label: "重启 web 服务", type: "action" },
   { id: "stop-system",  label: "关闭系统",   type: "action" },
+  { id: "exit",         label: "退出总控",   type: "action" },
 ];
+
+/* ---------- 侧边栏折叠（P2） ---------- */
+/* 折叠态挂在 #sidebar 的 class 上、按钮在 #mainbar 里 —— 两者都不在
+   renderDevices/renderOps 的重渲染容器内，1.5s 轮询不会复位。 */
+function sidebarCollapsed() {
+  return localStorage.getItem("launcherSidebarCollapsed") === "1";
+}
+function applySidebarState() {
+  const collapsed = sidebarCollapsed();
+  document.getElementById("sidebar").classList.toggle("collapsed", collapsed);
+  document.getElementById("collapse-btn").textContent = collapsed ? "»" : "«";
+}
+function toggleSidebar() {
+  const sidebar = document.getElementById("sidebar");
+  const collapsed = sidebar.classList.toggle("collapsed");
+  localStorage.setItem("launcherSidebarCollapsed", collapsed ? "1" : "0");
+  document.getElementById("collapse-btn").textContent = collapsed ? "»" : "«";
+}
 
 /* ---------- 状态 → 样式 ---------- */
 function dotClass(st) {
@@ -164,7 +214,7 @@ function renderOps() {
     : DEFAULT_OPS);
   ops.forEach(o => {
     const btn = document.createElement("button");
-    btn.className = "btn" + (o.id === "stop-system" ? " danger" : "");
+    btn.className = "btn" + (["stop-system", "exit"].includes(o.id) ? " danger" : "");
     btn.textContent = o.label;
     btn.id = "op-" + o.id;
     btn.style.width = "100%";
@@ -198,7 +248,7 @@ async function toggleDevice(id, currentlyOn) {
   showMsg(r.message || (r.ok ? "完成" : "失败"), !r.ok);
 }
 async function runAction(id) {
-  const path = { "start-system": "/start-system", "restart-web": "/restart-web", "stop-system": "/stop-system" }[id];
+  const path = { "start-system": "/start-system", "restart-web": "/restart-web", "stop-system": "/stop-system", "exit": "/shutdown" }[id];
   if (!path) return;
   // 空 JSON body 强制走 POST：api() 以 body 有无选方法，裸 api(path) 会变成
   // GET → 服务端只注册了 POST → 404 "未知地址"（真机点击才暴露的 bug）。
@@ -242,6 +292,7 @@ function setupFrame() {
 
 /* ---------- 启动 ---------- */
 async function init() {
+  applySidebarState();
   setupFrame();
   renderDevices(); renderOps();
   try {

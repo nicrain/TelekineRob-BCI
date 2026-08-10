@@ -25,6 +25,8 @@ def test_run_action_forces_post():
     assert not re.search(r"await api\(path\)", block), (
         "bare api(path) in runAction would become a GET → 404"
     )
+    # P1: the 退出总控 button maps to the /shutdown endpoint
+    assert '"exit": "/shutdown"' in block
 
 
 def test_toggle_device_keeps_body():
@@ -49,3 +51,26 @@ def test_poll_status_reloads_iframe_on_running_transition():
     assert 'G.status.system.state === "running"' in html
     assert 'frame.src = "about:blank"' in html
     assert "G.prevRunning = running;" in html
+
+
+def test_sidebar_collapse_markers():
+    """P2: collapse button lives in the static #mainbar, the collapsed class
+    sits on #sidebar — neither is inside the poll re-render containers
+    (#devices-list / #ops-list), so polling never resets the fold."""
+    html = INDEX.read_text(encoding="utf-8")
+    assert 'id="collapse-btn"' in html
+    assert "#sidebar.collapsed" in html
+    assert 'classList.toggle("collapsed")' in html
+    assert "launcherSidebarCollapsed" in html  # localStorage persistence
+
+
+def test_ferrari_theme_tokens():
+    """P3: Ferrari dark palette — fonts, red, razor radius, mono labels."""
+    html = INDEX.read_text(encoding="utf-8")
+    assert "@import url('https://fonts.googleapis.com" in html
+    assert "Space+Grotesk" in html
+    assert "IBM+Plex+Mono" in html
+    assert "#DA291C" in html.upper()          # Ferrari red (danger)
+    assert "--radius:2px" in html             # razor
+    assert "'IBM Plex Mono'" in html          # mono label font
+    assert "--f-ok:#03904A" in html and "--f-warn:#F13A2C" in html
