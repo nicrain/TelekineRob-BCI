@@ -200,6 +200,44 @@ def test_system_health_stays_running_when_web_up():
     assert payload["system"]["state"] == "running"
 
 
+def test_system_health_probes_backend():
+    """P14: the health check must probe the BACKEND (8010 /api/status), not
+    just the frontend — a dead backend must not report healthy."""
+    app = _make_app()
+    app._last_system_health_check = 0
+    urls: list[str] = []
+    app._ready_check = lambda url, t: (urls.append(url) or True)
+
+    app.status()
+
+    assert any("8010" in u and "api/status" in u for u in urls)
+    assert any("5173" in u for u in urls)
+
+
+def test_system_health_error_when_backend_down():
+    """P14 root cause: frontend answers (vite is independent of the backend)
+    but the backend is dead → system must go error."""
+    app = _make_app()
+    app._last_system_health_check = 0
+    app._ready_check = lambda url, t: "5173" in url  # backend probe fails
+
+    payload = app.status()
+
+    assert payload["system"]["state"] == "error"
+    assert "web service" in payload["system"]["message"]
+
+
+def test_system_health_error_when_frontend_down():
+    """Backend answers but the frontend doesn't → also error."""
+    app = _make_app()
+    app._last_system_health_check = 0
+    app._ready_check = lambda url, t: "8010" in url  # frontend probe fails
+
+    payload = app.status()
+
+    assert payload["system"]["state"] == "error"
+
+
 def test_system_health_check_throttled():
     """The probe is throttled (health_interval_sec): a recent check skips
     the HTTP round-trip on this 1.5 s poll."""

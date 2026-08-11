@@ -40,6 +40,7 @@ windows_launcher/
    | `devices.headband.open_ide_timeout_sec` | open_in_ide 连接等待 LSL 超时（默认 120s——操作者手动去 VS Code 跑桥需要时间，别用 30s 的 spawn 超时） | 可调 |
    | `devices.thymio.reconcile_sec` | usbipd 状态 reconcile 节流（默认 10s；`usbipd attach` 跨重启持久，已 attach → 重启后直接显示 connected） | 可调 |
    | `web.health_interval_sec` | 系统健康 reconcile 节流（默认 10s；状态为 running 但 web 服务不可达 → 标 error + 提示 Restart Web） | 可调 |
+   | `web.backend_url` | 后端健康检查地址（默认 `http://localhost:8010`；健康检查同时探前端 5173 + 后端 `/api/status`，**任一挂 → error**——只探前端不够，vite 独立于后端） | 确认（Windows→WSL localhost 转发） |
 
    ⚠️ **这个 config.json 是"机器本地配置"**：同步时被排除（`sync.items`
    里 `windows_launcher` 排除 `config.json`），永远不会被 WSL 仓库版覆盖——
@@ -81,6 +82,7 @@ windows_launcher/
 - [ ] **设备正常时桥稳定连接、无 churn、波形正常**（不再 "Reconnected → Pipeline stopped → No amplifiers" 循环）；断电 → 宽限期后判停滞 → 重建重试；设备回来 → 恢复
 - [ ] **open_in_ide 连接：操作者慢慢跑桥（>30s）不红**，流起来才绿
 - [ ] **设备断电 → 桥判停滞重建 + launcher 变灰**（样本时效：断电前缓存的旧样本不算 alive）；设备回来 → 桥恢复 → launcher 自动变绿
+- [ ] **杀后端（`pkill -f 'app.main'`）→ system ≤10s+探针变 error**；杀前端 → 也 error（健康检查同时探前后端）
 - [ ] 桥文件用的是同步后的最新版（改仓库后重新「启动系统」生效）
 - [ ] 重复点击幂等（已启动则跳过）
 

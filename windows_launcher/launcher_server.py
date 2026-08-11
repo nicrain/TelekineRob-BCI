@@ -275,17 +275,24 @@ class LauncherApp:
             self.state.set_device(name, DEVICE_DISCONNECTED, "")
 
     def _reconcile_system_health(self) -> None:
-        """P10①: while 'running', the web service is the truth — if the
-        frontend stops answering, the system is no longer usable, so stop
-        claiming running (the operator then hits Restart Web). Throttled.
-        """
+        """P10①/P14: while 'running', the web system is the truth — BOTH the
+        frontend (5173) and the backend (8010 /api/status) must answer.
+        Probing only the frontend is not enough: vite is independent of the
+        backend, so a dead backend still reports healthy (P14). Either down
+        → error + the Restart Web hint. Throttled."""
         if self.state.system != SYSTEM_RUNNING:
             return
         now = time.time()
         if now - self._last_system_health_check < self._system_health_interval:
             return
         self._last_system_health_check = now
-        if not self._ready_check(self.config["web"]["url"], 2.0):
+        web = self.config["web"]
+        backend = (
+            web.get("backend_url", "http://localhost:8010").rstrip("/")
+            + "/api/status"
+        )
+        if not (self._ready_check(web["url"], 2.0)
+                and self._ready_check(backend, 2.0)):
             self.state.set_system(
                 SYSTEM_ERROR, "web service unreachable — restart the web services"
             )

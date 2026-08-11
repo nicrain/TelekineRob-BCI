@@ -26,6 +26,7 @@
 
   "web": {
     "url": "http://localhost:5173",
+    "backend_url": "http://localhost:8010",
     "backend_cmd": "cd web_gui/backend && source /opt/ros/kilted/setup.bash && source ${wsl.repo_path}/install/setup.bash && source ../../.venv/bin/activate && ../../.venv/bin/python -m app.main > /tmp/launcher_backend.log 2>&1",
     "frontend_cmd": "cd web_gui/frontend && npm run dev > /tmp/launcher_frontend.log 2>&1",
     "stop_cmd": "pkill -f 'app.main' ; pkill -f 'npm run dev' ; true",
