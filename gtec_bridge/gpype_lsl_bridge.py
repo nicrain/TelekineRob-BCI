@@ -14,19 +14,33 @@ BCICore8(4ch) → Bandpass(0.5-45Hz) → Notch(50Hz) → LSLSender
 WSL2 counterpart (in existing launch config):
     RawLslAdapter(source_id="gtec_bci_core4", timeout=10.0)
 
-Robustness (P10④)
------------------
-A data-flow watchdog notices when the device stops feeding the pipeline
-(e.g. after a power cycle) and **rebuilds it from scratch** — g.pype's
-pipeline is not reusable after a device drop, so teardown + fresh
-BCICore8 + fresh LSL outlet is required, retrying with exponential
-backoff until the device is back. The watchdog probe reads a sample back
-from the bridge's own LSL outlet (pylsl): no sample for ``STALL_SEC`` →
-rebuild. ``test_reconnect.py`` already proved fresh-pipeline reconnects
-work in g.pype.
+Robustness (P10④ + P12)
+------------------------
+P10: a data-flow watchdog notices when the device stops feeding the
+    pipeline and rebuilds it from scratch (g.pype's pipeline is not reusable
+    after a device drop): teardown + fresh BCICore8 + fresh LSL outlet,
+    retrying with exponential backoff until the device is back. The watchdog
+    probe reads a sample back from the bridge's own LSL outlet (pylsl).
+    ``test_reconnect.py`` already proved fresh-pipeline reconnects work.
+
+P12: watchdog false-positive fixes (real-device churn — a "Reconnected →
+    Pipeline stopped → No amplifiers connected" loop while the device is
+    healthy, caused by rapid rebuilds leaving several same-name outlets and
+    the probe latching onto a stale empty one):
+      ① ``GRACE_SEC`` after a (re)build before stall is judged — outlet
+        discovery + probe latch take a moment;
+      ② the probe scans candidates for one that actually yields a sample
+        instead of locking to ``resolve_byprop``'s streams[0], and drops /
+        re-resolves an inlet that stays empty;
+      ③ a stall is only judged after data was actually seen — a fresh
+        pipeline that never produced a sample is never torn down (initial
+        connect stays fail-fast via build/start exceptions);
+      ④ ``STALL_SEC`` raised 5 s → 10 s to tolerate normal gaps.
+    Principle: rather miss a stall and wait one more round than tear down a
+    healthy pipeline.
 
 Importable WITHOUT gpype/pylsl (both imported lazily at runtime) so the
-watchdog + reconnect controller are unit-testable on macOS.
+watchdog, controller and probe are unit-testable on macOS.
 
 Usage
 -----
@@ -39,9 +53,12 @@ import sys
 import time
 
 STREAM_NAME = "gtec_bci_core4"
-STALL_SEC = 5.0          # no sample for this long → rebuild
+STALL_SEC = 10.0         # no sample for this long (after data was seen) → rebuild
+GRACE_SEC = 10.0         # after a (re)build, do not judge stall for this long
 POLL_SEC = 0.5           # watchdog poll cadence
 PROBE_TIMEOUT = 0.1      # LSL pull_sample timeout (non-blocking-ish)
+SCAN_TIMEOUT = 0.05      # per-candidate probe when selecting an alive outlet
+EMPTY_RESOLVE_AFTER = 3  # empty reads before dropping + re-resolving the inlet
 BACKOFF_INITIAL = 1.0    # reconnect retry backoff (seconds), doubling
 BACKOFF_MAX = 30.0
 
@@ -49,54 +66,101 @@ BACKOFF_MAX = 30.0
 class DataWatchdog:
     """Tracks the last moment data flowed; decides when the pipeline stalled.
 
-    Pure (injectable clock) so the stall logic is unit-testable.
+    P12③: a stall is only judged after data was actually seen — a pipeline
+    that never produced a sample is never torn down as "stalled". Pure
+    (injectable clock) so the stall logic is unit-testable.
     """
 
     def __init__(self, stall_sec: float = STALL_SEC, now_fn=time.monotonic):
         self.stall_sec = float(stall_sec)
         self._now = now_fn
+        self.seen_data = False
+        self.last_data_ts = self._now()
+
+    def reset(self) -> None:
+        """Forget prior data after a (re)build — stall is judged per pipeline
+        instance, only once THIS instance produced a sample."""
+        self.seen_data = False
         self.last_data_ts = self._now()
 
     def mark_data(self) -> None:
+        self.seen_data = True
         self.last_data_ts = self._now()
 
     def stalled(self) -> bool:
+        if not self.seen_data:
+            return False
         return (self._now() - self.last_data_ts) >= self.stall_sec
 
 
 class LslWatchdogProbe:
     """Reads a sample back from the bridge's own LSL outlet.
 
-    If the device stops feeding the pipeline, no sample arrives at the
-    outlet and :meth:`data_arrived` turns False — that is the stall signal.
+    P12②: instead of locking to ``resolve_byprop``'s streams[0] (rapid
+    rebuilds leave several same-name outlets, the first of which may be a
+    stale empty one), scan the candidates and keep one that actually yields
+    a sample. If that inlet later goes empty for ``empty_resolve_after``
+    reads, drop it and re-resolve rather than locking to a dead outlet.
     pylsl is imported lazily so this module stays importable on macOS.
     """
 
-    def __init__(self, stream_name: str = STREAM_NAME, timeout: float = PROBE_TIMEOUT):
+    def __init__(
+        self,
+        stream_name: str = STREAM_NAME,
+        timeout: float = PROBE_TIMEOUT,
+        scan_timeout: float = SCAN_TIMEOUT,
+        empty_resolve_after: int = EMPTY_RESOLVE_AFTER,
+    ):
         self.stream_name = stream_name
         self.timeout = timeout
+        self._scan_timeout = scan_timeout
+        self._empty_resolve_after = empty_resolve_after
         self._inlet = None
+        self._empty_reads = 0
 
     def reset(self) -> None:
         """Drop the inlet (after a rebuild the outlet is a new object)."""
         self._inlet = None
+        self._empty_reads = 0
 
     def data_arrived(self) -> bool:
         import pylsl  # lazy: not needed on macOS test hosts
 
         if self._inlet is None:
-            try:
-                streams = pylsl.resolve_byprop("name", self.stream_name, timeout=2.0)
-                if not streams:
-                    return False
-                self._inlet = pylsl.StreamInlet(streams[0], max_buflen=1)
-            except Exception:
+            self._inlet = self._resolve_alive(pylsl)
+            if self._inlet is None:
+                self._empty_reads += 1
                 return False
+            self._empty_reads = 0
+            return True  # the scan already confirmed a sample is flowing
         try:
-            sample, _ = self._inlet.pull_sample(timeout=self.timeout)
-            return sample is not None
+            sample = self._inlet.pull_sample(timeout=self.timeout)
         except Exception:
-            return False
+            sample = None
+        if sample is not None:
+            self._empty_reads = 0
+            return True
+        self._empty_reads += 1
+        if self._empty_reads >= self._empty_resolve_after:
+            self._inlet = None  # likely latched a stale outlet — re-resolve
+            self._empty_reads = 0
+        return False
+
+    def _resolve_alive(self, pylsl):
+        """Resolve the stream and return an inlet to a candidate that
+        actually yields a sample (P12②); None if none does."""
+        try:
+            streams = pylsl.resolve_byprop("name", self.stream_name, timeout=2.0)
+        except Exception:
+            return None
+        for stream in streams:
+            try:
+                inlet = pylsl.StreamInlet(stream, max_buflen=1)
+                if inlet.pull_sample(timeout=self._scan_timeout) is not None:
+                    return inlet
+            except Exception:
+                continue
+        return None
 
 
 class GpypeBridge:
@@ -156,6 +220,7 @@ class BridgeController:
         *,
         stall_sec: float = STALL_SEC,
         poll_sec: float = POLL_SEC,
+        grace_sec: float = GRACE_SEC,
         backoff_initial: float = BACKOFF_INITIAL,
         backoff_max: float = BACKOFF_MAX,
         sleep=time.sleep,
@@ -164,10 +229,13 @@ class BridgeController:
         self.api = api
         self.watchdog = DataWatchdog(stall_sec=stall_sec, now_fn=now_fn)
         self._poll_sec = poll_sec
+        self._grace_sec = float(grace_sec)
+        self._now = now_fn
         self._backoff = backoff_initial
         self._backoff_initial = backoff_initial
         self._backoff_max = backoff_max
         self._sleep = sleep
+        self._grace_until = 0.0
 
     def _reconnect_once(self, max_attempts=None) -> bool:
         """Teardown, then build+start with exponential backoff.
@@ -182,7 +250,8 @@ class BridgeController:
                 self.api.build()
                 self.api.start()
                 self._backoff = self._backoff_initial
-                self.watchdog.mark_data()
+                self.watchdog.reset()
+                self._grace_until = self._now() + self._grace_sec  # P12①
                 print("[OK] Reconnected. Resuming stream.")
                 return True
             except Exception as exc:
@@ -198,13 +267,16 @@ class BridgeController:
         (test hook) — production runs until Ctrl+C."""
         self.api.build()
         self.api.start()
-        self.watchdog.mark_data()
+        self.watchdog.reset()
+        self._grace_until = self._now() + self._grace_sec  # P12①
         stalls = 0
         while True:
             self._sleep(self._poll_sec)
             if self.api.data_arrived():
                 self.watchdog.mark_data()
                 continue
+            if self._now() < self._grace_until:
+                continue  # P12①: grace after (re)build — no stall judgement
             if not self.watchdog.stalled():
                 continue
             stalls += 1

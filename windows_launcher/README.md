@@ -34,7 +34,7 @@ windows_launcher/
    | `devices.thymio.detach_cmd` | usbipd detach 命令 | 填 |
    | `web.backend_cmd` / `frontend_cmd` | WSL 内起前后端的 shell 命令（**前台**执行，日志落 `/tmp/launcher_*.log`；后端 venv 默认仓库根 `.venv`，backend_cmd 会自动 `source ../../.venv/bin/activate` 让子节点 `eeg_control_node` 用 venv python，若缺依赖改 `web_gui/backend/.venv`） | 确认/可调 |
    | `devices.*.verify_cmd` | 连上后的自检命令（null = 只查进程存活） | 可选 |
-   | `devices.*.python_cmd` | 跑桥/探针的 Python（机器本地 venv 路径，默认 `python`） | 填 venv 路径 |
+   | `devices.*.python_cmd` | 跑桥/探针的 Python（机器本地 venv 路径，默认 `python`）。headband 走 open_in_ide 时**在 VS Code 里也用同一个 venv 解释器跑桥**（与 launcher/hybrid 一致，避免行为不一致） | 填 venv 路径 |
    | `devices.*.lsl_source_id` | LSL 流 source_id——连接/状态**活性验证**用（绿 = 流**有数据** alive，不是流存在/进程活着；设备断电但桥还在时空流仍发布 → 灰） | 确认（`gtec_bci_core4` / `gtec_hybrid_black`） |
    | `devices.headband.connect_mode` | `open_in_ide` = launcher 打开脚本、操作者在 VS Code 点 Run（g.Pype 免费版授权闸门） | 已设默认 |
    | `devices.thymio.reconcile_sec` | usbipd 状态 reconcile 节流（默认 10s；`usbipd attach` 跨重启持久，已 attach → 重启后直接显示 connected） | 可调 |
@@ -77,6 +77,7 @@ windows_launcher/
 - [ ] **Thymio 已 attach → 重启 launcher 后显示 connected**；点 connect 幂等（不报 already attached）
 - [ ] **gpype 桥断电重开 → 数据流/波形恢复**（不再 Buffer underrun 死循环；VS Code 里跑桥验证）
 - [ ] **headband/hybrid 设备断电 → 主控 ≤ 探针周期内变灰**（不是一直绿）；设备回来桥恢复 → 变绿
+- [ ] **设备正常时桥稳定连接、无 churn、波形正常**（不再 "Reconnected → Pipeline stopped → No amplifiers" 循环）；断电 → 宽限期后判停滞 → 重建重试；设备回来 → 恢复
 - [ ] 桥文件用的是同步后的最新版（改仓库后重新「启动系统」生效）
 - [ ] 重复点击幂等（已启动则跳过）
 
