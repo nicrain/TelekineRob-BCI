@@ -271,17 +271,45 @@ function renderDevices() {
   });
 }
 
+function opControl(opId, sysState, baseLabel) {
+  /* P10③: label + disabled + endpoint for an ops button, all derived from
+     the system state. Running Start becomes Restart System; busy (starting /
+     stopping) and stopped states disable the relevant buttons. Pure so the
+     state machine is Node-testable. */
+  const busy = sysState === "starting" || sysState === "stopping";
+  switch (opId) {
+    case "start-system":
+      return sysState === "running"
+        ? { label: "Restart System", endpoint: "/restart-system", disabled: false }
+        : { label: "Start System", endpoint: "/start-system", disabled: busy };
+    case "stop-system":
+      return { label: baseLabel || "Stop System", endpoint: "/stop-system", disabled: busy || sysState === "stopped" };
+    case "restart-web":
+      return { label: baseLabel || "Restart Web", endpoint: "/restart-web", disabled: sysState !== "running" && sysState !== "error" };
+    case "exit":
+      return { label: baseLabel || "Exit Launcher", endpoint: "/shutdown", disabled: false };
+    default:
+      return { label: baseLabel || opId, endpoint: "/" + opId, disabled: false };
+  }
+}
+
 function renderOps() {
   const list = document.getElementById("ops-list");
   list.innerHTML = "";
   const ops = (G.config && G.config.groups
     ? G.config.groups.find(g => g.id === "ops")?.items || DEFAULT_OPS
     : DEFAULT_OPS);
+  const sysState = G.status ? G.status.system.state : "stopped";
   ops.forEach(o => {
+    /* P10①: disabled is applied HERE, where the button is born — the old
+       code set it in renderSystem, then renderOps rebuilt the buttons
+       without it, so the disabled state never stuck. */
+    const ctl = opControl(o.id, sysState, o.label);
     const btn = document.createElement("button");
     btn.className = "btn" + (["stop-system", "exit"].includes(o.id) ? " danger" : "");
-    btn.textContent = o.label;
+    btn.textContent = ctl.label;
     btn.id = "op-" + o.id;
+    btn.disabled = ctl.disabled;
     btn.style.width = "100%";
     btn.onclick = () => runAction(o.id);
     list.appendChild(btn);
@@ -297,13 +325,8 @@ function renderSystem() {
   const lbl = item.querySelector(".sys-state");
   lbl.textContent = sysLabel(s.state);
   if (s.message) lbl.title = s.message;
-  const ops = G.status.system.state;
-  const startBtn = document.getElementById("op-start-system");
-  const stopBtn = document.getElementById("op-stop-system");
-  const restartBtn = document.getElementById("op-restart-web");
-  if (startBtn) startBtn.disabled = !["stopped", "error"].includes(ops);
-  if (stopBtn) stopBtn.disabled = !["running", "starting", "error"].includes(ops);
-  if (restartBtn) restartBtn.disabled = !["running", "error"].includes(ops);
+  /* P10①: op-button disabled now lives in renderOps (where buttons are
+     created) — touching them here would fight the rebuild every poll. */
 }
 
 /* ---------- Actions ---------- */
@@ -313,7 +336,9 @@ async function toggleDevice(id, currentlyOn) {
   showMsg(r.message || (r.ok ? "Done" : "Failed"), !r.ok);
 }
 async function runAction(id) {
-  const path = { "start-system": "/start-system", "restart-web": "/restart-web", "stop-system": "/stop-system", "exit": "/shutdown" }[id];
+  // P10③: the endpoint follows the system state — running Start → restart.
+  const sysState = G.status ? G.status.system.state : "stopped";
+  const path = opControl(id, sysState, null).endpoint;
   if (!path) return;
   // Empty JSON body forces POST: api() picks the method by body presence,
   // so a bare api(path) would send GET → the server only has POST routes
@@ -331,7 +356,10 @@ async function pollStatus() {
     showMsg("Cannot reach the control service — is it running?", true);
     return;
   }
-  renderSystem(); renderDevices(); renderOps();
+  /* P10①: renderOps FIRST so the ops buttons are created with their
+     disabled state before anything else reads them; renderSystem only
+     paints the system dot/label. */
+  renderOps(); renderDevices(); renderSystem();
   updateMainArea();
   G.prevRunning = G.status.system.state === "running";
 }

@@ -29,7 +29,8 @@
     "backend_cmd": "cd web_gui/backend && source /opt/ros/kilted/setup.bash && source ${wsl.repo_path}/install/setup.bash && source ../../.venv/bin/activate && ../../.venv/bin/python -m app.main > /tmp/launcher_backend.log 2>&1",
     "frontend_cmd": "cd web_gui/frontend && npm run dev > /tmp/launcher_frontend.log 2>&1",
     "stop_cmd": "pkill -f 'app.main' ; pkill -f 'npm run dev' ; true",
-    "ready_timeout_sec": 60
+    "ready_timeout_sec": 60,
+    "health_interval_sec": 10
   },
 
   "devices": {
@@ -63,7 +64,8 @@
       "attach_cmd": "usbipd attach --wsl=Ubuntu --busid=1-1",
       "detach_cmd": "usbipd detach --busid=1-1",
       "verify_cmd": "wsl -d Ubuntu -e bash -lc \"test -e /dev/ttyACM0 && echo ok\"",
-      "verify_delay_sec": 3
+      "verify_delay_sec": 3,
+      "reconcile_sec": 10
     }
   },
 

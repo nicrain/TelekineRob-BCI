@@ -16,6 +16,7 @@ def _make_app(ex=None):
     for dev in cfg["devices"].values():
         dev["verify_timeout_sec"] = 0
         dev["verify_poll_sec"] = 0
+        dev["reconcile_sec"] = 0  # P10②: usbipd reconcile fires every status()
     ex = ex or FakeExecutor()
     app = LauncherApp(cfg, executor=ex, ready_check=lambda url, t: True)
     assert app.start_system()["ok"] is True  # system running → can connect
@@ -58,6 +59,7 @@ def test_connect_bridge_fails_when_no_lsl_stream():
 
 def test_connect_usbipd_success():
     app, ex = _make_app()
+    app._thymio_attached = lambda dev: False  # device NOT already attached
     result = app.connect_device("thymio")
 
     assert result == {"ok": True, "message": "Thymio connected"}
@@ -67,8 +69,21 @@ def test_connect_usbipd_success():
     assert any("ttyACM0" in c[-1] for c in ex.run_calls)
 
 
+def test_connect_usbipd_idempotent_when_already_attached():
+    """P10②: usbipd attach survives launcher restarts — connect skips the
+    attach (would fail with "already attached") and goes straight green."""
+    app, ex = _make_app()
+    # default FakeExecutor verify_ok=True → already attached
+    result = app.connect_device("thymio")
+
+    assert result == {"ok": True, "message": "Thymio connected"}
+    assert app.state.devices["thymio"] == "connected"
+    assert not any(c[0] == "usbipd" for c in ex.run_calls)  # attach skipped
+
+
 def test_connect_usbipd_attach_fails():
     app, _ = _make_app(FakeExecutor(usbipd_ok=False))
+    app._thymio_attached = lambda dev: False  # force the attach path
     result = app.connect_device("thymio")
 
     assert result["ok"] is False
@@ -119,6 +134,7 @@ def test_disconnect_bridge_terminates():
 
 def test_disconnect_usbipd_runs_detach():
     app, ex = _make_app()
+    app._thymio_attached = lambda dev: False  # attach actually runs first
     app.connect_device("thymio")
 
     assert app.disconnect_device("thymio")["ok"] is True

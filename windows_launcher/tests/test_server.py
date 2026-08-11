@@ -118,10 +118,24 @@ def test_unknown_path_404(base_url):
 def test_action_endpoints_are_post_only(base_url):
     """Contract pin for the real-device bug: action endpoints must reject
     GET (the frontend's bare api(path) became a GET and got 404 here)."""
-    for path in ("/start-system", "/stop-system", "/restart-web"):
+    for path in ("/start-system", "/stop-system", "/restart-system", "/restart-web"):
         with pytest.raises(urllib.error.HTTPError) as excinfo:
             _get(base_url, path)
         assert excinfo.value.code == 404
+
+
+def test_restart_system_via_http(base_url):
+    """③ P10: POST /restart-system while running → stop+start, ok + running."""
+    _post(base_url, "/start-system", origin=base_url)
+    status, body = _post(base_url, "/restart-system", origin=base_url)
+    assert status == 200
+    assert body["ok"] is True
+
+
+def test_restart_system_when_stopped_rejected(base_url):
+    status, body = _post(base_url, "/restart-system", origin=base_url)
+    assert status == 200
+    assert body == {"ok": False, "message": "System not running — nothing to restart"}
 
 
 def test_post_without_origin_rejected(base_url):
@@ -191,6 +205,7 @@ def test_service_messages_are_english():
             app.start_system(),       # WSL-not-ready error path
             app.stop_system(),
             app.restart_web(),
+            app.restart_system(),     # ③ P10
             app.connect_device("headband"),
             app.connect_device("nope"),
             app.disconnect_device("thymio"),

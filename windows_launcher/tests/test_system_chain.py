@@ -14,6 +14,8 @@ def _make_app(*, ready=True, detect_ok=True, sync_ok=True, **kw):
     # zero poll interval.
     cfg["wsl"]["ready_timeout_sec"] = 1
     cfg["wsl"]["ready_poll_sec"] = 0
+    for dev in cfg["devices"].values():
+        dev["reconcile_sec"] = 0  # P10②
     ex = FakeExecutor(detect_ok=detect_ok, sync_ok=sync_ok, **kw)
     app = LauncherApp(cfg, executor=ex, ready_check=lambda url, t: ready)
     return app, ex
@@ -95,6 +97,31 @@ def test_stop_system_idempotent_when_already_stopped():
     app, _ = _make_app()
     result = app.stop_system()
     assert result == {"ok": True, "message": "System stopped"}
+
+
+def test_restart_system_stops_then_starts():
+    """③ P10: /restart-system = stop then start — WSL is terminated and the
+    web services re-spawned, ending in running."""
+    app, ex = _make_app()
+    assert app.start_system()["ok"] is True
+    spawn_before = len(ex.spawn_calls)
+
+    result = app.restart_system()
+
+    assert result["ok"] is True
+    assert app.state.system == "running"
+    assert any(c[:2] == ["wsl", "--terminate"] for c in ex.run_calls)  # stop ran
+    assert len(ex.spawn_calls) == spawn_before + 2                      # re-spawned
+
+
+def test_restart_system_when_stopped_rejected():
+    """③ P10: nothing running → no stop+start, clean rejection."""
+    app, _ = _make_app()
+
+    result = app.restart_system()
+
+    assert result == {"ok": False, "message": "System not running — nothing to restart"}
+    assert app.state.system == "stopped"
 
 
 def test_restart_web_respawns_services():

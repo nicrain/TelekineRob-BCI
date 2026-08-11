@@ -27,8 +27,57 @@ def test_run_action_forces_post():
     assert not re.search(r"await api\(path\)", block), (
         "bare api(path) in runAction would become a GET → 404"
     )
-    # P1: the 退出总控 button maps to the /shutdown endpoint
-    assert '"exit": "/shutdown"' in block
+    # P10③: the endpoint follows the system state (running Start → /restart-system)
+    assert "opControl(id, sysState, null).endpoint" in block
+
+
+def test_render_ops_applies_disabled_at_creation():
+    """P10①: op buttons must be born with their disabled state (in renderOps),
+    so renderSystem rebuilding / running later can't wipe it — the pre-P10
+    order bug. renderOps must run before renderSystem in the poll."""
+    html = INDEX.read_text(encoding="utf-8")
+    assert "btn.disabled = ctl.disabled;" in html
+    assert "renderOps(); renderDevices(); renderSystem();" in html
+    # renderSystem no longer touches op buttons (would fight the rebuild)
+    assert 'document.getElementById("op-start-system")' not in html
+
+
+def test_op_control_state_machine():
+    """P10③: the Start/Stop/Restart button state machine as a pure function —
+    running Start = Restart System (enabled), stopped/error = Start System,
+    busy (starting/stopping) and stopped disable the relevant buttons."""
+    import subprocess
+
+    html = INDEX.read_text(encoding="utf-8")
+    m = re.search(r"function opControl\(opId, sysState, baseLabel\) \{.*?\n\}", html, re.DOTALL)
+    assert m, "opControl not found in index.html"
+    fn = m.group(0)
+    script = fn + """
+const cases = [
+  ["start-system", "running",  { label:"Restart System", endpoint:"/restart-system", disabled:false }],
+  ["start-system", "stopped",  { label:"Start System",   endpoint:"/start-system",   disabled:false }],
+  ["start-system", "error",    { label:"Start System",   endpoint:"/start-system",   disabled:false }],
+  ["start-system", "starting", { label:"Start System",   endpoint:"/start-system",   disabled:true  }],
+  ["start-system", "stopping", { label:"Start System",   endpoint:"/start-system",   disabled:true  }],
+  ["stop-system",  "running",  { label:"Stop System",    endpoint:"/stop-system",    disabled:false }],
+  ["stop-system",  "stopped",  { label:"Stop System",    endpoint:"/stop-system",    disabled:true  }],
+  ["stop-system",  "starting", { label:"Stop System",    endpoint:"/stop-system",    disabled:true  }],
+  ["restart-web",  "running",  { label:"Restart Web",    endpoint:"/restart-web",    disabled:false }],
+  ["restart-web",  "stopped",  { label:"Restart Web",    endpoint:"/restart-web",    disabled:true  }],
+  ["restart-web",  "error",    { label:"Restart Web",    endpoint:"/restart-web",    disabled:false }],
+  ["exit",         "running",  { label:"Exit Launcher",  endpoint:"/shutdown",       disabled:false }],
+];
+for (const [id, st, want] of cases) {
+  const got = opControl(id, st, null);
+  for (const k of ["label","endpoint","disabled"]) {
+    if (got[k] !== want[k]) { console.error("FAIL", id, st, k, "got", got[k], "want", want[k]); process.exit(1); }
+  }
+}
+console.log("opControl OK");
+"""
+    r = subprocess.run(["node", "-e", script], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    assert "OK" in r.stdout
 
 
 def test_toggle_device_keeps_body():

@@ -37,6 +37,8 @@ windows_launcher/
    | `devices.*.python_cmd` | 跑桥/探针的 Python（机器本地 venv 路径，默认 `python`） | 填 venv 路径 |
    | `devices.*.lsl_source_id` | LSL 流 source_id——连接**真验证**用（绿 = 有流，不是进程活着） | 确认（`gtec_bci_core4` / `gtec_hybrid_black`） |
    | `devices.headband.connect_mode` | `open_in_ide` = launcher 打开脚本、操作者在 VS Code 点 Run（g.Pype 免费版授权闸门） | 已设默认 |
+   | `devices.thymio.reconcile_sec` | usbipd 状态 reconcile 节流（默认 10s；`usbipd attach` 跨重启持久，已 attach → 重启后直接显示 connected） | 可调 |
+   | `web.health_interval_sec` | 系统健康 reconcile 节流（默认 10s；状态为 running 但 web 服务不可达 → 标 error + 提示 Restart Web） | 可调 |
 
    ⚠️ **这个 config.json 是"机器本地配置"**：同步时被排除（`sync.items`
    里 `windows_launcher` 排除 `config.json`），永远不会被 WSL 仓库版覆盖——
@@ -50,7 +52,8 @@ windows_launcher/
 
 1. 双击 `launcher.bat` → 浏览器打开总控页（设备按钮全灰不可点）。
 2. 点「**启动系统**」→ WSL 起来、桥文件同步、前后端起、web GUI 出现在
-   主区域、设备按钮解灰。任一失败会弹一句中文提示（无堆栈）。
+   主区域、设备按钮解灰。任一失败会弹一句中文提示（无堆栈）。系统运行中
+   该按钮变「**Restart System**」——点它执行一次 stop+start。
 3. 点「**连接 Headband / HybridBlack / Thymio**」→ 各自变绿；
    再点变「断开」→ 变灰。
 4. 在 web GUI 里：配置设备 → 校准 → 点 Start 跑实验。
@@ -69,6 +72,10 @@ windows_launcher/
 - [ ] 点「关闭系统」→ 进程清干净 + WSL 停
 - [ ] 任一步失败 → 一句人话中文提示（无堆栈）
 - [ ] 断桥后（拔 USB / 关桥进程）状态变红/灰，不残留"已连接"
+- [ ] **运行中 Start 显示「Restart System」且可点**（点它 stop+start）；stopped 显示「Start System」
+- [ ] **web 服务挂 → system 变 error**（提示 restart web services），不再残留 running
+- [ ] **Thymio 已 attach → 重启 launcher 后显示 connected**；点 connect 幂等（不报 already attached）
+- [ ] **gpype 桥断电重开 → 数据流/波形恢复**（不再 Buffer underrun 死循环；VS Code 里跑桥验证）
 - [ ] 桥文件用的是同步后的最新版（改仓库后重新「启动系统」生效）
 - [ ] 重复点击幂等（已启动则跳过）
 

@@ -154,6 +154,12 @@ class LauncherApp:
         # truth. The reconcile probe is throttled (avoid a subprocess every
         # 1.5 s poll) via this per-device last-check timestamp (P8d).
         self._last_lsl_check: Dict[str, float] = {}
+        # P10②/P10①: same throttling for the usbipd ttyACM0 probe and the
+        # web-service health probe — status() runs every 1.5 s and neither
+        # should spawn a probe (WSL subprocess / HTTP) every single time.
+        self._last_verify_check: Dict[str, float] = {}
+        self._last_system_health_check = 0.0
+        self._system_health_interval = float(config["web"].get("health_interval_sec", 10))
 
         # Origin whitelist for the action POSTs (finding A). The console
         # page is same-origin, so its browser requests always carry one of
@@ -198,6 +204,7 @@ class LauncherApp:
         # explicit disconnect shows red/grey, not a stale "connected" (§4:
         # 状态显示反映真实系统).
         self._reconcile_proc_health()
+        self._reconcile_system_health()
         return status_payload(self.state)
 
     def _reconcile_proc_health(self) -> None:
@@ -212,12 +219,54 @@ class LauncherApp:
                         if not self._lsl_found(dev):
                             self.state.set_device(name, DEVICE_DISCONNECTED, "")
                 continue
+            # P10②: usbipd attach survives launcher restarts — reconcile the
+            # Thymio state to the REAL attach status (ttyACM0 in WSL).
+            if dev.get("type") == "usbipd":
+                self._reconcile_usbipd(name, dev)
+                continue
             # spawn mode: reconcile on process health (existing behaviour).
             proc = self._device_procs.get(name)
             if proc is not None and proc.poll() is not None and self.state.devices[name] in (
                 DEVICE_CONNECTED, DEVICE_CONNECTING,
             ):
                 self.state.set_device(name, DEVICE_ERROR, "bridge process exited")
+
+    def _reconcile_usbipd(self, name: str, dev: dict) -> None:
+        """P10②: align Thymio state with the real attach status.
+
+        ``usbipd attach`` persists across launcher restarts, so a fresh
+        launcher must show an already-attached device as connected instead
+        of waiting for a connect click — and a device detached outside the
+        launcher must fall back to grey. Throttled so status() (1.5 s poll)
+        doesn't spawn a WSL subprocess every time.
+        """
+        if self.state.system not in (SYSTEM_RUNNING, SYSTEM_STARTING):
+            return  # WSL is down — probing ttyACM0 would boot it pointlessly
+        now = time.time()
+        if now - self._last_verify_check.get(name, 0.0) < float(dev.get("reconcile_sec", 10)):
+            return
+        self._last_verify_check[name] = now
+        if self._thymio_attached(dev):
+            if self.state.devices[name] == DEVICE_DISCONNECTED:
+                self.state.set_device(name, DEVICE_CONNECTED, "Connected")
+        elif self.state.devices[name] == DEVICE_CONNECTED:
+            self.state.set_device(name, DEVICE_DISCONNECTED, "")
+
+    def _reconcile_system_health(self) -> None:
+        """P10①: while 'running', the web service is the truth — if the
+        frontend stops answering, the system is no longer usable, so stop
+        claiming running (the operator then hits Restart Web). Throttled.
+        """
+        if self.state.system != SYSTEM_RUNNING:
+            return
+        now = time.time()
+        if now - self._last_system_health_check < self._system_health_interval:
+            return
+        self._last_system_health_check = now
+        if not self._ready_check(self.config["web"]["url"], 2.0):
+            self.state.set_system(
+                SYSTEM_ERROR, "web service unreachable — restart the web services"
+            )
 
     def sidebar_config(self) -> dict:
         """Safe subset for ``GET /config`` (no command bodies)."""
@@ -389,6 +438,19 @@ class LauncherApp:
             self.state.set_system(SYSTEM_ERROR, friendly_error(exc, "Restart Web"))
             return {"ok": False, "message": self.state.system_msg}
 
+    def restart_system(self) -> dict:
+        """③ P10: full stop-then-start (the running-state Start button).
+
+        The frontend shows "Restart System" while running and POSTs
+        /restart-system; the server owns the stop→start ordering."""
+        with self._lock:
+            if not can_stop_system(self.state):
+                return {"ok": False, "message": "System not running — nothing to restart"}
+        stopped = self.stop_system()
+        if not stopped["ok"]:
+            return stopped
+        return self.start_system()
+
     # -- M4: device chain -------------------------------------------------
 
     def connect_device(self, name: str) -> dict:
@@ -510,8 +572,25 @@ class LauncherApp:
         except Exception:
             return False
 
+    def _thymio_attached(self, dev: dict) -> bool:
+        """Whether the Thymio is already visible in WSL (ttyACM0)."""
+        verify = dev.get("verify_cmd")
+        if not verify:
+            return False
+        try:
+            return self.executor.run(build_bridge_command(verify), timeout=30).ok()
+        except Exception:
+            return False
+
     def _connect_usbipd(self, name: str, dev: dict) -> None:
-        """Attach the Thymio USB device via usbipd, then verify inside WSL."""
+        """Attach the Thymio USB device via usbipd, then verify inside WSL.
+
+        Idempotent (P10②): ``usbipd attach`` survives launcher restarts, so
+        if the device is already attached (ttyACM0 visible in WSL) skip the
+        attach instead of failing on "already attached".
+        """
+        if self._thymio_attached(dev):
+            return
         result = self.executor.run(
             build_usbipd_attach_cmd(dev["attach_cmd"]), timeout=30,
         )
@@ -654,6 +733,8 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if path == "/start-system":
                 result = app.start_system()
+            elif path == "/restart-system":
+                result = app.restart_system()
             elif path == "/stop-system":
                 result = app.stop_system()
             elif path == "/restart-web":
