@@ -132,6 +132,49 @@ def test_reconcile_stays_green_when_stream_alive():
     assert payload["devices"]["hybrid"]["state"] == "connected"
 
 
+def test_reconcile_upgrades_stalled_to_connected_when_stream_returns():
+    """P11-fix②: a device greyed out by stall whose bridge self-recovers
+    (unicornpy O4 / gpype P10 watchdog) auto-greens — no manual reconnect."""
+    app = _make_app()
+    assert app.connect_device("hybrid")["ok"] is True
+    app._lsl_state = lambda dev: "stalled"
+    assert app.status()["devices"]["hybrid"]["state"] == "disconnected"
+
+    app._lsl_state = lambda dev: "alive"  # device came back
+    app._last_lsl_check["hybrid"] = 0     # skip the 10s liveness throttle
+    payload = app.status()
+
+    assert payload["devices"]["hybrid"]["state"] == "connected"
+
+
+def test_disconnect_clears_stalled_no_auto_recover():
+    """P11-fix②: an EXPLICIT disconnect must never auto-green again, even if
+    the stream is alive afterwards (the operator said disconnect)."""
+    app = _make_app()
+    assert app.connect_device("hybrid")["ok"] is True
+    assert app.disconnect_device("hybrid")["ok"] is True
+
+    app._lsl_state = lambda dev: "alive"
+    payload = app.status()
+
+    assert payload["devices"]["hybrid"]["state"] == "disconnected"
+
+
+def test_disconnect_after_stall_clears_auto_recover():
+    """P11-fix②: disconnecting a stall-greyed device cancels the pending
+    auto-recover — the operator disconnecting it means "stop, stay off"."""
+    app = _make_app()
+    assert app.connect_device("hybrid")["ok"] is True
+    app._lsl_state = lambda dev: "stalled"
+    assert app.status()["devices"]["hybrid"]["state"] == "disconnected"
+
+    assert app.disconnect_device("hybrid")["ok"] is True
+    app._lsl_state = lambda dev: "alive"
+    payload = app.status()
+
+    assert payload["devices"]["hybrid"]["state"] == "disconnected"
+
+
 # --- P10①: system health reconcile -------------------------------------
 
 def test_system_health_error_when_web_down():

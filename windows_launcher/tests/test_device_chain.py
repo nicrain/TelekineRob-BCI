@@ -57,6 +57,31 @@ def test_connect_bridge_fails_when_no_lsl_stream():
     assert app.state.devices["hybrid"] == "error"
 
 
+def test_connect_bridge_terminates_stale_proc():
+    """P11-fix①: a bridge left over from a stalled grey-out must be
+    terminated before the reconnect spawns a new one — otherwise the old
+    process leaks and holds the device ("device in use") / double outlet."""
+    app, ex = _make_app()
+    assert app.connect_device("hybrid")["ok"] is True
+    old_proc = app._device_procs["hybrid"]
+    spawn_before = len(ex.spawn_calls)
+
+    # device goes off → reconcile grey (bridge kept alive, process leaks)
+    app._lsl_state = lambda dev: "stalled"
+    payload = app.status()
+    assert payload["devices"]["hybrid"]["state"] == "disconnected"
+    assert app._device_procs["hybrid"].poll() is None  # still alive (design)
+
+    # operator reconnects → the stale proc is terminated first, then respawn
+    app._lsl_state = lambda dev: "alive"
+    result = app.connect_device("hybrid")
+
+    assert result["ok"] is True
+    assert old_proc.poll() is not None            # old process terminated
+    assert app._device_procs["hybrid"] is not old_proc
+    assert len(ex.spawn_calls) == spawn_before + 1  # exactly one new bridge
+
+
 def test_connect_usbipd_success():
     app, ex = _make_app()
     app._thymio_attached = lambda dev: False  # device NOT already attached

@@ -160,6 +160,11 @@ class LauncherApp:
         self._last_verify_check: Dict[str, float] = {}
         self._last_system_health_check = 0.0
         self._system_health_interval = float(config["web"].get("health_interval_sec", 10))
+        # P11-fix②: devices greyed out by a STALLED stream (not an explicit
+        # disconnect) are marked so reconcile can auto-green them when the
+        # bridge self-recovers (unicornpy O4 / gpype P10 watchdog). Explicit
+        # disconnect/connect clears the mark → no surprise auto-recover.
+        self._stalled: Dict[str, bool] = {}
 
         # Origin whitelist for the action POSTs (finding A). The console
         # page is same-origin, so its browser requests always carry one of
@@ -217,25 +222,36 @@ class LauncherApp:
                 continue
             if dev.get("type") != "bridge":
                 continue
-            # Bridge devices: green means the stream has DATA, not that a
-            # process is alive (P11). Spawn mode first flags a dead bridge
-            # (red); both modes then reconcile on LSL liveness.
+            # Bridge devices (P11): green means the stream has DATA, not
+            # that a process is alive. Design: a stalled device is left GREY
+            # with the bridge alive so it can self-recover (unicornpy O4 /
+            # gpype P10 watchdog) — never killed here; a DEAD process is RED.
             if dev.get("connect_mode") != "open_in_ide":
                 proc = self._device_procs.get(name)
                 if proc is not None and proc.poll() is not None and self.state.devices[name] in (
                     DEVICE_CONNECTED, DEVICE_CONNECTING,
                 ):
                     self.state.set_device(name, DEVICE_ERROR, "bridge process exited")
+                    self._stalled.pop(name, None)
                     continue
-            if self.state.devices[name] != DEVICE_CONNECTED:
-                continue
-            if now - self._last_lsl_check.get(name, 0.0) < 10.0:
-                continue
-            self._last_lsl_check[name] = now
-            if self._lsl_state(dev) != "alive":
-                # P11: stream resolved but empty, or gone (device off while
-                # the bridge keeps publishing) → grey, not stale green.
-                self.state.set_device(name, DEVICE_DISCONNECTED, "")
+            if self.state.devices[name] == DEVICE_CONNECTED:
+                if now - self._last_lsl_check.get(name, 0.0) < 10.0:
+                    continue
+                self._last_lsl_check[name] = now
+                if self._lsl_state(dev) != "alive":
+                    # downgrade: stream empty/gone (device off) → grey.
+                    self._stalled[name] = True
+                    self.state.set_device(name, DEVICE_DISCONNECTED, "")
+            elif self.state.devices[name] == DEVICE_DISCONNECTED and self._stalled.get(name):
+                # P11-fix②: the device came back and the bridge self-
+                # recovered → auto-green, no manual reconnect. Only devices
+                # greyed out BY STALL (not explicitly disconnected) qualify.
+                if now - self._last_lsl_check.get(name, 0.0) < 10.0:
+                    continue
+                self._last_lsl_check[name] = now
+                if self._lsl_state(dev) == "alive":
+                    self._stalled[name] = False
+                    self.state.set_device(name, DEVICE_CONNECTED, "Connected")
 
     def _reconcile_usbipd(self, name: str, dev: dict) -> None:
         """P10②: align Thymio state with the real attach status.
@@ -469,6 +485,9 @@ class LauncherApp:
             if self.state.devices[name] in (DEVICE_CONNECTING, DEVICE_CONNECTED):
                 return {"ok": True, "message": f"{dev['label']} connected"}
             self.state.set_device(name, DEVICE_CONNECTING, "Connecting…")
+            # P11-fix②: a connect intent is explicit — clear any stall mark
+            # so the stale-grey auto-recover flag doesn't outlive it.
+            self._stalled.pop(name, None)
         try:
             if dev.get("connect_mode") == "open_in_ide":
                 # P8d: returns immediately with the "press Run" prompt; the
@@ -493,6 +512,12 @@ class LauncherApp:
         """Spawn the LSL bridge and verify by stream, not by process (P8b):
         green means the LSL stream is actually up. Timeout → terminate the
         bridge and fail with a human message."""
+        # P11-fix①: a stale bridge from a stalled grey-out is kept alive by
+        # reconcile (so it can self-recover) — terminate it BEFORE spawning
+        # the new one, symmetric with disconnect. Otherwise the old process
+        # leaks, holds the device ("device in use") and publishes a second
+        # outlet with the same source_id, making the probe non-deterministic.
+        self._terminate_proc(self._device_procs.pop(name, None))
         cmd = build_python_script_cmd(dev.get("python_cmd", "python"), dev["script"])
         log_path = self._bridge_log_path(name)
         try:
@@ -628,6 +653,12 @@ class LauncherApp:
                 return {"ok": False, "message": f"Unknown device: {name}"}
             dev = self.config["devices"][name]
             if self.state.devices[name] == DEVICE_DISCONNECTED:
+                # Already grey — including a stall-greyed device: an explicit
+                # disconnect here cancels any pending auto-recover (P11-fix②)
+                # and terminates the lingering self-recovering bridge (an
+                # explicit disconnect means "no resources held").
+                self._stalled.pop(name, None)
+                self._terminate_proc(self._device_procs.pop(name, None))
                 return {"ok": True, "message": f"{dev['label']} disconnected"}
             self.state.set_device(name, DEVICE_DISCONNECTING, "Disconnecting…")
         try:
@@ -635,6 +666,7 @@ class LauncherApp:
                 # P8d: we cannot terminate a bridge running in VS Code —
                 # reset the state and tell the operator to stop it there.
                 self.state.set_device(name, DEVICE_DISCONNECTED, "")
+                self._stalled.pop(name, None)  # explicit disconnect, no auto-recover
                 return {"ok": True, "message": "Stop the bridge in VS Code"}
             dev_type = dev["type"]
             if dev_type == "bridge":
@@ -650,6 +682,7 @@ class LauncherApp:
             else:
                 raise ValueError(f"Unknown device type: {dev_type!r}")
             self.state.set_device(name, DEVICE_DISCONNECTED, "")
+            self._stalled.pop(name, None)  # explicit disconnect, no auto-recover
             return {"ok": True, "message": f"{dev['label']} disconnected"}
         except Exception as exc:
             self.state.set_device(
