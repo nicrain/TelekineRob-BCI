@@ -157,3 +157,56 @@ TelekineRob-BCI/
 | 2026-08-10 | **P8** 完成（设备连接健壮性 a/b/c/d）：**a** 桥日志落盘——launcher 直起桥输出改 `bridge_<device>.log`（append + 时间戳头，不再 DEVNULL）；**b** LSL 真验证（核心）——内置 `lsl_probe.py` 用 device 的 `python_cmd` 跑 pylsl resolve，绿 = 有流（非进程活着）；verify 轮询直到流出现或超时，超时 → 红 + "no LSL stream — check device is on"；**c** device 加 `python_cmd`（机器本地 venv 路径，默认 python）；**d** headband `connect_mode: open_in_ide`——打开脚本（`code`，无则回退默认打开）+ 提示 "press Run (F5)" + 异步等 LSL（waiting 态 busy）+ 无进程 reconcile 走 LSL（流消失 → 灰）+ disconnect 提示 "Stop the bridge in VS Code"；hybrid 保持 spawn 模式 | config device schema 变（python_cmd/script/lsl_source_id/connect_mode/verify_timeout_poll/open_cmd）；**用户侧 config 需手动同步 devices**；`.gitignore` 加 bridge_*.log；探针行精确匹配（"not-found" 不以 "found" 误判）；94 launcher / 全量 180 passed |
 | 2026-08-11 | **P9** 完成（eeg_control_node 用 venv python）：真机发现 launcher 起系统后 `/eeg_analysis` 无数据无波形。根因 = backend_cmd 未激活 venv → `_load_ros_env()` 捕获的 PATH 无 `.venv/bin` → launch 起 `eeg_control_node`（`#!/usr/bin/env python3`）`env python3` 解析到系统 python3（缺 pylsl）→ 无数据（手动 `source activate` 正常故可复现）。**P9a**（根修，web_gui `command_runner.py`）：`_source_prefix()` 在 ROS source 后追加 `export PATH=<venv_bin>:"$PATH"`（venv bin 排 PATH 最前）——捕获环境恒含 venv，与后端启动方式无关。**故意用 export PATH 而非 source activate**：实测本仓库 `.venv/bin/activate` 是陈旧拷贝（`VIRTUAL_ENV` 硬编码成另一项目 `ros_thymio/.venv`），source 它静默排错 venv；export 基于运行时计算路径，确定生效。venv 发现顺序 repo 根 `.venv` → `web_gui/backend/.venv`（README 文档备选）。**P9b**（纵深防御，config.json）：backend_cmd 加 `source ../../.venv/bin/activate`（与手动一致） | **真机验收**：launcher 起系统 → 点 start → `/eeg_analysis` 有数据、波形正常；设备 venv 需含 pylsl（应已具备）；若 venv python3 下 `ros2 launch` shim import rclpy 失败（设备 venv 缺 rclpy），需在设备 venv 补装 rclpy 依赖——手动 `source activate` 正常即兼容；新增 venv 单测 7 条（优先级/回退/缺失/export 顺序/PATH 捕获）→ command_runner 20 passed、launcher 95 passed、web_gui app 47 passed；**用户侧 config 需手动同步 backend_cmd** |
 | 2026-08-11 | **P10** 完成（状态实时性 + Thymio 幂等 + Start/Restart + gpype 重连）：**①** 状态实时——前端 pollStatus 顺序 bug（renderSystem 先设 op 按钮 disabled，renderOps 后重建按钮不带它 → 禁用态永不生效）→ disabled 移进 renderOps（按钮创建处 `btn.disabled = ctl.disabled`）+ 轮询 renderOps 先行；服务端 `_reconcile_system_health`——running 但 web 服务不可达 → error + "web service unreachable — restart the web services"（节流 `web.health_interval_sec` 默认 10s，复用 ready_check 探针，测试注入）。**②** Thymio 幂等——usbipd attach 跨 launcher 重启持久 → `_reconcile_usbipd` 用 verify_cmd(ttyACM0) 对齐真实 attach 态（已 attach → connected；被拔 → 灰；system 非 running/starting 不探测防空启 WSL；节流 `devices.thymio.reconcile_sec`）；`_connect_usbipd` 幂等（`_thymio_attached` 已 attach 跳过 attach，不再报 "already attached"）。**③** Start/Restart——前端 `opControl` 纯函数按状态给 label/disabled/endpoint：running → "Restart System"(POST `/restart-system`)，stopped/error → "Start System"，starting/stopping 禁用；服务端 `restart_system` = stop 后 start（先 can_stop 门控）。**④** gpype 桥重连——`gpype_lsl_bridge.py` 重写：`DataWatchdog`（纯停滞判定，可注入时钟）+ `LslWatchdogProbe`（pylsl 读回自身 LSL 流，惰性导入）+ `BridgeController`（监视→停滞→teardown+重建+指数 backoff 重试，teardown 释放旧源防"设备被占用"；重建 = fresh BCICore8 全管线，`test_reconnect.py` 已实证）；初始连接仍 fail-fast 出 checklist | config 新增 `web.health_interval_sec` + `devices.thymio.reconcile_sec`（代码有默认，缺键不破）；**用户侧 config 需手动同步两键**；gpype 桥改动需真机在 VS Code 里断电重开验证（④ 无法 macOS 端到端）；+19 launcher 测试（opControl Node 映射、disabled 创建处、usbipd reconcile/幂等、system 健康/节流、restart 顺序/HTTP、gpype 看门狗 6 条）→ launcher 114 passed、web_gui app 47 passed、全量回归通过 |
+| 2026-08-11 | **P11** 完成（LSL 活性真校验）：真机 headband 断电 → launcher 一直绿。根因 = `lsl_probe.py` 只 `resolve_byprop` 查流**存在**——设备断电但桥还在时空流仍在发布 → found → 误判 connected。**P11a** `lsl_probe.py` 三态：resolve 到流 → 开 `StreamInlet.pull_sample(timeout=1.0)`——有 sample → `alive`；resolve 到但拉不到 → `stalled`；resolve 不到 → `not-found`（`no-pylsl` 保留）。**P11b** reconcile 统一 IDE + spawn：CONNECTED 仅当活性 `alive`；`stalled`/`not-found` → 灰。顺带修 hybrid——spawn 模式进程活着但流停，之前保持绿，现在灰；spawn 仍先查进程死 → error（红）再查活性；IDE 模式仅活性。`_lsl_found` → `_lsl_state`（三态解析，行精确匹配防 "not-found" 子串误判）；连接 `_wait_for_lsl` 也改判 `alive`（connect 绿 = 有数据，更严格） | 探针周期 ≈ reconcile 节流 10s + 探针 ~2s（resolve 1s + pull 1s）；无 config 改动；测试：`test_lsl_probe.py` 三态 pylsl mock 6 条（alive/stalled/not-found/pull 异常/resolve 异常/no-pylsl）+ reconcile 按活性设状态 3 条（stalled/not-found→灰、alive→绿）→ launcher 123 passed；真机验收：headband/hybrid 断电 ≤ 探针周期变灰、设备回来桥恢复 → 变绿 |
+
+---
+
+## 7. O2 真机验收清单（用户侧逐项勾）
+
+> 状态：✓ = 已真机验证通过；☐ = 待验证。P1–P10 单点已验，此表为**整体系统性过一遍**的收尾。
+
+### A. 入口与幂等
+- [x] 双击 launcher.bat → 无 python 窗口、浏览器自动开总控页、设备按钮全灰（P1）
+- [x] 再次双击 → 旧进程被杀、单实例、单浏览器标签（P1）
+- [ ] 缺 Python / 启动超时时 bat 英文提示（P7，罕见路径）
+
+### B. 启动系统链路
+- [x] Start System → Ubuntu 起、检测通过、桥文件同步、前后端起（M3）
+- [x] GUI 自动加载进 iframe、不手动刷新（P5/P6）
+- [x] 全程无 cmd 窗口闪现/残留（P4）
+- [ ] 运行中 Start 变 "Restart System"，可点（stop+start）（P10）
+- [ ] web 服务挂掉 → system 变 error + "restart the web services"（P10）
+
+### C. 设备连接
+- [x] HybridBlack connect → 变绿（LSL 流）；设备没开 → 超时红（P8）
+- [x] Headband connect → VS Code 打开脚本 + 提示 → 点 Run → 变绿（P8）
+- [ ] Thymio connect → 变绿；**重启 launcher 后已 attach 直接绿**（P10）
+- [ ] Thymio 被拔 → 变灰（P10）
+- [ ] headband 断电重开 → **波形自动恢复**（P10-④，VS Code 里测）
+
+### D. 主题与界面
+- [x] 任意一侧切 ☀/☾ → 两侧同变；刷新后一致（P6）
+- [x] 系统离线 → Ferrari 占位，无哭脸错误页（P6）
+- [x] 侧边栏可收起 + 刷新保持（P2）
+- [x] 全英文界面 + Refresh 按钮（P5）
+
+### E. 关闭与退出
+- [ ] Stop System → 进程干净 + WSL 停
+- [ ] Exit Launcher → 服务退出，`launcher_server.log` 有日志
+- [ ] 断桥后状态变红/灰（§4 核心项）
+
+### F. 实验链路
+- [x] calibrate + start → 波形正常（P9）
+- [ ] 双设备同时跑 → 波形正常（沿用早期验证，launcher 全链路复核）
+
+---
+
+## 8. O2 待办（非阻塞，按优先级）
+
+| # | 待办 | 状态 |
+|---|---|---|
+| 1 | **g.tec 决策 A/B/C**：Headband 现走 C 变体（VS Code 手动跑）可用；A（g.Pype Runtime）/ B（学术条款）是"非 IT 操作者部署"愿景，需用户联系 g.tec | 挂着，不影响实验 |
+| 2 | P6 残留：浅色 `.btn.danger` 边框色 `#A01409` vs web_gui `#B01E0A`（1px 视觉） | 🟢 可选 |
+| 3 | P8 残留①：spawn 模式进程活着但 LSL 流丢 → 保持绿到进程退出（窗口小） | 🟢 可选 |
+| 4 | P8 残留②：`bridge_<device>.log` 在 Windows 上有内容（日志落盘真机确认） | 🟢 顺手确认 |
+| 5 | 项目 backlog：O5（App.jsx 重构）等 TASKS.md 里早期 O 系列 | 项目级，另行排期 |

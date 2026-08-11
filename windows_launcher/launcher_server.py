@@ -210,26 +210,32 @@ class LauncherApp:
     def _reconcile_proc_health(self) -> None:
         now = time.time()
         for name, dev in self.config["devices"].items():
-            # IDE mode (P8d): no launcher process — the LSL stream is the
-            # truth. If it disappears the device falls back to grey.
-            if dev.get("connect_mode") == "open_in_ide":
-                if self.state.devices[name] == DEVICE_CONNECTED:
-                    if now - self._last_lsl_check.get(name, 0.0) >= 10.0:
-                        self._last_lsl_check[name] = now
-                        if not self._lsl_found(dev):
-                            self.state.set_device(name, DEVICE_DISCONNECTED, "")
-                continue
             # P10②: usbipd attach survives launcher restarts — reconcile the
             # Thymio state to the REAL attach status (ttyACM0 in WSL).
             if dev.get("type") == "usbipd":
                 self._reconcile_usbipd(name, dev)
                 continue
-            # spawn mode: reconcile on process health (existing behaviour).
-            proc = self._device_procs.get(name)
-            if proc is not None and proc.poll() is not None and self.state.devices[name] in (
-                DEVICE_CONNECTED, DEVICE_CONNECTING,
-            ):
-                self.state.set_device(name, DEVICE_ERROR, "bridge process exited")
+            if dev.get("type") != "bridge":
+                continue
+            # Bridge devices: green means the stream has DATA, not that a
+            # process is alive (P11). Spawn mode first flags a dead bridge
+            # (red); both modes then reconcile on LSL liveness.
+            if dev.get("connect_mode") != "open_in_ide":
+                proc = self._device_procs.get(name)
+                if proc is not None and proc.poll() is not None and self.state.devices[name] in (
+                    DEVICE_CONNECTED, DEVICE_CONNECTING,
+                ):
+                    self.state.set_device(name, DEVICE_ERROR, "bridge process exited")
+                    continue
+            if self.state.devices[name] != DEVICE_CONNECTED:
+                continue
+            if now - self._last_lsl_check.get(name, 0.0) < 10.0:
+                continue
+            self._last_lsl_check[name] = now
+            if self._lsl_state(dev) != "alive":
+                # P11: stream resolved but empty, or gone (device off while
+                # the bridge keeps publishing) → grey, not stale green.
+                self.state.set_device(name, DEVICE_DISCONNECTED, "")
 
     def _reconcile_usbipd(self, name: str, dev: dict) -> None:
         """P10②: align Thymio state with the real attach status.
@@ -546,31 +552,41 @@ class LauncherApp:
         return HERE / f"bridge_{name}.log"
 
     def _wait_for_lsl(self, dev: dict, timeout: float | None = None, poll: float | None = None) -> bool:
-        """Poll the LSL probe until the device's stream resolves or timeout."""
+        """Poll the LSL probe until the stream is ALIVE (has data) or timeout."""
         timeout = float(dev.get("verify_timeout_sec", 20)) if timeout is None else timeout
         poll = float(dev.get("verify_poll_sec", 2)) if poll is None else poll
         deadline = time.time() + timeout
         while True:
-            if self._lsl_found(dev):
+            if self._lsl_state(dev) == "alive":
                 return True
             if time.time() >= deadline:
                 return False
             time.sleep(poll)
 
-    def _lsl_found(self, dev: dict) -> bool:
-        """Run the probe under the DEVICE's python_cmd (venv has pylsl); the
-        launcher itself stays zero-dependency."""
+    def _lsl_state(self, dev: dict) -> str:
+        """Three-state LSL liveness probe (P11), run under the DEVICE's
+        python_cmd (venv has pylsl); the launcher itself stays zero-dep.
+
+        ``alive`` = the stream resolved AND yielded a sample (the device is
+        actually streaming). ``stalled`` = resolved but empty — the bridge is
+        still publishing while the device is off (the false-green case).
+        ``not-found`` = no stream at all (bridge down)."""
         cmd = (
             build_python_script_cmd(dev.get("python_cmd", "python"), str(LSL_PROBE))
             + [dev.get("lsl_source_id", ""), "1"]
         )
         try:
             result = self.executor.run(cmd, timeout=10)
-            # Line-exact match: "found" vs "not-found" (a substring check
-            # would treat "not-found" as found — it ends with "found").
-            return "found" in (result.stdout or "").splitlines()
+            lines = (result.stdout or "").splitlines()
         except Exception:
-            return False
+            return "not-found"
+        # Line-exact match: the probe prints one full word per run; a
+        # substring check would misfire (e.g. "not-found" ends with "found").
+        if "alive" in lines:
+            return "alive"
+        if "stalled" in lines:
+            return "stalled"
+        return "not-found"
 
     def _thymio_attached(self, dev: dict) -> bool:
         """Whether the Thymio is already visible in WSL (ttyACM0)."""

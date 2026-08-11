@@ -37,7 +37,7 @@ class FakeExecutor:
         verify_ok: bool = True,
         bridge_alive: bool = True,
         usbipd_ok: bool = True,
-        lsl_found: bool = True,
+        lsl_state: str = "alive",
     ) -> None:
         self.run_calls: list[list[str]] = []
         self.spawn_calls: list[list[str]] = []
@@ -51,7 +51,7 @@ class FakeExecutor:
         self.verify_ok = verify_ok
         self.bridge_alive = bridge_alive
         self.usbipd_ok = usbipd_ok
-        self.lsl_found = lsl_found
+        self.lsl_state = lsl_state
 
     def run(self, cmd, *, timeout, cwd=None) -> CompletedCommand:
         self.run_calls.append(cmd)
@@ -69,8 +69,8 @@ class FakeExecutor:
                 return CompletedCommand(1, "degraded", "")
             return CompletedCommand(0, "running", "")
         if any("lsl_probe.py" in c for c in cmd):
-            # P8b: the LSL probe prints found / not-found.
-            return CompletedCommand(0, "found" if self.lsl_found else "not-found", "")
+            # P8b/P11: the LSL probe prints one of alive / stalled / not-found.
+            return CompletedCommand(0, self.lsl_state, "")
         if head in (["xcopy"], ["robocopy"]):
             # robocopy: 0–7 are success, >=8 are real failures
             return CompletedCommand(0 if self.sync_ok else 8)

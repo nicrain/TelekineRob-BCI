@@ -49,7 +49,7 @@ def test_connect_bridge_probes_lsl_stream():
 def test_connect_bridge_fails_when_no_lsl_stream():
     """P8b: device off → probe never finds the stream → timeout + error,
     no false green."""
-    app, _ = _make_app(FakeExecutor(lsl_found=False))
+    app, _ = _make_app(FakeExecutor(lsl_state="not-found"))
     result = app.connect_device("hybrid")
 
     assert result["ok"] is False
@@ -162,14 +162,14 @@ def test_connect_open_in_ide_opens_script_and_prompts():
 
 
 def test_wait_lsl_background_sets_connected():
-    app, _ = _make_app()  # lsl_found=True
+    app, _ = _make_app()  # lsl_state="alive" by default
     app.state.set_device("headband", "connecting", "waiting for LSL stream")
     app._wait_lsl_background("headband", app.config["devices"]["headband"], 0, 0)
     assert app.state.devices["headband"] == "connected"
 
 
 def test_wait_lsl_background_times_out_to_error():
-    app, _ = _make_app(FakeExecutor(lsl_found=False))
+    app, _ = _make_app(FakeExecutor(lsl_state="not-found"))
     app.state.set_device("headband", "connecting", "waiting for LSL stream")
     app._wait_lsl_background("headband", app.config["devices"]["headband"], 0, 0)
     assert app.state.devices["headband"] == "error"

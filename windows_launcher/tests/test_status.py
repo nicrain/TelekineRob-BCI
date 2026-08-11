@@ -43,7 +43,7 @@ def test_status_ide_device_falls_back_when_lsl_lost():
     when it disappears the device falls back to grey."""
     app = _make_app()
     app.state.set_device("headband", "connected", "Connected")
-    app._lsl_found = lambda dev: False  # operator stopped the VS Code bridge
+    app._lsl_state = lambda dev: "not-found"  # operator stopped the VS Code bridge
 
     payload = app.status()
 
@@ -96,6 +96,40 @@ def test_reconcile_usbipd_skipped_when_system_down():
 
     assert payload["system"]["state"] == "stopped"
     assert payload["devices"]["thymio"]["state"] == "connected"  # untouched
+
+
+# --- P11: LSL liveness reconcile (unified IDE + spawn) ------------------
+
+def test_reconcile_spawn_bridge_grey_when_stream_stalled():
+    """P11: spawn mode — the bridge process is ALIVE but the stream is empty
+    (device off, bridge keeps publishing) → grey, not the old stale green."""
+    app = _make_app()
+    assert app.connect_device("hybrid")["ok"] is True
+    app._lsl_state = lambda dev: "stalled"
+
+    payload = app.status()
+
+    assert payload["devices"]["hybrid"]["state"] == "disconnected"
+
+
+def test_reconcile_spawn_bridge_grey_when_stream_not_found():
+    app = _make_app()
+    assert app.connect_device("hybrid")["ok"] is True
+    app._lsl_state = lambda dev: "not-found"
+
+    payload = app.status()
+
+    assert payload["devices"]["hybrid"]["state"] == "disconnected"
+
+
+def test_reconcile_stays_green_when_stream_alive():
+    app = _make_app()
+    assert app.connect_device("hybrid")["ok"] is True
+    app._lsl_state = lambda dev: "alive"
+
+    payload = app.status()
+
+    assert payload["devices"]["hybrid"]["state"] == "connected"
 
 
 # --- P10①: system health reconcile -------------------------------------
