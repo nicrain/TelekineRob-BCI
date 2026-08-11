@@ -71,11 +71,38 @@ def _repo_root() -> Path:
     return Path(__file__).resolve().parents[3]
 
 
+def _venv_bin_path() -> Optional[Path]:
+    """First existing venv bin dir used to run Python nodes.
+
+    Prefers the repo-root ``.venv`` (the launcher ``backend_cmd`` default),
+    falling back to the backend-local ``web_gui/backend/.venv`` documented in
+    the launcher README. Returns None when no venv exists.
+    """
+    for candidate in (_repo_root() / ".venv", _repo_root() / "web_gui" / "backend" / ".venv"):
+        bin_dir = candidate / "bin"
+        if bin_dir.exists():
+            return bin_dir
+    return None
+
+
 def _source_prefix() -> str:
     repo_setup = _repo_root() / "install" / "setup.bash"
     parts = ["source /opt/ros/kilted/setup.bash"]
     if repo_setup.exists():
         parts.append(f"source {shlex.quote(str(repo_setup))}")
+    venv_bin = _venv_bin_path()
+    if venv_bin is not None:
+        # LAST so <venv>/bin wins PATH. eeg_control_node (and any ROS node
+        # with a `#!/usr/bin/env python3` shebang) then resolves the venv
+        # python3, which has pylsl — the launcher starts the backend with the
+        # venv python but without activate, so the child `bash -lc` captured
+        # env would otherwise point env python3 at the system python (no pylsl
+        # → /eeg_analysis empty → no waveform). P9.
+        #
+        # Deliberately `export PATH`, NOT `source activate`: activate bakes
+        # its creation-time VIRTUAL_ENV and silently prepends a stale path on
+        # a copied venv (observed on this repo's .venv). Export is exact.
+        parts.append(f"export PATH={shlex.quote(str(venv_bin))}:\"$PATH\"")
     return " && ".join(parts)
 
 

@@ -32,7 +32,7 @@ windows_launcher/
    | `sync.dst_root` | 同步目标目录（launcher+桥文件拷到这） | 确认（默认桌面 `gpype_test\TelekineRob-BCI`） |
    | `devices.thymio.attach_cmd` | **usbipd attach 命令**（含 busid，只有你知道） | **必须填** |
    | `devices.thymio.detach_cmd` | usbipd detach 命令 | 填 |
-   | `web.backend_cmd` / `frontend_cmd` | WSL 内起前后端的 shell 命令（**前台**执行，日志落 `/tmp/launcher_*.log`；后端 venv 默认仓库根 `.venv`，若缺依赖改 `web_gui/backend/.venv`） | 确认/可调 |
+   | `web.backend_cmd` / `frontend_cmd` | WSL 内起前后端的 shell 命令（**前台**执行，日志落 `/tmp/launcher_*.log`；后端 venv 默认仓库根 `.venv`，backend_cmd 会自动 `source ../../.venv/bin/activate` 让子节点 `eeg_control_node` 用 venv python，若缺依赖改 `web_gui/backend/.venv`） | 确认/可调 |
    | `devices.*.verify_cmd` | 连上后的自检命令（null = 只查进程存活） | 可选 |
    | `devices.*.python_cmd` | 跑桥/探针的 Python（机器本地 venv 路径，默认 `python`） | 填 venv 路径 |
    | `devices.*.lsl_source_id` | LSL 流 source_id——连接**真验证**用（绿 = 有流，不是进程活着） | 确认（`gtec_bci_core4` / `gtec_hybrid_black`） |

@@ -33,6 +33,19 @@ def test_backend_cmd_sources_ros2_absolutely():
     assert "${wsl.repo_path}" not in cmd  # fully expanded
 
 
+def test_backend_cmd_activates_venv():
+    """P9b: the launcher backend also activates the repo-root venv (matches
+    the manual flow) so the captured env / child nodes resolve venv python3.
+    Comes after the ROS sources so venv/bin wins PATH."""
+    cfg = load_config(REPO_CONFIG)
+    cmd = cfg["web"]["backend_cmd"]
+
+    assert "source ../../.venv/bin/activate" in cmd
+    assert cmd.index("source ../../.venv/bin/activate") > cmd.index(
+        cfg["wsl"]["repo_path"] + "/install/setup.bash"
+    )
+
+
 def test_missing_config_file_raises(tmp_path: Path):
     with pytest.raises(ValueError, match="config file not found"):
         load_config(tmp_path / "nope.json")

@@ -1,3 +1,5 @@
+import shlex
+
 import pytest
 
 import app.command_runner as command_runner
@@ -158,3 +160,82 @@ def test_start_system_rejects_eeg2_without_run_eeg():
 
     with pytest.raises(ValueError, match="eeg2 is configured"):
         start_system(cfg, dry_run=True)
+
+
+# ---------------------------------------------------------------------------
+# P9 — venv python for eeg_control_node
+# ---------------------------------------------------------------------------
+
+
+def _venv_export(venv_bin):
+    return f"export PATH={shlex.quote(str(venv_bin))}:\"$PATH\""
+
+
+def test_venv_bin_path_prefers_repo_root_venv(tmp_path, monkeypatch):
+    """Repo-root .venv (launcher backend_cmd default) wins over backend-local."""
+    repo_bin = tmp_path / ".venv" / "bin"
+    backend_bin = tmp_path / "web_gui" / "backend" / ".venv" / "bin"
+    repo_bin.mkdir(parents=True)
+    backend_bin.mkdir(parents=True)
+    monkeypatch.setattr(command_runner, "_repo_root", lambda: tmp_path)
+
+    assert command_runner._venv_bin_path() == repo_bin
+
+
+def test_venv_bin_path_falls_back_to_backend_venv(tmp_path, monkeypatch):
+    """Documented deployment (launcher README): backend-local .venv is used
+    when the repo-root .venv is absent."""
+    backend_bin = tmp_path / "web_gui" / "backend" / ".venv" / "bin"
+    backend_bin.mkdir(parents=True)
+    monkeypatch.setattr(command_runner, "_repo_root", lambda: tmp_path)
+
+    assert command_runner._venv_bin_path() == backend_bin
+
+
+def test_venv_bin_path_none_when_no_venv(tmp_path, monkeypatch):
+    monkeypatch.setattr(command_runner, "_repo_root", lambda: tmp_path)
+
+    assert command_runner._venv_bin_path() is None
+
+
+def test_source_prefix_puts_venv_export_last():
+    """P9: the venv export must come after the ROS sources — last prepend is
+    front of PATH, so `env python3` resolves the venv python3 (pylsl), not
+    anything /opt/ros or system put ahead."""
+    prefix = command_runner._source_prefix()
+    venv_bin = command_runner._venv_bin_path()
+    assert venv_bin is not None  # repo ships a venv today
+    venv_export = _venv_export(venv_bin)
+
+    assert venv_export in prefix
+    assert prefix.index(venv_export) > prefix.index("source /opt/ros/kilted/setup.bash")
+
+
+def test_source_prefix_without_venv_omits_venv_export(monkeypatch):
+    """No venv present → no export line, ROS chain intact (no short-circuit)."""
+    monkeypatch.setattr(command_runner, "_venv_bin_path", lambda: None)
+
+    prefix = command_runner._source_prefix()
+
+    assert "source /opt/ros/kilted/setup.bash" in prefix
+    assert ".venv" not in prefix
+
+
+def test_load_ros_env_captures_venv_in_path(monkeypatch):
+    """P9 core: the bash -lc chain the backend actually runs must land the
+    venv bin dir in the captured env's PATH. macOS has no /opt/ros/kilted, so
+    run exactly the venv segment the real _source_prefix() emits — the same
+    line that follows the ROS sources on the device."""
+    venv_bin = command_runner._venv_bin_path()
+    assert venv_bin is not None
+    monkeypatch.setattr(command_runner, "_ros_env_cache", None)
+    monkeypatch.setattr(
+        command_runner, "_source_prefix",
+        lambda: _venv_export(venv_bin),
+    )
+
+    env = command_runner._load_ros_env()
+
+    path_parts = env["PATH"].split(":")
+    assert str(venv_bin) in path_parts
+    assert path_parts[0] == str(venv_bin)  # wins over ROS/system for env python3
