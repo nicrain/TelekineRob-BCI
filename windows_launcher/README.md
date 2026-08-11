@@ -37,6 +37,7 @@ windows_launcher/
    | `devices.*.python_cmd` | 跑桥/探针的 Python（机器本地 venv 路径，默认 `python`）。headband 走 open_in_ide 时**在 VS Code 里也用同一个 venv 解释器跑桥**（与 launcher/hybrid 一致，避免行为不一致） | 填 venv 路径 |
    | `devices.*.lsl_source_id` | LSL 流 source_id——连接/状态**活性验证**用（绿 = 流**有数据** alive，不是流存在/进程活着；设备断电但桥还在时空流仍发布 → 灰） | 确认（`gtec_bci_core4` / `gtec_hybrid_black`） |
    | `devices.headband.connect_mode` | `open_in_ide` = launcher 打开脚本、操作者在 VS Code 点 Run（g.Pype 免费版授权闸门） | 已设默认 |
+   | `devices.headband.open_ide_timeout_sec` | open_in_ide 连接等待 LSL 超时（默认 120s——操作者手动去 VS Code 跑桥需要时间，别用 30s 的 spawn 超时） | 可调 |
    | `devices.thymio.reconcile_sec` | usbipd 状态 reconcile 节流（默认 10s；`usbipd attach` 跨重启持久，已 attach → 重启后直接显示 connected） | 可调 |
    | `web.health_interval_sec` | 系统健康 reconcile 节流（默认 10s；状态为 running 但 web 服务不可达 → 标 error + 提示 Restart Web） | 可调 |
 
@@ -78,6 +79,8 @@ windows_launcher/
 - [ ] **gpype 桥断电重开 → 数据流/波形恢复**（不再 Buffer underrun 死循环；VS Code 里跑桥验证）
 - [ ] **headband/hybrid 设备断电 → 主控 ≤ 探针周期内变灰**（不是一直绿）；设备回来桥恢复 → 变绿
 - [ ] **设备正常时桥稳定连接、无 churn、波形正常**（不再 "Reconnected → Pipeline stopped → No amplifiers" 循环）；断电 → 宽限期后判停滞 → 重建重试；设备回来 → 恢复
+- [ ] **open_in_ide 连接：操作者慢慢跑桥（>30s）不红**，流起来才绿
+- [ ] **设备断电 → 桥判停滞重建 + launcher 变灰**（样本时效：断电前缓存的旧样本不算 alive）；设备回来 → 桥恢复 → launcher 自动变绿
 - [ ] 桥文件用的是同步后的最新版（改仓库后重新「启动系统」生效）
 - [ ] 重复点击幂等（已启动则跳过）
 

@@ -17,6 +17,7 @@ def _make_app(ex=None):
         dev["verify_timeout_sec"] = 0
         dev["verify_poll_sec"] = 0
         dev["reconcile_sec"] = 0  # P10②: usbipd reconcile fires every status()
+        dev["open_ide_timeout_sec"] = 0  # P13①: no 120s background wait in tests
     ex = ex or FakeExecutor()
     app = LauncherApp(cfg, executor=ex, ready_check=lambda url, t: True)
     assert app.start_system()["ok"] is True  # system running → can connect
@@ -170,6 +171,27 @@ def test_disconnect_usbipd_runs_detach():
 def test_disconnect_when_already_disconnected_idempotent():
     app, _ = _make_app()
     assert app.disconnect_device("thymio") == {"ok": True, "message": "Thymio disconnected"}
+
+
+# --- P13①: open_in_ide connect timeout ----------------------------------
+
+def test_open_in_ide_timeout_config_is_generous():
+    """The operator runs the headband bridge in VS Code by hand — the
+    open_in_ide connect must give them 120s, not the 30s spawn-mode timeout."""
+    cfg = load_config(REPO_CONFIG)
+    assert cfg["devices"]["headband"].get("open_ide_timeout_sec", 120) >= 120
+
+
+def test_wait_lsl_background_does_not_override_disconnect():
+    """P13①: if the operator disconnects while the background wait is still
+    running, a late success must not flip the device back to green."""
+    app, _ = _make_app()
+    app.state.set_device("headband", "connecting", "waiting for LSL stream")
+    assert app.disconnect_device("headband")["ok"] is True  # explicit disconnect
+
+    app._wait_lsl_background("headband", app.config["devices"]["headband"], 0, 0)
+
+    assert app.state.devices["headband"] == "disconnected"
 
 
 # --- P8d: open_in_ide mode (headband) ------------------------------------

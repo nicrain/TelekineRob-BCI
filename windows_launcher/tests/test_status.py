@@ -14,6 +14,7 @@ def _make_app(ex=None):
         dev["verify_timeout_sec"] = 0
         dev["verify_poll_sec"] = 0
         dev["reconcile_sec"] = 0  # P10②: usbipd reconcile fires every status()
+        dev["open_ide_timeout_sec"] = 0  # P13①: no 120s background wait in tests
     app = LauncherApp(cfg, executor=ex or FakeExecutor(), ready_check=lambda u, t: True)
     assert app.start_system()["ok"] is True
     return app

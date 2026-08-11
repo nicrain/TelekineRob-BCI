@@ -59,6 +59,7 @@ POLL_SEC = 0.5           # watchdog poll cadence
 PROBE_TIMEOUT = 0.1      # LSL pull_sample timeout (non-blocking-ish)
 SCAN_TIMEOUT = 0.05      # per-candidate probe when selecting an alive outlet
 EMPTY_RESOLVE_AFTER = 3  # empty reads before dropping + re-resolving the inlet
+FRESHNESS_SEC = 3.0      # a sample older than this does NOT prove streaming (P13)
 BACKOFF_INITIAL = 1.0    # reconnect retry backoff (seconds), doubling
 BACKOFF_MAX = 30.0
 
@@ -110,11 +111,15 @@ class LslWatchdogProbe:
         timeout: float = PROBE_TIMEOUT,
         scan_timeout: float = SCAN_TIMEOUT,
         empty_resolve_after: int = EMPTY_RESOLVE_AFTER,
+        freshness_sec: float = FRESHNESS_SEC,
+        clock=None,
     ):
         self.stream_name = stream_name
         self.timeout = timeout
         self._scan_timeout = scan_timeout
         self._empty_resolve_after = empty_resolve_after
+        self._freshness_sec = float(freshness_sec)
+        self._clock = clock  # injectable; None → pylsl.local_clock (lazy)
         self._inlet = None
         self._empty_reads = 0
 
@@ -122,6 +127,21 @@ class LslWatchdogProbe:
         """Drop the inlet (after a rebuild the outlet is a new object)."""
         self._inlet = None
         self._empty_reads = 0
+
+    def _now(self) -> float:
+        if self._clock is not None:
+            return self._clock()
+        import pylsl  # lazy
+        return pylsl.local_clock()
+
+    def _fresh(self, sample) -> bool:
+        # P13②: an outlet caches the last samples from before a power-off —
+        # only a sample younger than freshness_sec proves the device is
+        # actually streaming right now.
+        if sample is None:
+            return False
+        _, timestamp = sample
+        return self._now() - timestamp <= self._freshness_sec
 
     def data_arrived(self) -> bool:
         import pylsl  # lazy: not needed on macOS test hosts
@@ -132,12 +152,12 @@ class LslWatchdogProbe:
                 self._empty_reads += 1
                 return False
             self._empty_reads = 0
-            return True  # the scan already confirmed a sample is flowing
+            return True  # the scan already confirmed a FRESH sample flows
         try:
             sample = self._inlet.pull_sample(timeout=self.timeout)
         except Exception:
             sample = None
-        if sample is not None:
+        if self._fresh(sample):
             self._empty_reads = 0
             return True
         self._empty_reads += 1
@@ -148,7 +168,7 @@ class LslWatchdogProbe:
 
     def _resolve_alive(self, pylsl):
         """Resolve the stream and return an inlet to a candidate that
-        actually yields a sample (P12②); None if none does."""
+        actually yields a FRESH sample (P12② + P13②); None if none does."""
         try:
             streams = pylsl.resolve_byprop("name", self.stream_name, timeout=2.0)
         except Exception:
@@ -156,7 +176,7 @@ class LslWatchdogProbe:
         for stream in streams:
             try:
                 inlet = pylsl.StreamInlet(stream, max_buflen=1)
-                if inlet.pull_sample(timeout=self._scan_timeout) is not None:
+                if self._fresh(inlet.pull_sample(timeout=self._scan_timeout)):
                     return inlet
             except Exception:
                 continue

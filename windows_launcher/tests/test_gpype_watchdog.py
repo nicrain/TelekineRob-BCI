@@ -130,23 +130,28 @@ def test_stall_sec_default_is_10s():
 
 # --- LslWatchdogProbe (pylsl mocked) ------------------------------------
 
+NOW = 1000.0  # probe clock stand-in
+
+
 class _FakeStream:
     def __init__(self, name="gtec_bci_core4"):
         self.name = name
 
 
 class _FakeInlet:
-    """Returns samples while alive; `samples_until_dead` models a device that
-    drops after N samples (the P12 residual-outlet / dead-outlet case)."""
-    def __init__(self, alive: bool, samples_until_dead: int | None = None):
+    """Returns a sample while alive; `samples_until_dead` models a device that
+    drops after N samples. The returned sample carries a timestamp so the
+    P13 freshness check is exercised."""
+    def __init__(self, alive: bool, timestamp: float, samples_until_dead: int | None = None):
         self.alive = alive
+        self._timestamp = timestamp
         self._remaining = samples_until_dead
 
     def pull_sample(self, timeout=None):
         if self.alive and (self._remaining is None or self._remaining > 0):
             if self._remaining is not None:
                 self._remaining -= 1
-            return ([1.0], 0.0)
+            return ([1.0], self._timestamp)
         return None
 
 
@@ -168,29 +173,53 @@ class _FakePylsl:
         raise ValueError("unknown stream")
 
 
+def _probe(*a, **kw):
+    return bridge.LslWatchdogProbe(clock=lambda: NOW, *a, **kw)
+
+
 def test_probe_picks_alive_outlet_among_residual(monkeypatch):
     """P12②: rapid rebuilds leave several same-name outlets — the probe must
     not lock to streams[0] (which may be a stale empty one); it scans and
-    keeps the outlet that actually yields a sample."""
+    keeps the outlet that actually yields a FRESH sample."""
     stale = _FakeStream()
     alive = _FakeStream()
-    pylsl = _FakePylsl([(stale, _FakeInlet(False)), (alive, _FakeInlet(True))])
+    pylsl = _FakePylsl([(stale, _FakeInlet(False, NOW)), (alive, _FakeInlet(True, NOW - 0.1))])
     monkeypatch.setitem(sys.modules, "pylsl", pylsl)
 
-    probe = bridge.LslWatchdogProbe()
+    probe = _probe()
 
     assert probe.data_arrived() is True  # scan found the alive candidate
+
+
+def test_probe_rejects_stale_sample(monkeypatch):
+    """P13②: an outlet caching samples from before a power-off yields an OLD
+    sample — that must NOT count as alive (the "powered-off stays green"
+    bug)."""
+    alive = _FakeStream()
+    pylsl = _FakePylsl([(alive, _FakeInlet(True, NOW - 100.0))])
+    monkeypatch.setitem(sys.modules, "pylsl", pylsl)
+
+    probe = _probe()
+
+    assert probe.data_arrived() is False  # sample too old → no data
+
+
+def test_probe_accepts_fresh_sample(monkeypatch):
+    alive = _FakeStream()
+    pylsl = _FakePylsl([(alive, _FakeInlet(True, NOW - 0.1))])
+    monkeypatch.setitem(sys.modules, "pylsl", pylsl)
+
+    assert _probe().data_arrived() is True
 
 
 def test_probe_re_resolves_after_persistent_empty(monkeypatch):
     """P12②: an inlet that goes empty (device dropped) is dropped after
     EMPTY_RESOLVE_AFTER reads and re-resolved — never locked to forever."""
-    stale = _FakeStream()
     alive = _FakeStream()
-    pylsl = _FakePylsl([(alive, _FakeInlet(True, samples_until_dead=1))])
+    pylsl = _FakePylsl([(alive, _FakeInlet(True, NOW - 0.1, samples_until_dead=1))])
     monkeypatch.setitem(sys.modules, "pylsl", pylsl)
 
-    probe = bridge.LslWatchdogProbe(empty_resolve_after=3)
+    probe = _probe(empty_resolve_after=3)
 
     assert probe.data_arrived() is True   # scan confirmed the alive outlet
     assert probe.data_arrived() is False  # outlet is now dead → empty reads
@@ -204,7 +233,7 @@ def test_probe_re_resolves_after_persistent_empty(monkeypatch):
 def test_probe_resolve_failure_is_not_alive(monkeypatch):
     pylsl = _FakePylsl([])
     monkeypatch.setitem(sys.modules, "pylsl", pylsl)
-    assert bridge.LslWatchdogProbe().data_arrived() is False
+    assert _probe().data_arrived() is False
 
 
 # --- BridgeController: rebuild trigger ----------------------------------

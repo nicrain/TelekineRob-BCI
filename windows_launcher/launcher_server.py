@@ -539,7 +539,9 @@ class LauncherApp:
         the LSL stream in the background (they press Run themselves)."""
         self._open_script(dev)
         self.state.set_device(name, DEVICE_CONNECTING, "waiting for LSL stream")
-        timeout = float(dev.get("verify_timeout_sec", 30))
+        # P13①: the operator runs the bridge in VS Code by hand — give them a
+        # generous window (120s default) so a slow start doesn't flash red.
+        timeout = float(dev.get("open_ide_timeout_sec", 120))
         poll = float(dev.get("verify_poll_sec", 2))
         threading.Thread(
             target=self._wait_lsl_background,
@@ -563,13 +565,20 @@ class LauncherApp:
             self.executor.run(build_ide_open_cmd(fallback), timeout=10)
 
     def _wait_lsl_background(self, name: str, dev: dict, timeout: float, poll: float) -> None:
-        if self._wait_for_lsl(dev, timeout, poll):
-            self.state.set_device(name, DEVICE_CONNECTED, "Connected")
-        else:
-            self.state.set_device(
-                name, DEVICE_ERROR,
-                "no LSL stream — check device is on; in VS Code press Run (F5)",
-            )
+        ok = self._wait_for_lsl(dev, timeout, poll)
+        # P13①: the operator may have disconnected (or reconnected) while we
+        # waited in the background — never override an explicit disconnect
+        # with a late result.
+        with self._lock:
+            if self.state.devices[name] != DEVICE_CONNECTING:
+                return
+            if ok:
+                self.state.set_device(name, DEVICE_CONNECTED, "Connected")
+            else:
+                self.state.set_device(
+                    name, DEVICE_ERROR,
+                    "no LSL stream — confirm the bridge is running in VS Code",
+                )
 
     # -- LSL stream verification (P8b) -----------------------------------
 

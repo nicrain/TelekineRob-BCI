@@ -44,6 +44,7 @@
       "lsl_source_id": "gtec_bci_core4",
       "verify_timeout_sec": 30,
       "verify_poll_sec": 2,
+      "open_ide_timeout_sec": 120,
       "open_cmd": "code \"${sync.dst_root}\\gtec_bridge\\gpype_lsl_bridge.py\"",
       "open_fallback_cmd": "cmd /c start \"\" \"${sync.dst_root}\\gtec_bridge\\gpype_lsl_bridge.py\""
     },
