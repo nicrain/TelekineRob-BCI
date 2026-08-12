@@ -181,6 +181,17 @@ def test_light_theme_tokens_present():
     assert "--f-info:#1769AA" not in html
 
 
+def test_light_danger_border_matches_web_gui():
+    """P15③: the light-mode .btn.danger border (--f-red-dark) must equal
+    web_gui's palette (#B01E0A, styles.css) — not the drifted #A01409."""
+    html = INDEX.read_text(encoding="utf-8")
+    light = re.search(r'\[data-theme="light"\][^}]*\}', html, re.DOTALL)
+    assert light, "light theme block not found in index.html"
+    assert "--f-red-dark:#B01E0A" in light.group(0)
+    # the danger button still keys its border off that token
+    assert ".btn.danger { color:var(--f-red); border-color:var(--f-red-dark); }" in html
+
+
 def test_placeholder_markers_and_show_hide():
     """P6-②: main-area placeholder exists and toggles with the iframe per
     system state (no browser error page when the frontend is down)."""

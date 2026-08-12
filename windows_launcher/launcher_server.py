@@ -165,6 +165,10 @@ class LauncherApp:
         # bridge self-recovers (unicornpy O4 / gpype P10 watchdog). Explicit
         # disconnect/connect clears the mark → no surprise auto-recover.
         self._stalled: Dict[str, bool] = {}
+        # P15②: per-device connect generation — the background LSL wait
+        # (open_in_ide) captures its own instance's generation and discards a
+        # late result when a disconnect→reconnect superseded it.
+        self._connect_gen: Dict[str, int] = {}
 
         # Origin whitelist for the action POSTs (finding A). The console
         # page is same-origin, so its browser requests always carry one of
@@ -430,6 +434,12 @@ class LauncherApp:
             self.state.set_system(SYSTEM_STOPPED, "System stopped")
             for name in self.state.devices:
                 self.state.set_device(name, DEVICE_DISCONNECTED, "")
+            # P15①: the IDE bridge (headband) runs in VS Code and is NOT killed
+            # by stop — a leftover _stalled mark would let reconcile auto-green
+            # the device once its stream comes back, while the system is
+            # stopped. Clear every device's mark at the stop boundary (also
+            # keeps the next start from surprise-auto-green on a stale flag).
+            self._stalled.clear()
             return {"ok": True, "message": "System stopped"}
         except Exception as exc:
             self.state.set_system(SYSTEM_ERROR, friendly_error(exc, "Stop System"))
@@ -495,6 +505,10 @@ class LauncherApp:
             # P11-fix②: a connect intent is explicit — clear any stall mark
             # so the stale-grey auto-recover flag doesn't outlive it.
             self._stalled.pop(name, None)
+            # P15②: each connect intent is a NEW generation — the background
+            # LSL wait captures it and drops a result from an instance a newer
+            # disconnect→reconnect superseded.
+            self._connect_gen[name] = self._connect_gen.get(name, 0) + 1
         try:
             if dev.get("connect_mode") == "open_in_ide":
                 # P8d: returns immediately with the "press Run" prompt; the
@@ -550,9 +564,12 @@ class LauncherApp:
         # generous window (120s default) so a slow start doesn't flash red.
         timeout = float(dev.get("open_ide_timeout_sec", 120))
         poll = float(dev.get("verify_poll_sec", 2))
+        # P15②: capture THIS connect instance's generation so the wait discards
+        # its result if a newer connect superseded it before the probe lands.
+        gen = self._connect_gen.get(name, 0)
         threading.Thread(
             target=self._wait_lsl_background,
-            args=(name, dev, timeout, poll),
+            args=(name, dev, timeout, poll, gen),
             daemon=True,
         ).start()
         return {"ok": True, "message": "Bridge script opened in VS Code — press Run (F5) there to start it"}
@@ -571,12 +588,22 @@ class LauncherApp:
                 raise
             self.executor.run(build_ide_open_cmd(fallback), timeout=10)
 
-    def _wait_lsl_background(self, name: str, dev: dict, timeout: float, poll: float) -> None:
+    def _wait_lsl_background(
+        self, name: str, dev: dict, timeout: float, poll: float, gen: int | None = None
+    ) -> None:
+        # P15②: default to the CURRENT generation so direct calls (tests)
+        # belong to the live connect instance; the spawn passes its own.
+        gen = self._connect_gen.get(name, 0) if gen is None else gen
         ok = self._wait_for_lsl(dev, timeout, poll)
         # P13①: the operator may have disconnected (or reconnected) while we
         # waited in the background — never override an explicit disconnect
         # with a late result.
         with self._lock:
+            # P15②: a disconnect→reconnect bumped the generation — a result
+            # from a superseded connect instance must not overwrite the new
+            # instance's still-running wait.
+            if self._connect_gen.get(name, 0) != gen:
+                return
             if self.state.devices[name] != DEVICE_CONNECTING:
                 return
             if ok:

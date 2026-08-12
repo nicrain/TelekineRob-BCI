@@ -194,6 +194,52 @@ def test_wait_lsl_background_does_not_override_disconnect():
     assert app.state.devices["headband"] == "disconnected"
 
 
+def test_connect_generation_stale_failure_does_not_override_new_wait():
+    """P15②: fast disconnect→reconnect — the OLD instance's late failure must
+    not overwrite the NEW instance's still-running wait (CONNECTING is not
+    enough of a guard: a reconnect re-enters CONNECTING)."""
+    app, _ = _make_app(FakeExecutor(lsl_state="not-found"))
+    dev = app.config["devices"]["headband"]
+    app._connect_gen["headband"] = 2  # the second connect owns the state
+    app.state.set_device("headband", "connecting", "waiting for LSL stream")
+
+    # gen-1 thread's result arrives late → dropped, the new wait survives
+    app._wait_lsl_background("headband", dev, 0, 0, gen=1)
+    assert app.state.devices["headband"] == "connecting"
+
+    # the current (gen-2) instance's result still applies
+    app._wait_lsl_background("headband", dev, 0, 0, gen=2)
+    assert app.state.devices["headband"] == "error"
+
+
+def test_connect_generation_stale_success_does_not_override_new_wait():
+    """P15② symmetric: a stale SUCCESS from a superseded instance is dropped
+    too — only the current generation may set the result."""
+    app, _ = _make_app()  # lsl_state="alive"
+    dev = app.config["devices"]["headband"]
+    app._connect_gen["headband"] = 2
+    app.state.set_device("headband", "connecting", "waiting for LSL stream")
+
+    app._wait_lsl_background("headband", dev, 0, 0, gen=1)
+    assert app.state.devices["headband"] == "connecting"
+
+    app._wait_lsl_background("headband", dev, 0, 0, gen=2)
+    assert app.state.devices["headband"] == "connected"
+
+
+def test_connect_increments_generation_per_instance():
+    """P15②: every connect intent advances the generation, so a reconnect is
+    always distinguishable from the instance it superseded."""
+    app, _ = _make_app()
+    app.connect_device("headband")
+    gen1 = app._connect_gen["headband"]
+
+    app.disconnect_device("headband")
+    app.connect_device("headband")
+
+    assert app._connect_gen["headband"] == gen1 + 1
+
+
 # --- P8d: open_in_ide mode (headband) ------------------------------------
 
 def test_connect_open_in_ide_opens_script_and_prompts():

@@ -176,6 +176,27 @@ def test_disconnect_after_stall_clears_auto_recover():
     assert payload["devices"]["hybrid"]["state"] == "disconnected"
 
 
+def test_stop_system_clears_stalled_no_auto_green():
+    """P15①: the IDE bridge (headband) runs in VS Code and is NOT killed by
+    stop — a leftover _stalled mark would let reconcile auto-green the device
+    once its stream comes back, while the system is stopped. stop_system must
+    clear the mark so the device stays grey."""
+    app = _make_app()
+    assert app.connect_device("hybrid")["ok"] is True
+    app._lsl_state = lambda dev: "stalled"
+    assert app.status()["devices"]["hybrid"]["state"] == "disconnected"
+    assert app._stalled["hybrid"] is True
+
+    assert app.stop_system()["ok"] is True
+    assert app._stalled == {}  # stop clears every device's stall mark
+
+    app._lsl_state = lambda dev: "alive"  # VS Code bridge still publishing
+    payload = app.status()
+
+    assert payload["system"]["state"] == "stopped"
+    assert payload["devices"]["hybrid"]["state"] == "disconnected"
+
+
 # --- P10①: system health reconcile -------------------------------------
 
 def test_system_health_error_when_web_down():

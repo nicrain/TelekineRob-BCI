@@ -165,6 +165,7 @@ TelekineRob-BCI/
 
 | 2026-08-11 | 真机 headband 稳定性收官验证通过：**P12 看门狗**（宽限期/选活 outlet/见过数据才判停）无 churn；**P13 样本时效**（launcher + 桥探针 freshness 3s）断电正确变灰、重开自动变绿；open_in_ide 120s 宽限连接不闪红 | headband 全链路（连接/断电检测/自动恢复）真机通过；🟡 残留：stop_system 不清 _stalled（P11 复审）、P13 信息性连接线程计数 edge——均非阻塞，下批可选 |
 | 2026-08-11 | 真机 UX/健壮性 **P10 完成**：① 状态实时——前端 pollStatus 顺序 bug（renderOps 重建抹掉 disabled）→ disabled 移创建处 + 轮询 renderOps 先行；`_reconcile_system_health`（running 但 web 不可达 → error，节流 `web.health_interval_sec` 10s）。② Thymio 幂等——`_reconcile_usbipd`（ttyACM0 对齐真实 attach，停机不探测）+ `_connect_usbipd` 幂等。③ Start/Restart——`opControl` 纯函数（running→"Restart System" POST /restart-system）+ 服务端 stop→start。④ gpype 桥重连——`DataWatchdog`+`LslWatchdogProbe`+`BridgeController`（停滞→teardown+重建+backoff） | +19 launcher 测试 → 114；config 加 health_interval_sec + thymio.reconcile_sec |
+| 2026-08-12 | **P15** 完成（review 门禁残留 4 项）：**① 停系统不清 _stalled**（🟡 必修）——IDE 桥(headband)在 VS Code 跑、stop 杀不到 → 停系统后残留 `_stalled` 标记，10s 节流一过、LSL 流恢复 alive → system stopped 但设备自动误回绿。修：`stop_system` 置设备 disconnected 后 `_stalled.clear()`（选此而非 running gate：gate 会在 system error(web 挂) 时冻结设备 reconcile 掩盖真相，且清标记顺带防下次 start 的残留自动回绿）。**② 连接线程计数 edge**——CONNECTING 未按连接实例区分，disconnect→reconnect 后旧实例晚到结果（成功/失败）可盖过新实例的等待（state 又回 CONNECTING，P13 状态守卫挡不住）。修：per-device `_connect_gen` 代计数，connect 递增、`_wait_lsl_background` 捕获本实例代、设置结果前校验、旧代直接丢弃（成功失败都丢）。**③ 浅色 `.btn.danger` 边框色**——浅色 `--f-red-dark:#A01409` → `#B01E0A`（与 web_gui styles.css 一致，1px 视觉）。**④ spawn 活性 reconcile**——验证**已在 P11 统一**（进程死→红；进程活+流停/not-found→灰带 `_stalled` 自动恢复；流活→绿），既有测试已锁定（spawn stalled→灰、返回→自动绿、停滞不杀进程、进程死→红）；此残留为 P8 时代旧发现，早于 P11 reconcile 统一，无需代码改动 | 无 config 改动；测试 +5（① 停系统清标记+流恢复仍灰、② 旧代失败/成功均丢弃+当前代生效+连接递增、③ 浅色 danger 边框断言）→ launcher 147 passed；真机验收：停系统后设备不再自动误回绿；快速断开→重连晚到结果不覆盖新等待；hybrid 断电→灰、回来→自动绿；浅色 danger 边框与 web_gui 一致 |
 
 ---
 
@@ -212,8 +213,8 @@ TelekineRob-BCI/
 
 | # | 待办 | 状态 |
 |---|---|---|
-| 1 | **g.tec 决策 A/B/C**：Headband 现走 C 变体（VS Code 手动跑）可用；A（g.Pype Runtime）/ B（学术条款）是"非 IT 操作者部署"愿景，需用户联系 g.tec | 挂着，不影响实验 |
-| 2 | P6 残留：浅色 `.btn.danger` 边框色 `#A01409` vs web_gui `#B01E0A`（1px 视觉） | 🟢 可选 |
-| 3 | P8 残留①：spawn 模式进程活着但 LSL 流丢 → 保持绿到进程退出（窗口小） | 🟢 可选 |
+| 1 | **g.tec 决策定案（2026-08-12）**：Headband 长期走 **C 变体**（open_in_ide，VS Code 手动跑）；A（g.Pype Runtime）/ B（学术条款）**搁置，不推进**。"非 IT 操作者自动连 Headband"愿景关闭（headband 需操作者会 VS Code 手动跑） | 已定案，不再跟踪 |
+| 2 | ~~P6 残留：浅色 `.btn.danger` 边框色 `#A01409` vs web_gui `#B01E0A`（1px 视觉）~~ | ✅ **P15③** 已修（`#B01E0A`，2026-08-12） |
+| 3 | ~~P8 残留①：spawn 模式进程活着但 LSL 流丢 → 保持绿到进程退出（窗口小）~~ | ✅ **P15④** 确认已由 P11 reconcile 统一修复（既有测试锁定：spawn stalled→灰、返回→自动绿、停滞不杀进程、进程死→红） |
 | 4 | P8 残留②：`bridge_<device>.log` 在 Windows 上有内容（日志落盘真机确认） | 🟢 顺手确认 |
 | 5 | 项目 backlog：O5（App.jsx 重构）等 TASKS.md 里早期 O 系列 | 项目级，另行排期 |
