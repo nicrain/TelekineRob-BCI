@@ -144,13 +144,32 @@ def test_experiment_panel_electrode_labeled_after_session():
 
 
 def test_experiment_panel_electrode_dropdown_tweaks():
-    """P26②③: the Electrode dropdown is narrower (minWidth 64) and its
-    options display as Dry / Wet (values stay lowercase dry/wet)."""
+    """P26②③ + P27②: the Electrode dropdowns have a FIXED width 64 (so the
+    flex column can't stretch them) and options display as Dry / Wet."""
     panel = (APPJSX.parent / "ExperimentPanel.jsx").read_text(encoding="utf-8")
-    assert panel.count("minWidth: 64") >= 2          # single + dual select
+    assert panel.count("width: 64 }} value={meta.electrode") == 2   # single + dual
+    assert "minWidth: 64" not in panel                             # no stretchable minWidth
     assert '<option value="dry">Dry</option>' in panel
     assert '<option value="wet">Wet</option>' in panel
     assert '<option value="dry">dry</option>' not in panel  # not the old lowercase text
+
+
+def test_experiment_panel_field_order():
+    """P27①: the field order is Subject → Session → Electrode → Metric →
+    Roles → Mode in BOTH branches (Mode last)."""
+    panel = (APPJSX.parent / "ExperimentPanel.jsx").read_text(encoding="utf-8")
+    # dual branch (first in source): A input → Session → Electrode → Metric → Roles → Mode
+    # (label text with \n avoids matching comments like "Session #/Mode")
+    assert (panel.index('placeholder="A"')
+            < panel.index("Session #\n")
+            < panel.index("Electrode\n")
+            < panel.index("Metric\n")
+            < panel.index("Roles\n")
+            < panel.index("Mode\n"))
+    # single branch (after the dual branch in source): Metric → Roles → Mode
+    assert (panel.rfind("Metric\n")
+            < panel.rfind("Roles\n")
+            < panel.rfind("Mode\n"))
 
 
 def test_experiment_panel_dual_layout_markers():

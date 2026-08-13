@@ -129,9 +129,10 @@ export default function ExperimentPanel({ config }) {
       {(!configured || formOpen) && (
         <div>
           {/* P24: dual device → a column grid whose values span TWO rows —
-              Subject (A/B), Session #/Mode (shared, stretched), Electrode
-              (device1 n/a, device2 dry/wet), Metric/Roles (per person).
-              single-device mode keeps the layout below unchanged. */}
+              Subject (A/B), Session #/Mode (shared, stretched), and the
+              Electrode column (device1 n/a, device2 dry/wet) each show two
+              rows; Metric/Roles are per person; single-device mode keeps the
+              layout below unchanged. */}
           {isDual ? (
             <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginTop: 10 }}>
               <div style={fieldLabelStyle}>
@@ -147,22 +148,17 @@ export default function ExperimentPanel({ config }) {
                   value={meta.session_no} onChange={(e) => setMetaField('session_no', Number(e.target.value) || 1)} />
               </div>
               <div style={fieldLabelStyle}>
-                Mode
-                <div style={{ ...valueStyle, display: 'flex', alignItems: 'center', height: 58 }}>
-                  {MODE_LABEL[cfg.device_mode] || cfg.device_mode || '…'}
-                </div>
-              </div>
-              <div style={fieldLabelStyle}>
                 Electrode
                 {devices.map((d, i) => (
                   d.device === 'hybrid'
-                    ? <select key={i} style={{ ...inputStyle, minWidth: 64 }} value={meta.electrode || 'dry'}
+                    ? <select key={i} style={{ ...inputStyle, width: 64 }} value={meta.electrode || 'dry'}
                         onChange={(e) => setMetaField('electrode', e.target.value)}>
                         <option value="dry">Dry</option>
                         <option value="wet">Wet</option>
                       </select>
-                    // P25②: headband row → N/A, centered to align with the select
-                    : <div key={i} style={{ ...rowValueStyle, minWidth: 88, justifyContent: 'center' }}>N/A</div>
+                    // P25② + P27②: headband row → N/A, fixed width, centered to
+                    // match the select (a minWidth would still stretch in the column)
+                    : <div key={i} style={{ ...rowValueStyle, width: 64, justifyContent: 'center' }}>N/A</div>
                 ))}
               </div>
               <div style={fieldLabelStyle}>
@@ -176,6 +172,13 @@ export default function ExperimentPanel({ config }) {
                 {devices.map((d, i) => (
                   <div key={i} style={rowValueStyle}>{ROLE_LABEL[d.role] || d.role || '…'}</div>
                 ))}
+              </div>
+              {/* P27①: Mode last — same order in single and dual */}
+              <div style={fieldLabelStyle}>
+                Mode
+                <div style={{ ...valueStyle, display: 'flex', alignItems: 'center', height: 58 }}>
+                  {MODE_LABEL[cfg.device_mode] || cfg.device_mode || '…'}
+                </div>
               </div>
             </div>
           ) : (
@@ -194,8 +197,10 @@ export default function ExperimentPanel({ config }) {
                 {cfg.has_hybrid && (
                   <label style={fieldLabelStyle}>
                     Electrode
-                    {/* P26②③: dry/wet is short — narrower dropdown, capitalized options */}
-                    <select style={{ ...inputStyle, minWidth: 64 }} value={meta.electrode || 'dry'}
+                    {/* P26②③ + P27②: dry/wet is short — a FIXED width (not
+                        minWidth, which still stretches in the flex column)
+                        keeps the dropdown genuinely narrow. */}
+                    <select style={{ ...inputStyle, width: 64 }} value={meta.electrode || 'dry'}
                       onChange={(e) => setMetaField('electrode', e.target.value)}>
                       <option value="dry">Dry</option>
                       <option value="wet">Wet</option>
@@ -203,20 +208,21 @@ export default function ExperimentPanel({ config }) {
                   </label>
                 )}
               </div>
-              {/* P23: read-only config is VERTICAL like the hand-filled fields —
-                  Title-Case label on top, capitalized value below. */}
+              {/* P23 + P27①: read-only config is VERTICAL like the hand-filled
+                  fields — Title-Case label on top, capitalized value below;
+                  order Metric → Roles → Mode (same as dual, Mode last). */}
               <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', paddingBottom: 6 }}>
                 <span style={fieldLabelStyle}>
                   Metric
                   <span style={valueStyle}>{METRIC_LABEL[cfg.metric] || cfg.metric || '…'}</span>
                 </span>
                 <span style={fieldLabelStyle}>
-                  Mode
-                  <span style={valueStyle}>{MODE_LABEL[cfg.device_mode] || cfg.device_mode || '…'}</span>
-                </span>
-                <span style={fieldLabelStyle}>
                   Roles
                   <span style={valueStyle}>{(cfg.roles || []).map((r) => ROLE_LABEL[r] || r).join(' / ') || '…'}</span>
+                </span>
+                <span style={fieldLabelStyle}>
+                  Mode
+                  <span style={valueStyle}>{MODE_LABEL[cfg.device_mode] || cfg.device_mode || '…'}</span>
                 </span>
               </div>
             </div>
