@@ -29,6 +29,9 @@ const fieldLabelStyle = {
   color: 'var(--f-text-secondary)', fontFamily: 'var(--font-mono)',
 };
 const valueStyle = { fontSize: 14, color: 'var(--f-text-primary)', fontFamily: 'var(--font-display)' };
+// P25①: dual-device per-person rows match the input row height so the two
+// values sit properly apart in the column (no cramped/too-high second row).
+const rowValueStyle = { ...valueStyle, height: 28, display: 'flex', alignItems: 'center' };
 // P23③: capitalize the raw config values for display.
 const METRIC_LABEL = { alpha: 'Alpha', tbr: 'TBR', ei: 'EI' };
 const MODE_LABEL = { single: 'Single', dual: 'Dual' };
@@ -158,19 +161,20 @@ export default function ExperimentPanel({ config }) {
                         <option value="dry">dry</option>
                         <option value="wet">wet</option>
                       </select>
-                    : <div key={i} style={valueStyle}>n/a</div>
+                    // P25②: headband row → N/A, centered to align with the select
+                    : <div key={i} style={{ ...rowValueStyle, minWidth: 88, justifyContent: 'center' }}>N/A</div>
                 ))}
               </div>
               <div style={fieldLabelStyle}>
                 Metric
                 {devices.map((d, i) => (
-                  <div key={i} style={valueStyle}>{METRIC_LABEL[d.metric] || d.metric || '…'}</div>
+                  <div key={i} style={rowValueStyle}>{METRIC_LABEL[d.metric] || d.metric || '…'}</div>
                 ))}
               </div>
               <div style={fieldLabelStyle}>
                 Roles
                 {devices.map((d, i) => (
-                  <div key={i} style={valueStyle}>{ROLE_LABEL[d.role] || d.role || '…'}</div>
+                  <div key={i} style={rowValueStyle}>{ROLE_LABEL[d.role] || d.role || '…'}</div>
                 ))}
               </div>
             </div>

@@ -80,12 +80,16 @@ _PHASES = {PHASE_IDLE, PHASE_PROMPT, PHASE_TRIAL, PHASE_REST, PHASE_PAUSED, PHAS
 _SOURCE_TO_DEVICE = {"gtec_bci_core4": "headband", "gtec_hybrid_black": "hybrid"}
 
 
-def device_entry(role: str, lsl_source_id: str) -> dict:
-    """One configured device: role + physical device + the raw source id."""
+def device_entry(role: str, lsl_source_id: str, metric: str = "tbr") -> dict:
+    """One configured device: role + physical device + per-device metric
+    (P24/P25) + the raw source id. ``metric`` comes from the device's policy —
+    the frontend path (ExperimentConfigSummary) and this backend fallback
+    path now record it identically."""
     source = (lsl_source_id or "").strip()
     return {
         "role": role,
         "device": _SOURCE_TO_DEVICE.get(source, source),
+        "metric": metric,
         "lsl_source_id": source,
     }
 
@@ -99,10 +103,10 @@ def config_summary(cfg) -> dict:
     panel no longer hand-fills them, eliminating mis-labelled records.
     """
     eeg = cfg.eeg
-    devices = [device_entry(eeg.role, eeg.lsl_source_id)]
+    devices = [device_entry(eeg.role, eeg.lsl_source_id, eeg.policy)]
     eeg2 = getattr(cfg, "eeg2", None)
     if eeg2 is not None:
-        devices.append(device_entry(eeg2.role, eeg2.lsl_source_id))
+        devices.append(device_entry(eeg2.role, eeg2.lsl_source_id, eeg2.policy))
     return {
         "metric": eeg.policy,
         "device_mode": "dual" if eeg2 is not None else "single",

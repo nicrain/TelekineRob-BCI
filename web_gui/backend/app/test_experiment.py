@@ -185,13 +185,14 @@ def test_config_summary_single_headband():
         "metric": "tbr",
         "device_mode": "single",
         "roles": ["speed"],
-        "devices": [{"role": "speed", "device": "headband", "lsl_source_id": "gtec_bci_core4"}],
+        "devices": [{"role": "speed", "device": "headband", "metric": "tbr", "lsl_source_id": "gtec_bci_core4"}],
         "has_hybrid": False,
     }
 
 
 def test_config_summary_dual_with_hybrid():
-    """Dual mode with a HybridBlack → has_hybrid True + both roles."""
+    """Dual mode with a HybridBlack → has_hybrid True + both roles + PER-DEVICE
+    metric (P25: the backend fallback path records metric like the frontend)."""
     eeg2 = EegConfig2(role="steering", policy="ei", lsl_source_id="gtec_hybrid_black")
     summary = config_summary(_cfg(eeg2=eeg2))
     assert summary["metric"] == "tbr"      # device-1 policy
@@ -199,6 +200,8 @@ def test_config_summary_dual_with_hybrid():
     assert summary["roles"] == ["speed", "steering"]
     assert summary["has_hybrid"] is True
     assert any(d["device"] == "hybrid" for d in summary["devices"])
+    metrics = {d["role"]: d["metric"] for d in summary["devices"]}
+    assert metrics == {"speed": "tbr", "steering": "ei"}  # per-device policies
 
 
 def test_session_meta_derives_metric_and_mode_from_summary():

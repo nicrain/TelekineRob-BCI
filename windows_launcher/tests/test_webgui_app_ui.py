@@ -144,15 +144,17 @@ def test_experiment_panel_electrode_labeled_after_session():
 
 
 def test_experiment_panel_dual_layout_markers():
-    """P24: dual device renders a two-row column grid — two Subject inputs
-    (A/B), shared Session #/Mode stretched, Electrode n/a + dry/wet,
-    per-person Metric/Roles; the single-mode layout is unchanged."""
+    """P24+P25: dual device renders a two-row column grid — two Subject inputs
+    (A/B), shared Session #/Mode stretched, Electrode N/A + dry/wet (centered),
+    per-person Metric/Roles with proper row spacing; single-mode unchanged."""
     panel = (APPJSX.parent / "ExperimentPanel.jsx").read_text(encoding="utf-8")
     assert "isDual ? (" in panel                        # dual branch present
     assert 'placeholder="A"' in panel and 'placeholder="B"' in panel  # two subjects
     assert "meta.subject_b" in panel                    # device B operator
-    assert ">n/a<" in panel                             # device1 electrode n/a
+    assert ">N/A<" in panel                             # device1 electrode, centered
+    assert "justifyContent: 'center'" in panel          # N/A aligns with the select
     assert "height: 58" in panel                        # shared Session #/Mode stretched
+    assert "rowValueStyle" in panel                     # per-row height spacing
     assert "METRIC_LABEL[d.metric]" in panel            # per-device metric row
     assert "ROLE_LABEL[d.role]" in panel                # per-device role row
     assert 'placeholder="e.g. S01"' in panel            # single-mode branch kept
