@@ -310,6 +310,18 @@ class LauncherApp:
             "web_url": self.config.get("web", {}).get("url", "http://localhost:5173"),
         }
 
+    def log_tail(self, lines: int = 200) -> List[dict]:
+        """P17②: tail the launcher's own log + per-device bridge logs for the
+        View Log button (launcher_server.log + bridge_<device>.log in HERE)."""
+        out: List[dict] = []
+        for path in sorted(HERE.glob("*.log")):
+            try:
+                tail = path.read_text(encoding="utf-8", errors="replace").splitlines()[-lines:]
+            except OSError:
+                continue
+            out.append({"source": path.name, "lines": tail})
+        return out
+
     # -- process management primitives -----------------------------------
 
     def _terminate_proc(self, proc: subprocess.Popen, wait_sec: float = 2.0) -> None:
@@ -810,6 +822,13 @@ class Handler(BaseHTTPRequestHandler):
             return self._send_json(self.server.app.status())
         if path == "/config":
             return self._send_json(self.server.app.sidebar_config())
+        if path == "/log":
+            # P17②: View Log — tail launcher_server.log + bridge_*.log.
+            try:
+                lines = int(urlparse(self.path).query.split("=")[1]) if "lines=" in urlparse(self.path).query else 200
+            except (ValueError, IndexError):
+                lines = 200
+            return self._send_json({"ok": True, "logs": self.server.app.log_tail(lines)})
         return self._send_json({"ok": False, "message": "Unknown path"}, code=404)
 
     def do_POST(self):

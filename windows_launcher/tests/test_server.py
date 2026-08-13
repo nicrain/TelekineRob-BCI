@@ -94,6 +94,30 @@ def test_get_config_returns_sidebar(base_url):
     assert data["log"]["label"] == "View Log"
 
 
+def test_get_log_returns_log_list(base_url):
+    """P17②: GET /log tails launcher_server.log + bridge logs (may be empty
+    in a fresh test run — the shape is what matters)."""
+    status, body = _get(base_url, "/log")
+    assert status == 200
+    data = json.loads(body)
+    assert data["ok"] is True
+    assert isinstance(data["logs"], list)
+
+
+def test_log_tail_reads_launcher_and_bridge_logs(tmp_path, monkeypatch):
+    """P17②: log_tail tails *.log files in the launcher dir, last N lines."""
+    monkeypatch.setattr(launcher_server, "HERE", tmp_path)
+    (tmp_path / "launcher_server.log").write_text("l1\nl2\nl3\n", encoding="utf-8")
+    (tmp_path / "bridge_headband.log").write_text("bridge line\n", encoding="utf-8")
+    app = LauncherApp(load_config(REPO_CONFIG), executor=FakeExecutor(), ready_check=lambda u, t: True)
+
+    logs = app.log_tail(lines=2)
+
+    by_name = {f["source"]: f["lines"] for f in logs}
+    assert "launcher_server.log" in by_name and "bridge_headband.log" in by_name
+    assert by_name["launcher_server.log"] == ["l2", "l3"]  # tail lines=2
+
+
 def test_start_system_via_http(base_url):
     status, body = _post(base_url, "/start-system", origin=base_url)
     assert status == 200

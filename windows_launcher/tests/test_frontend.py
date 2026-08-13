@@ -154,6 +154,16 @@ def test_user_visible_layer_has_no_cjk():
     assert not cjk.search(json.dumps(cfg, ensure_ascii=False)), "config.json has residual CJK"
 
 
+def test_view_log_wired():
+    """P17②: the View Log button fetches /log and shows the modal."""
+    html = INDEX.read_text(encoding="utf-8")
+    assert 'id="log-btn" disabled onclick="viewLog()"' in html
+    assert 'id="log-modal"' in html
+    assert 'id="log-modal-body"' in html
+    assert 'api("/log")' in html
+    assert "closeLog" in html
+
+
 def test_theme_toggle_and_cross_origin_sync_markers():
     """P6-①: theme toggle button, data-theme application, localStorage, and
     the cross-origin postMessage broadcast + listener."""

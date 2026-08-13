@@ -68,3 +68,22 @@ def test_experiment_panel_markers():
     assert "remaining" in panel
     assert "Get ready" in panel
     assert "Rest — next trial" in panel
+
+
+# --- P17①: web GUI log panel ---------------------------------------------
+
+def test_log_panel_wired_into_app():
+    """P17①: the log panel is imported and rendered by App.jsx (own component
+    file — the O5 incremental split)."""
+    src = _app()
+    assert "import LogPanel from './LogPanel';" in src
+    assert "<LogPanel />" in src
+
+
+def test_log_panel_markers():
+    """P17①: the panel fetches /api/logs, collapses, refreshes, auto-polls."""
+    panel = (APPJSX.parent / "LogPanel.jsx").read_text(encoding="utf-8")
+    assert "/api/logs" in panel
+    assert "Collapse" in panel and "Expand" in panel
+    assert "Refresh" in panel
+    assert "auto (2 s)" in panel

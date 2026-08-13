@@ -23,6 +23,7 @@ from .experiment import (
     load_protocol,
     trial_dict,
 )
+from .logs import RingBufferHandler, tail_files
 from .models import (
     CommandRequest,
     ConfigPatch,
@@ -105,6 +106,10 @@ app.add_middleware(
 
 _subscriber: RosBridge | None = None
 _experiment = ExperimentSession()
+# P17①: recent-log ring for the log panel — captures everything routed to
+# root (main/ros_bridge/teleop/... propagate there).
+_ring = RingBufferHandler()
+logging.getLogger().addHandler(_ring)
 
 
 def _get_subscriber() -> RosBridge:
@@ -305,6 +310,12 @@ async def ws_teleop(websocket: WebSocket) -> None:
 # --------------------------------------------------------------------------- #
 # P16: experiment mode (E1 logging / E3 protocol + prompt UI / E4 labels)
 # --------------------------------------------------------------------------- #
+
+
+@app.get("/api/logs")
+def get_logs(lines: int = 100) -> dict[str, Any]:
+    """P17①: recent backend log records + best-effort WSL launcher log tails."""
+    return {"backend": _ring.tail(lines), "files": tail_files(lines)}
 
 
 @app.get("/api/experiment/protocol")

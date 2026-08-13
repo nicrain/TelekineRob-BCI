@@ -73,6 +73,28 @@
   .btn:disabled { opacity:.4; cursor:not-allowed; }
   .btn.danger { color:var(--f-red); border-color:var(--f-red-dark); }
   .btn.danger:hover:not(:disabled) { background:rgba(218,41,28,.12); }
+
+  /* P17②: View Log modal */
+  .hidden { display:none !important; }
+  #log-modal {
+    position:fixed; inset:0; background:rgba(0,0,0,.55);
+    display:flex; align-items:center; justify-content:center; z-index:50;
+  }
+  #log-modal-box {
+    width:min(760px, 92vw); max-height:80vh; display:flex; flex-direction:column;
+    background:var(--f-surface); border:1px solid var(--f-border-strong);
+    border-radius:2px; box-shadow:0 8px 40px rgba(0,0,0,.4);
+  }
+  #log-modal-head {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:10px 12px; border-bottom:1px solid var(--f-border-strong);
+    font-family:var(--font-mono); font-size:13px;
+  }
+  #log-modal-body {
+    margin:0; padding:12px; overflow:auto; font-family:var(--font-mono);
+    font-size:11.5px; line-height:1.5; color:var(--f-text-secondary);
+    white-space:pre-wrap; word-break:break-word;
+  }
   @keyframes blink { 50% { opacity:.35; } }
 
   /* ---------- message bar ---------- */
@@ -124,7 +146,7 @@
     <div class="group-label">Operations</div>
     <div id="ops-list"></div>
     <div class="group-label">Log</div>
-    <button class="btn" id="log-btn" disabled>View Log</button>
+    <button class="btn" id="log-btn" disabled onclick="viewLog()">View Log</button>
   </aside>
 
   <!-- ============ Main: web GUI iframe + offline placeholder ============ -->
@@ -151,6 +173,20 @@
 </div>
 
 <div id="msg"><span class="close" onclick="hideMsg()">✕</span><span id="msg-text"></span></div>
+
+<!-- P17②: View Log modal (launcher_server.log + bridge_*.log tails) -->
+<div id="log-modal" class="hidden">
+  <div id="log-modal-box">
+    <div id="log-modal-head">
+      <span>Launcher Log</span>
+      <div>
+        <button class="btn" id="log-refresh-btn" onclick="viewLog()">↻</button>
+        <button class="btn" onclick="closeLog()">✕</button>
+      </div>
+    </div>
+    <pre id="log-modal-body"></pre>
+  </div>
+</div>
 
 <script>
 "use strict";
@@ -239,6 +275,24 @@ function showMsg(text, isError) {
   m.style.display = "block";
 }
 function hideMsg() { document.getElementById("msg").style.display = "none"; }
+
+/* ---------- View Log (P17②) ---------- */
+async function viewLog() {
+  const modal = document.getElementById("log-modal");
+  const body = document.getElementById("log-modal-body");
+  modal.classList.remove("hidden");
+  body.textContent = "Loading…";
+  try {
+    const r = await api("/log");
+    const logs = r.logs || [];
+    body.textContent = logs.length
+      ? logs.map((f) => `── ${f.source} ──\n${f.lines.join("\n")}`).join("\n\n")
+      : "(no log files yet — start the system to generate launcher/bridge logs)";
+  } catch (e) {
+    body.textContent = `Failed to load logs: ${e.message}`;
+  }
+}
+function closeLog() { document.getElementById("log-modal").classList.add("hidden"); }
 
 /* ---------- API ---------- */
 async function api(path, body) {

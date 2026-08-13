@@ -88,6 +88,7 @@ windows_launcher/
 - [ ] **浅色 danger 边框与 web_gui 一致**（`--f-red-dark:#B01E0A`）
 - [ ] 桥文件用的是同步后的最新版（改仓库后重新「启动系统」生效）
 - [ ] 重复点击幂等（已启动则跳过）
+- [ ] **View Log 按钮可点** → 弹出 `launcher_server.log` + `bridge_<device>.log` 尾部（P17②）
 
 ## 故障排查
 

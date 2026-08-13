@@ -89,6 +89,7 @@ frontend ←WebSocket→ backend ←rclpy→ ROS2 topics
 | `/ws/stream` | WS | Real-time signal data (channels, features, control) |
 | `/ws/teleop` | WS | Directional teleop commands |
 | `/ws/gazebo_frame` | WS | Gazebo camera proxy |
+| `/api/logs` | GET | Recent backend log records + WSL launcher log tails (log panel) |
 | `/api/experiment/protocol` | GET | Default protocol file (trials + shuffle + prompt_sec) |
 | `/api/experiment/configure` | POST | Start a session: metadata + protocol, shuffle applied |
 | `/api/experiment/state` | GET | Current phase / target / countdown / progress |
