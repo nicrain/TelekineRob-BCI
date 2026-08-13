@@ -78,9 +78,9 @@ def test_experiment_panel_metadata_autoconfig():
     # the panel consumes the config from PROPS, not the state poll
     assert "export default function ExperimentPanel({ config })" in panel
     assert "const cfg = config || {};" in panel
-    # read-only actual config display (values from the prop)
+    # read-only actual config display (values from the prop, capitalized)
     assert "cfg.metric || '…'" in panel
-    assert "(cfg.roles || []).join(' / ') || '…'" in panel
+    assert "(cfg.roles || []).map((r) => ROLE_LABEL[r] || r).join(' / ') || '…'" in panel
     # electrode only when a hybrid is present
     assert "cfg.has_hybrid && (" in panel
     assert 'value="dry"' in panel and 'value="wet"' in panel
@@ -105,27 +105,41 @@ def test_experiment_config_passed_as_live_prop():
 
 
 def test_experiment_panel_layout_markers():
-    """P21③: subject/session carry labels; the read-only config sits on the
-    same row to the right; names (mono small) and values (body) use distinct
-    fonts."""
+    """P21③ + P23: all fields vertical — mono-small label on top, body value
+    below; the read-only config uses the same fieldLabelStyle layout; every
+    label is Title Case."""
     panel = (APPJSX.parent / "ExperimentPanel.jsx").read_text(encoding="utf-8")
-    assert "fieldLabelStyle" in panel
-    assert "Subject" in panel and "Session #" in panel
-    assert "nameStyle" in panel and "valueStyle" in panel
-    assert "fontFamily: 'var(--font-mono)'" in panel   # name style (mono small)
+    assert "fieldLabelStyle" in panel and "valueStyle" in panel
+    assert "fontFamily: 'var(--font-mono)'" in panel      # label font (mono small)
+    assert "fontFamily: 'var(--font-display)'" in panel   # value font (body)
+    for label in ("Subject\n", "Session #\n", "Electrode\n", "Metric\n", "Mode\n", "Roles\n"):
+        assert label in panel, f"missing Title-Case label {label!r}"
+
+
+def test_experiment_panel_value_capitalization():
+    """P23③: raw config values are capitalized for display — Alpha/TBR/EI,
+    Dual/Single, Steering/Speed."""
+    panel = (APPJSX.parent / "ExperimentPanel.jsx").read_text(encoding="utf-8")
+    assert "METRIC_LABEL = { alpha: 'Alpha', tbr: 'TBR', ei: 'EI' }" in panel
+    assert "MODE_LABEL = { single: 'Single', dual: 'Dual' }" in panel
+    assert "ROLE_LABEL = { speed: 'Speed', steering: 'Steering' }" in panel
+    assert "METRIC_LABEL[cfg.metric]" in panel
+    assert "MODE_LABEL[cfg.device_mode]" in panel
+    assert "ROLE_LABEL[r]" in panel
 
 
 def test_experiment_panel_electrode_labeled_after_session():
-    """P22①: electrode is a labeled field AFTER session_no (subject →
+    """P22① + P23: electrode is a labeled field AFTER session_no (subject →
     session → electrode), dropdown carries only dry / wet (no placeholder)."""
     panel = (APPJSX.parent / "ExperimentPanel.jsx").read_text(encoding="utf-8")
     # source order: the Session # label precedes the electrode dropdown
     assert panel.index("Session #") < panel.index("value={meta.electrode || 'dry'}")
     # electrode is a label-wrapped field (own-line text), dry/wet only
-    assert "electrode\n" in panel
+    assert "Electrode\n" in panel
     assert 'value="dry"' in panel and 'value="wet"' in panel
-    assert "<option value=\"\">electrode</option>" not in panel
-    assert panel.count("style={fieldLabelStyle}") == 3  # Subject / Session # / electrode
+    assert 'value=""' not in panel  # no empty placeholder option anywhere
+    # 3 hand-filled + 3 read-only fields, all in the vertical labeled layout
+    assert panel.count("style={fieldLabelStyle}") == 6
 
 
 def test_experiment_panel_exit_and_reconfigure():

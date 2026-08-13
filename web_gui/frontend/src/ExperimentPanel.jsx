@@ -23,14 +23,16 @@ const inputStyle = {
   borderRadius: 2,
   fontFamily: 'var(--font-mono)',
 };
-// P21: name (mono small secondary) vs value (body) — distinct fonts.
+// P21/P23: fields are vertical — mono-small label on top, body value below.
 const fieldLabelStyle = {
   display: 'flex', flexDirection: 'column', gap: 4, fontSize: 11,
   color: 'var(--f-text-secondary)', fontFamily: 'var(--font-mono)',
 };
-const kvStyle = { display: 'flex', alignItems: 'baseline', gap: 6 };
-const nameStyle = { fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--f-text-secondary)' };
-const valueStyle = { fontSize: 14, color: 'var(--f-text-primary)' };
+const valueStyle = { fontSize: 14, color: 'var(--f-text-primary)', fontFamily: 'var(--font-display)' };
+// P23③: capitalize the raw config values for display.
+const METRIC_LABEL = { alpha: 'Alpha', tbr: 'TBR', ei: 'EI' };
+const MODE_LABEL = { single: 'Single', dual: 'Dual' };
+const ROLE_LABEL = { speed: 'Speed', steering: 'Steering' };
 
 export default function ExperimentPanel({ config }) {
   const [exp, setExp] = useState(null);
@@ -138,7 +140,7 @@ export default function ExperimentPanel({ config }) {
               </label>
               {cfg.has_hybrid && (
                 <label style={fieldLabelStyle}>
-                  electrode
+                  Electrode
                   <select style={{ ...inputStyle, minWidth: 88 }} value={meta.electrode || 'dry'}
                     onChange={(e) => setMetaField('electrode', e.target.value)}>
                     <option value="dry">dry</option>
@@ -147,10 +149,21 @@ export default function ExperimentPanel({ config }) {
                 </label>
               )}
             </div>
+            {/* P23: read-only config is VERTICAL like the hand-filled fields —
+                Title-Case label on top, capitalized value below. */}
             <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', paddingBottom: 6 }}>
-              <span style={kvStyle}><span style={nameStyle}>metric</span><span style={valueStyle}>{cfg.metric || '…'}</span></span>
-              <span style={kvStyle}><span style={nameStyle}>mode</span><span style={valueStyle}>{cfg.device_mode || '…'}</span></span>
-              <span style={kvStyle}><span style={nameStyle}>roles</span><span style={valueStyle}>{(cfg.roles || []).join(' / ') || '…'}</span></span>
+              <span style={fieldLabelStyle}>
+                Metric
+                <span style={valueStyle}>{METRIC_LABEL[cfg.metric] || cfg.metric || '…'}</span>
+              </span>
+              <span style={fieldLabelStyle}>
+                Mode
+                <span style={valueStyle}>{MODE_LABEL[cfg.device_mode] || cfg.device_mode || '…'}</span>
+              </span>
+              <span style={fieldLabelStyle}>
+                Roles
+                <span style={valueStyle}>{(cfg.roles || []).map((r) => ROLE_LABEL[r] || r).join(' / ') || '…'}</span>
+              </span>
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 12 }}>
