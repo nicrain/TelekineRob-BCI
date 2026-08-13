@@ -70,6 +70,26 @@ def test_experiment_panel_markers():
     assert "Rest — next trial" in panel
 
 
+def test_experiment_panel_metadata_autoconfig():
+    """P20: metric/device_mode are read-only from the live config (no hand
+    selects); electrode is conditional on has_hybrid; subject/session remain
+    hand-filled."""
+    panel = (APPJSX.parent / "ExperimentPanel.jsx").read_text(encoding="utf-8")
+    # read-only actual config display
+    assert "metric: {cfg ? cfg.metric : '…'}" in panel
+    assert "roles: {(cfg ? cfg.roles : []).join(' / ') || '…'}" in panel
+    # electrode only when a hybrid is present
+    assert "cfg.has_hybrid && (" in panel
+    assert 'value="dry"' in panel and 'value="wet"' in panel
+    # hand-filled: subject + session only
+    assert 'placeholder="Subject"' in panel
+    assert 'placeholder="Sess #"' in panel
+    # NO hand-filled metric / device_mode selects remain
+    assert "METRIC_OPTIONS" not in panel
+    assert "Single device" not in panel
+    assert "Dual device" not in panel
+
+
 # --- P17①: web GUI log panel ---------------------------------------------
 
 def test_log_panel_wired_into_app():

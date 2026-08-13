@@ -74,6 +74,43 @@ _METRIC_OPTS = {"alpha", "tbr", "ei"}
 _MODE_OPTS = {"single", "dual"}
 _PHASES = {PHASE_IDLE, PHASE_PROMPT, PHASE_TRIAL, PHASE_REST, PHASE_PAUSED, PHASE_DONE}
 
+# P20: physical device inferred from the configured LSL source id (the same
+# mapping the frontend uses). Used only to decide electrode applicability —
+# the recorded "devices" block keeps the raw source ids too.
+_SOURCE_TO_DEVICE = {"gtec_bci_core4": "headband", "gtec_hybrid_black": "hybrid"}
+
+
+def device_entry(role: str, lsl_source_id: str) -> dict:
+    """One configured device: role + physical device + the raw source id."""
+    source = (lsl_source_id or "").strip()
+    return {
+        "role": role,
+        "device": _SOURCE_TO_DEVICE.get(source, source),
+        "lsl_source_id": source,
+    }
+
+
+def config_summary(cfg) -> dict:
+    """Actual experiment config, derived from the live AppConfig (P20).
+
+    ``cfg`` is duck-typed (``.eeg`` / ``.eeg2`` / ``.launch``) so this stays
+    stdlib-importable — the caller passes the pydantic AppConfig instance.
+    This is the SOURCE OF TRUTH for the recorded metric/device_mode: the
+    panel no longer hand-fills them, eliminating mis-labelled records.
+    """
+    eeg = cfg.eeg
+    devices = [device_entry(eeg.role, eeg.lsl_source_id)]
+    eeg2 = getattr(cfg, "eeg2", None)
+    if eeg2 is not None:
+        devices.append(device_entry(eeg2.role, eeg2.lsl_source_id))
+    return {
+        "metric": eeg.policy,
+        "device_mode": "dual" if eeg2 is not None else "single",
+        "roles": [d["role"] for d in devices],
+        "devices": devices,
+        "has_hybrid": any(d["device"] == "hybrid" for d in devices),
+    }
+
 
 @dataclass
 class TrialSpec:
@@ -111,6 +148,29 @@ class SessionMeta:
             raise ValueError(f"metric must be in {sorted(_METRIC_OPTS)}, got {self.metric!r}")
         if self.device_mode not in _MODE_OPTS:
             raise ValueError(f"device_mode must be in {sorted(_MODE_OPTS)}, got {self.device_mode!r}")
+
+
+def session_meta_from_request(
+    subject: str,
+    role: str,
+    session_no: int,
+    electrode: str,
+    date: str,
+    summary: dict,
+) -> SessionMeta:
+    """Build the recorded SessionMeta from hand-filled fields + the ACTUAL
+    config summary (P20): metric/device_mode always come from ``summary``
+    (never the client); electrode is recorded only when a hybrid is present.
+    """
+    return SessionMeta(
+        subject=subject,
+        role=role,
+        session_no=int(session_no),
+        metric=summary["metric"],
+        device_mode=summary["device_mode"],
+        electrode=electrode if summary.get("has_hybrid") else "",
+        date=date,
+    )
 
 
 def _cond_key(trial: TrialSpec) -> tuple:
@@ -199,6 +259,7 @@ class ExperimentSession:
         self._trials_writer: Optional[csv.DictWriter] = None
         self._labels_fh: Any = None
         self._trials_fh: Any = None
+        self._system_summary: dict = {}
 
         self._phase = PHASE_IDLE
         self._trial_idx = 0
@@ -220,9 +281,15 @@ class ExperimentSession:
         shuffle: str = "none",
         seed: Optional[int] = None,
         prompt_sec: Optional[float] = None,
+        system_summary: Optional[dict] = None,
     ) -> str:
         """Start a new session: reset state, shuffle the protocol, write
-        session.json. Returns the session id."""
+        session.json. Returns the session id.
+
+        ``system_summary`` (P20) is the ACTUAL runtime config (metric /
+        device_mode / roles / devices) captured at configure time — recorded
+        verbatim into session.json so the label truth matches the run.
+        """
         ordered = shuffle_trials(trials, shuffle, seed=seed)
         with self._lock:
             self._close_files_locked()
@@ -231,6 +298,7 @@ class ExperimentSession:
             self._shuffle = shuffle
             self._seed = seed
             self._prompt_sec = float(prompt_sec if prompt_sec is not None else PROMPT_SEC)
+            self._system_summary = dict(system_summary or {})
 
             self._session_id = self._make_session_id(meta)
             self._session_dir = self._data_dir / self._session_id
@@ -256,15 +324,17 @@ class ExperimentSession:
         assert self._meta is not None and self._session_dir is not None
         payload = {
             "session_id": self._session_id,
+            # P20: meta = hand-filled operator fields only.
             "meta": {
                 "subject": self._meta.subject,
                 "role": self._meta.role,
                 "session_no": self._meta.session_no,
-                "metric": self._meta.metric,
-                "device_mode": self._meta.device_mode,
                 "electrode": self._meta.electrode,
                 "date": self._meta.date,
             },
+            # P20: system = the ACTUAL runtime config at configure time
+            # (metric/device_mode/roles/devices) — the label truth source.
+            "system": self._system_summary,
             "protocol": {
                 "shuffle": self._shuffle,
                 "seed": self._seed,

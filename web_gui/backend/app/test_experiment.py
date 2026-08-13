@@ -15,9 +15,12 @@ from app.experiment import (
     TrialSpec,
     TRIAL_CSV_COLUMNS,
     balanced_shuffle,
+    config_summary,
     load_protocol,
+    session_meta_from_request,
     shuffle_trials,
 )
+from app.models import AppConfig, EegConfig, EegConfig2
 
 
 class _Clock:
@@ -127,6 +130,85 @@ def test_balanced_shuffle_alternates_and_keeps_counts():
     for i in range(1, len(states)):
         run = run + 1 if states[i] == states[i - 1] else 1
         assert run <= 2, "balanced shuffle left a long run of one target"
+
+
+# --- P20: metadata auto-config from the live AppConfig --------------------
+
+def _cfg(eeg2=None) -> AppConfig:
+    return AppConfig(
+        eeg=EegConfig(role="speed", policy="tbr", lsl_source_id="gtec_bci_core4"),
+        eeg2=eeg2,
+    )
+
+
+def test_config_summary_single_headband():
+    """P20: metric/device_mode/roles/devices derived from the actual config —
+    a single headband yields no hybrid, no electrode."""
+    summary = config_summary(_cfg())
+    assert summary == {
+        "metric": "tbr",
+        "device_mode": "single",
+        "roles": ["speed"],
+        "devices": [{"role": "speed", "device": "headband", "lsl_source_id": "gtec_bci_core4"}],
+        "has_hybrid": False,
+    }
+
+
+def test_config_summary_dual_with_hybrid():
+    """Dual mode with a HybridBlack → has_hybrid True + both roles."""
+    eeg2 = EegConfig2(role="steering", policy="ei", lsl_source_id="gtec_hybrid_black")
+    summary = config_summary(_cfg(eeg2=eeg2))
+    assert summary["metric"] == "tbr"      # device-1 policy
+    assert summary["device_mode"] == "dual"
+    assert summary["roles"] == ["speed", "steering"]
+    assert summary["has_hybrid"] is True
+    assert any(d["device"] == "hybrid" for d in summary["devices"])
+
+
+def test_session_meta_derives_metric_and_mode_from_summary():
+    """P20: metric/device_mode are never client-supplied — they come from the
+    config summary; electrode is recorded when a hybrid is present."""
+    meta = session_meta_from_request(
+        subject="s", role="pilot", session_no=3, electrode="wet", date="2026-08-13",
+        summary={"metric": "ei", "device_mode": "dual", "has_hybrid": True},
+    )
+    assert meta.metric == "ei"
+    assert meta.device_mode == "dual"
+    assert meta.electrode == "wet"
+    assert meta.subject == "s" and meta.session_no == 3
+
+
+def test_session_meta_drops_electrode_without_hybrid():
+    """Single headband → electrode is forced empty even if the client sent one."""
+    meta = session_meta_from_request(
+        subject="s", role="pilot", session_no=1, electrode="wet", date="",
+        summary={"metric": "tbr", "device_mode": "single", "has_hybrid": False},
+    )
+    assert meta.electrode == ""
+
+
+def test_session_json_records_system_config(tmp_path):
+    """P20: session.json separates hand-filled meta from the ACTUAL system
+    config (metric/mode/roles/devices) recorded at configure time."""
+    clock = _Clock(0.0)
+    sess = ExperimentSession(data_dir=tmp_path, clock=clock)
+    summary = {
+        "metric": "ei", "device_mode": "dual", "roles": ["speed", "steering"],
+        "devices": [
+            {"role": "speed", "device": "headband", "lsl_source_id": "gtec_bci_core4"},
+            {"role": "steering", "device": "hybrid", "lsl_source_id": "gtec_hybrid_black"},
+        ],
+        "has_hybrid": True,
+    }
+    sess.configure(SessionMeta(subject="s", session_no=2, electrode="dry"), _trials(1), system_summary=summary)
+
+    data = json.loads((tmp_path / sess._session_id / "session.json").read_text(encoding="utf-8"))
+    assert data["system"] == summary                     # actual config recorded
+    assert data["meta"]["subject"] == "s"
+    assert data["meta"]["electrode"] == "dry"
+    assert "metric" not in data["meta"]                  # no hand metric field
+    assert "device_mode" not in data["meta"]             # no hand mode field
+    assert data["protocol"]["n_trials"] == 1
 
 
 # --- session state machine (E3) + recording (E1) + labels (E4) ------------

@@ -140,4 +140,5 @@
 
 | 日期 | 变更 | 影响 |
 |---|---|---|
+| 2026-08-13 | **P20 实验元数据自动配置**：metric/device_mode 去掉手填——Configure 时后端从实际 AppConfig 推导写入 session.json `system` 块（消除手填与实跑不一致的错标）；electrode 仅配置含 hybrid 时显示/记录；手填保留 subject/session_no | session.json 重构：`meta`（手填）+ `system`（实际配置 roles/devices/metric/mode）；面板只读显示实际配置 |
 | 2026-08-13 | **P16 完成 E1/E3/E4**（实验模式）：E1 `experiment.py` 按 §2 落盘——每 session 目录含 `session.json`（元数据+打乱协议）、`labels.csv`（E4 真值流，prompt 入口写入，wall_ts 与样本同钟）、`trials.csv`（每 trial 汇总）、`trial_<NNN>.csv`（每 trial 样本：真值三路+起止戳+alpha/tbr/ei+速度/转向意图+cmd_lin/ang+眨眼事件+latency_ms）；trial 状态机 prompt→trial→rest→next 纯墙钟惰性推进（无后台线程，暂停存剩余时长）；协议配置文件 `web_gui/backend/app/protocol.json`（shuffle none/random/balanced，balanced=条件桶轮转防连跑）；E4 真值在提示目标时写入。E3 `ExperimentPanel.jsx`（独立组件文件，O5 增量拆分起点）——配置 session→Start/Pause/Resume/Reset、当前目标大字显示、计时、trial 间休息提示、进度。`eeg_control_node` 分析消息加 `cmd_vel_ts`（§2 #6 延迟分析）；`RosBridge` 加原始帧处理器钩子 | 前端需用户侧 vite build 确认；实验数据落仓库根 `experiment_data/`（gitignored，`EXPERIMENT_DATA_DIR` 可覆盖）；测试 +11 后端（协议解析/shuffle 确定性/平衡/状态机/记录 schema/眨眼事件/标签对齐/暂停恢复）+4 前端标记 → 后端 58 passed、launcher 156 passed |

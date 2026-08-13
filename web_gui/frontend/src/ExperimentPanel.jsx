@@ -13,11 +13,6 @@ import { api } from './api';
 const PHASE_LABELS = { idle: 'Idle', prompt: 'Prompt', trial: 'Trial', rest: 'Rest', paused: 'Paused', done: 'Done' };
 const STATE_LABEL = { attention: 'ATTENTION', rest: 'REST' };
 const DIR_LABEL = { left: 'LEFT', right: 'RIGHT' };
-const METRIC_OPTIONS = [
-  { value: 'alpha', label: 'Alpha' },
-  { value: 'tbr',   label: 'TBR' },
-  { value: 'ei',    label: 'EI' },
-];
 
 const inputStyle = {
   padding: '6px 8px',
@@ -28,14 +23,20 @@ const inputStyle = {
   borderRadius: 2,
   fontFamily: 'var(--font-mono)',
 };
+// P20: read-only display of the ACTUAL config (metric/roles/devices) — never
+// hand-filled, derived by the backend from the live AppConfig.
+const readonlyStyle = {
+  fontSize: 12, color: 'var(--f-text-secondary)', fontFamily: 'var(--font-mono)',
+};
 
 export default function ExperimentPanel() {
   const [exp, setExp] = useState(null);
   const [protocol, setProtocol] = useState(null);
   const [busy, setBusy] = useState(false);
+  // P20: only subject / session_no are hand-filled; metric/device_mode come
+  // from the backend config, electrode only when a hybrid is present.
   const [meta, setMeta] = useState({
-    subject: '', role: 'pilot', session_no: 1, metric: 'tbr',
-    device_mode: 'single', electrode: '', date: '',
+    subject: '', role: 'pilot', session_no: 1, electrode: '', date: '',
   });
 
   function refresh() {
@@ -80,6 +81,7 @@ export default function ExperimentPanel() {
 
   const phase = exp?.phase || 'idle';
   const target = exp?.target || null;
+  const cfg = exp?.config || null;
   const idx = (exp?.trial_idx ?? 0) + 1;
   const total = exp?.n_trials ?? 0;
   const remaining = Math.ceil(exp?.remaining_sec ?? 0);
@@ -110,15 +112,20 @@ export default function ExperimentPanel() {
               onChange={(e) => setMetaField('subject', e.target.value)} />
             <input style={{ ...inputStyle, width: 64 }} type="number" min="1" placeholder="Sess #"
               value={meta.session_no} onChange={(e) => setMetaField('session_no', Number(e.target.value) || 1)} />
-            <select style={inputStyle} value={meta.metric} onChange={(e) => setMetaField('metric', e.target.value)}>
-              {METRIC_OPTIONS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
-            </select>
-            <select style={inputStyle} value={meta.device_mode} onChange={(e) => setMetaField('device_mode', e.target.value)}>
-              <option value="single">Single device</option>
-              <option value="dual">Dual device</option>
-            </select>
-            <input style={inputStyle} placeholder="electrode (dry/wet)" value={meta.electrode}
-              onChange={(e) => setMetaField('electrode', e.target.value)} />
+          </div>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 8, alignItems: 'center' }}>
+            {/* P20: read-only — the recorded metric/mode/roles come from the
+                live config, never hand-entered. */}
+            <span style={readonlyStyle}>metric: {cfg ? cfg.metric : '…'} · mode: {cfg ? cfg.device_mode : '…'}</span>
+            <span style={readonlyStyle}>roles: {(cfg ? cfg.roles : []).join(' / ') || '…'}</span>
+            {cfg && cfg.has_hybrid && (
+              <select style={inputStyle} value={meta.electrode}
+                onChange={(e) => setMetaField('electrode', e.target.value)}>
+                <option value="">electrode</option>
+                <option value="dry">dry</option>
+                <option value="wet">wet</option>
+              </select>
+            )}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 12 }}>
             <button className="btn btn-cta" disabled={busy} onClick={configure}>Configure session</button>

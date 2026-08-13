@@ -109,12 +109,12 @@ class ConfigPatch(BaseModel):
 
 
 class ExperimentMeta(BaseModel):
+    """Hand-filled operator metadata only (P20) — metric / device_mode are
+    derived from the live config at configure time, never hand-entered."""
     subject: str = ""
     role: str = "pilot"
     session_no: int = 1
-    metric: Literal["alpha", "tbr", "ei"] = "tbr"
-    device_mode: Literal["single", "dual"] = "single"
-    electrode: str = ""
+    electrode: str = ""  # only meaningful when the config includes a hybrid
     date: str = ""
 
 

@@ -18,9 +18,10 @@ from .config_store import get_config_envelope, init_store, patch_config
 from .experiment import (
     DEFAULT_PROTOCOL,
     ExperimentSession,
-    SessionMeta,
     TrialSpec,
+    config_summary,
     load_protocol,
+    session_meta_from_request,
     trial_dict,
 )
 from .logs import RingBufferHandler, tail_files
@@ -334,9 +335,22 @@ def exp_protocol() -> dict[str, Any]:
 
 @app.post("/api/experiment/configure")
 def exp_configure(req: ExperimentConfigureRequest) -> dict[str, Any]:
-    """Start a session: session metadata + protocol (inline trials, or the
-    default protocol file), shuffle applied, session files opened."""
-    meta = SessionMeta(**req.meta.model_dump())
+    """Start a session: hand-filled metadata + protocol (inline trials, or the
+    default protocol file), shuffle applied, session files opened.
+
+    P20: metric / device_mode are NOT accepted from the client — they are
+    derived from the live AppConfig so the recorded truth matches the actual
+    run. electrode is only recorded when the config includes a hybrid.
+    """
+    summary = config_summary(get_config_envelope().config)
+    meta = session_meta_from_request(
+        subject=req.meta.subject,
+        role=req.meta.role,
+        session_no=req.meta.session_no,
+        electrode=req.meta.electrode,
+        date=req.meta.date,
+        summary=summary,
+    )
     if req.trials is not None:
         trials = [TrialSpec(**t.model_dump()) for t in req.trials]
         shuffle = req.shuffle or "none"
@@ -347,13 +361,17 @@ def exp_configure(req: ExperimentConfigureRequest) -> dict[str, Any]:
         shuffle = req.shuffle or proto["shuffle"]
         seed = req.seed if req.seed is not None else proto["seed"]
         prompt_sec = req.prompt_sec if req.prompt_sec is not None else proto["prompt_sec"]
-    session_id = _experiment.configure(meta, trials, shuffle, seed, prompt_sec)
-    return {"ok": True, "session_id": session_id, "state": _experiment.state()}
+    session_id = _experiment.configure(meta, trials, shuffle, seed, prompt_sec, system_summary=summary)
+    st = _experiment.state()
+    st["config"] = summary
+    return {"ok": True, "session_id": session_id, "state": st}
 
 
 @app.get("/api/experiment/state")
 def exp_state() -> dict[str, Any]:
-    return _experiment.state()
+    st = _experiment.state()
+    st["config"] = config_summary(get_config_envelope().config)  # P20: live, read-only
+    return st
 
 
 @app.post("/api/experiment/start")
