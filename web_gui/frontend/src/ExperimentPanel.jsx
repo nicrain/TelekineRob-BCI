@@ -36,6 +36,10 @@ export default function ExperimentPanel({ config }) {
   const [exp, setExp] = useState(null);
   const [protocol, setProtocol] = useState(null);
   const [busy, setBusy] = useState(false);
+  // P22②: after Configure the session view shows; formOpen lets the operator
+  // EXIT back to the form (to re-configure / open a new session) — no one-way
+  // door.
+  const [formOpen, setFormOpen] = useState(false);
   // P20/P21: only subject / session_no are hand-filled; metric/device_mode/
   // roles/devices/has_hybrid come from the LIVE App.jsx 01 config prop (no
   // backend poll); electrode only when a hybrid is present.
@@ -64,12 +68,14 @@ export default function ExperimentPanel({ config }) {
     setBusy(true);
     try {
       // P21: send the live 01 config; the backend validates it and records it
-      // into session.json's system block.
+      // into session.json's system block. P22②: re-configuring is allowed —
+      // the backend starts a fresh session; flip back to the session view.
       const r = await api.post('/api/experiment/configure', {
         meta: { ...meta, date: new Date().toISOString().slice(0, 10) },
         config: cfg,
       });
       if (r.data?.state) setExp(r.data.state);
+      setFormOpen(false);
     } catch (e) {
       window.alert(`Configure failed: ${e.message}`);
     }
@@ -112,11 +118,12 @@ export default function ExperimentPanel({ config }) {
         )}
       </div>
 
-      {!configured && (
+      {(!configured || formOpen) && (
         <div>
           {/* ③: hand-filled fields carry labels; the read-only actual config
               sits on the SAME row to the right, names in mono small,
-              values in body text. */}
+              values in body text. P22①: electrode follows session_no with a
+              label; its dropdown carries only dry / wet. */}
           <div style={{ display: 'flex', gap: 28, flexWrap: 'wrap', marginTop: 10, alignItems: 'flex-end' }}>
             <div style={{ display: 'flex', gap: 12 }}>
               <label style={fieldLabelStyle}>
@@ -129,31 +136,40 @@ export default function ExperimentPanel({ config }) {
                 <input style={{ ...inputStyle, width: 64 }} type="number" min="1"
                   value={meta.session_no} onChange={(e) => setMetaField('session_no', Number(e.target.value) || 1)} />
               </label>
+              {cfg.has_hybrid && (
+                <label style={fieldLabelStyle}>
+                  electrode
+                  <select style={{ ...inputStyle, minWidth: 88 }} value={meta.electrode || 'dry'}
+                    onChange={(e) => setMetaField('electrode', e.target.value)}>
+                    <option value="dry">dry</option>
+                    <option value="wet">wet</option>
+                  </select>
+                </label>
+              )}
             </div>
             <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', paddingBottom: 6 }}>
               <span style={kvStyle}><span style={nameStyle}>metric</span><span style={valueStyle}>{cfg.metric || '…'}</span></span>
               <span style={kvStyle}><span style={nameStyle}>mode</span><span style={valueStyle}>{cfg.device_mode || '…'}</span></span>
               <span style={kvStyle}><span style={nameStyle}>roles</span><span style={valueStyle}>{(cfg.roles || []).join(' / ') || '…'}</span></span>
-              {cfg.has_hybrid && (
-                <select style={inputStyle} value={meta.electrode}
-                  onChange={(e) => setMetaField('electrode', e.target.value)}>
-                  <option value="">electrode</option>
-                  <option value="dry">dry</option>
-                  <option value="wet">wet</option>
-                </select>
-              )}
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 12 }}>
-            <button className="btn btn-cta" disabled={busy} onClick={configure}>Configure session</button>
+            <button className="btn btn-cta" disabled={busy} onClick={configure}>
+              {configured ? 'Configure new session' : 'Configure session'}
+            </button>
             <span style={{ fontSize: 12, color: 'var(--f-text-secondary)' }}>
               {protocol ? `${protocol.n_trials} trials · shuffle ${protocol.shuffle} · ${protocol.prompt_sec}s prompt` : 'loading protocol…'}
             </span>
+            {configured && exp?.session_id && (
+              <span style={{ fontSize: 12, color: 'var(--f-text-secondary)', fontFamily: 'var(--font-mono)' }}>
+                current session: {exp.session_id}
+              </span>
+            )}
           </div>
         </div>
       )}
 
-      {configured && (
+      {configured && !formOpen && (
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 10, flexWrap: 'wrap' }}>
             <span style={phaseBadgeStyle}>{PHASE_LABELS[phase]}</span>
@@ -170,6 +186,9 @@ export default function ExperimentPanel({ config }) {
               ? <button className="btn btn-cta" onClick={() => action('/api/experiment/start')}>Start</button>
               : null}
             <button className="btn btn-ghost" onClick={() => action('/api/experiment/reset')}>Reset</button>
+            {/* P22②: exit the experiment session back to the form — the
+                session stays on disk; Configure can open a new one. */}
+            <button className="btn btn-ghost" onClick={() => setFormOpen(true)}>Exit</button>
           </div>
 
           {target && targetOn && (

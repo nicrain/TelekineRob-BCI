@@ -115,6 +115,32 @@ def test_experiment_panel_layout_markers():
     assert "fontFamily: 'var(--font-mono)'" in panel   # name style (mono small)
 
 
+def test_experiment_panel_electrode_labeled_after_session():
+    """P22①: electrode is a labeled field AFTER session_no (subject →
+    session → electrode), dropdown carries only dry / wet (no placeholder)."""
+    panel = (APPJSX.parent / "ExperimentPanel.jsx").read_text(encoding="utf-8")
+    # source order: the Session # label precedes the electrode dropdown
+    assert panel.index("Session #") < panel.index("value={meta.electrode || 'dry'}")
+    # electrode is a label-wrapped field (own-line text), dry/wet only
+    assert "electrode\n" in panel
+    assert 'value="dry"' in panel and 'value="wet"' in panel
+    assert "<option value=\"\">electrode</option>" not in panel
+    assert panel.count("style={fieldLabelStyle}") == 3  # Subject / Session # / electrode
+
+
+def test_experiment_panel_exit_and_reconfigure():
+    """P22②: the session view has an Exit button back to the form; Configure
+    stays reachable (Configure new session) — no one-way door."""
+    panel = (APPJSX.parent / "ExperimentPanel.jsx").read_text(encoding="utf-8")
+    assert "formOpen" in panel
+    assert "(!configured || formOpen)" in panel       # form reachable again
+    assert "configured && !formOpen" in panel         # session view hides the form
+    assert "setFormOpen(true)" in panel               # Exit opens the form
+    assert "setFormOpen(false)" in panel              # Configure returns to the view
+    assert ">Exit<" in panel
+    assert "Configure new session" in panel
+
+
 def _extract_function(src: str, name: str) -> str:
     """Brace-matched extraction of a top-level function (handles nested {}).
 
