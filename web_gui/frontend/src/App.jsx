@@ -149,6 +149,26 @@ const SOURCE_ID_TO_BRAND = {
 };
 
 /**
+ * P21: the experiment's ACTUAL run config, derived from the live App 01 state.
+ * Pure (no React, no external deps) so it is Node-testable; the panel receives
+ * it as a prop — editing 01 re-renders App, so the panel updates instantly
+ * with NO backend poll. has_hybrid comes from the device selection (a single
+ * hybrid counts even before LSL connects — the backend's lsl_source_id can be
+ * empty until a save).
+ */
+function experimentConfigFromApp({ role1, role2, metric, device1, device2, source1, source2, dualDevice }) {
+  const devices = [{ role: role1, device: device1, lsl_source_id: source1 || '' }];
+  if (dualDevice) devices.push({ role: role2, device: device2, lsl_source_id: source2 || '' });
+  return {
+    metric,
+    device_mode: dualDevice ? 'dual' : 'single',
+    roles: devices.map((d) => d.role),
+    devices,
+    has_hybrid: devices.some((d) => d.device === 'hybrid'),
+  };
+}
+
+/**
  * Per-device calibration state (design §5.5.1/§5.5.4, O5 continuation).
  * Instantiate once per device: useCalibration('eeg', …) / useCalibration('eeg2', …).
  *
@@ -780,6 +800,17 @@ export default function App() {
   /* ── Derived ────────────────────────────────────────── */
   const isControlMode = inputMode === 'teleop';
   const activeCalib = calib1.calibrating ? calib1 : (calib2.calibrating ? calib2 : null);
+  // P21: the experiment panel's read-only config comes from THIS live 01
+  // state (props), not a backend poll — editing 01 re-renders App and the
+  // panel updates instantly. has_hybrid covers a single-device hybrid.
+  const experimentConfig = experimentConfigFromApp({
+    role1, role2, metric,
+    device1: eegBrand === 'gtec_hybrid' ? 'hybrid' : 'headband',
+    device2: eegBrand2 === 'gtec_hybrid' ? 'hybrid' : 'headband',
+    source1: BRAND_TO_SOURCE_ID[eegBrand] || '',
+    source2: BRAND_TO_SOURCE_ID[eegBrand2] || '',
+    dualDevice,
+  });
 
   /* ── Control token (O17) ────────────────────────────── */
   // Fetch the configured control token once at startup and keep it in
@@ -1412,7 +1443,7 @@ export default function App() {
       )}
 
       {/* ── SECTION 4: Experiment mode (P16/E3) ────────── */}
-      <ExperimentPanel />
+      <ExperimentPanel config={experimentConfig} />
 
       {/* ── SECTION 5: Logs (P17①) ─────────────────────── */}
       <LogPanel />

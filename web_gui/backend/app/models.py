@@ -126,8 +126,39 @@ class ExperimentTrial(BaseModel):
     rest_sec: float = 10.0
 
 
+class ExperimentDeviceSummary(BaseModel):
+    role: Literal["speed", "steering"] = "speed"
+    device: str = ""          # "headband" | "hybrid" | raw source fallback
+    lsl_source_id: str = ""   # raw source id, kept for cross-checking (§2)
+
+
+class ExperimentConfigSummary(BaseModel):
+    """Actual run config supplied by the frontend (P21) — the backend
+    VALIDATES it and records it verbatim into session.json's ``system`` block.
+    metric/device_mode are derived from the live App.jsx 01 state, never
+    hand-entered; has_hybrid comes from the device selection (works for a
+    single hybrid even before LSL connects)."""
+
+    metric: Literal["alpha", "tbr", "ei"] = "tbr"
+    device_mode: Literal["single", "dual"] = "single"
+    roles: list[str] = []
+    devices: list[ExperimentDeviceSummary] = []
+    has_hybrid: bool = False
+
+    @model_validator(mode="after")
+    def _consistent(self) -> "ExperimentConfigSummary":
+        if self.device_mode == "dual" and len(self.devices) != 2:
+            raise ValueError("dual mode requires exactly 2 devices")
+        if self.device_mode == "single" and len(self.devices) != 1:
+            raise ValueError("single mode requires exactly 1 device")
+        if self.has_hybrid != any(d.device == "hybrid" for d in self.devices):
+            raise ValueError("has_hybrid inconsistent with the configured devices")
+        return self
+
+
 class ExperimentConfigureRequest(BaseModel):
     meta: ExperimentMeta = Field(default_factory=ExperimentMeta)
+    config: ExperimentConfigSummary | None = None   # P21: frontend actual config
     trials: list[ExperimentTrial] | None = None
     shuffle: str = ""          # "" → protocol file default
     seed: int | None = None

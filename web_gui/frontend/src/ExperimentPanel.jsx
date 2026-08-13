@@ -23,18 +23,22 @@ const inputStyle = {
   borderRadius: 2,
   fontFamily: 'var(--font-mono)',
 };
-// P20: read-only display of the ACTUAL config (metric/roles/devices) — never
-// hand-filled, derived by the backend from the live AppConfig.
-const readonlyStyle = {
-  fontSize: 12, color: 'var(--f-text-secondary)', fontFamily: 'var(--font-mono)',
+// P21: name (mono small secondary) vs value (body) — distinct fonts.
+const fieldLabelStyle = {
+  display: 'flex', flexDirection: 'column', gap: 4, fontSize: 11,
+  color: 'var(--f-text-secondary)', fontFamily: 'var(--font-mono)',
 };
+const kvStyle = { display: 'flex', alignItems: 'baseline', gap: 6 };
+const nameStyle = { fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--f-text-secondary)' };
+const valueStyle = { fontSize: 14, color: 'var(--f-text-primary)' };
 
-export default function ExperimentPanel() {
+export default function ExperimentPanel({ config }) {
   const [exp, setExp] = useState(null);
   const [protocol, setProtocol] = useState(null);
   const [busy, setBusy] = useState(false);
-  // P20: only subject / session_no are hand-filled; metric/device_mode come
-  // from the backend config, electrode only when a hybrid is present.
+  // P20/P21: only subject / session_no are hand-filled; metric/device_mode/
+  // roles/devices/has_hybrid come from the LIVE App.jsx 01 config prop (no
+  // backend poll); electrode only when a hybrid is present.
   const [meta, setMeta] = useState({
     subject: '', role: 'pilot', session_no: 1, electrode: '', date: '',
   });
@@ -59,8 +63,11 @@ export default function ExperimentPanel() {
   async function configure() {
     setBusy(true);
     try {
+      // P21: send the live 01 config; the backend validates it and records it
+      // into session.json's system block.
       const r = await api.post('/api/experiment/configure', {
         meta: { ...meta, date: new Date().toISOString().slice(0, 10) },
+        config: cfg,
       });
       if (r.data?.state) setExp(r.data.state);
     } catch (e) {
@@ -81,7 +88,7 @@ export default function ExperimentPanel() {
 
   const phase = exp?.phase || 'idle';
   const target = exp?.target || null;
-  const cfg = exp?.config || null;
+  const cfg = config || {};   // P21: the LIVE App.jsx 01 config (props)
   const idx = (exp?.trial_idx ?? 0) + 1;
   const total = exp?.n_trials ?? 0;
   const remaining = Math.ceil(exp?.remaining_sec ?? 0);
@@ -107,25 +114,35 @@ export default function ExperimentPanel() {
 
       {!configured && (
         <div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
-            <input style={inputStyle} placeholder="Subject" value={meta.subject}
-              onChange={(e) => setMetaField('subject', e.target.value)} />
-            <input style={{ ...inputStyle, width: 64 }} type="number" min="1" placeholder="Sess #"
-              value={meta.session_no} onChange={(e) => setMetaField('session_no', Number(e.target.value) || 1)} />
-          </div>
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 8, alignItems: 'center' }}>
-            {/* P20: read-only — the recorded metric/mode/roles come from the
-                live config, never hand-entered. */}
-            <span style={readonlyStyle}>metric: {cfg ? cfg.metric : '…'} · mode: {cfg ? cfg.device_mode : '…'}</span>
-            <span style={readonlyStyle}>roles: {(cfg ? cfg.roles : []).join(' / ') || '…'}</span>
-            {cfg && cfg.has_hybrid && (
-              <select style={inputStyle} value={meta.electrode}
-                onChange={(e) => setMetaField('electrode', e.target.value)}>
-                <option value="">electrode</option>
-                <option value="dry">dry</option>
-                <option value="wet">wet</option>
-              </select>
-            )}
+          {/* ③: hand-filled fields carry labels; the read-only actual config
+              sits on the SAME row to the right, names in mono small,
+              values in body text. */}
+          <div style={{ display: 'flex', gap: 28, flexWrap: 'wrap', marginTop: 10, alignItems: 'flex-end' }}>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <label style={fieldLabelStyle}>
+                Subject
+                <input style={inputStyle} placeholder="e.g. S01" value={meta.subject}
+                  onChange={(e) => setMetaField('subject', e.target.value)} />
+              </label>
+              <label style={fieldLabelStyle}>
+                Session #
+                <input style={{ ...inputStyle, width: 64 }} type="number" min="1"
+                  value={meta.session_no} onChange={(e) => setMetaField('session_no', Number(e.target.value) || 1)} />
+              </label>
+            </div>
+            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', paddingBottom: 6 }}>
+              <span style={kvStyle}><span style={nameStyle}>metric</span><span style={valueStyle}>{cfg.metric || '…'}</span></span>
+              <span style={kvStyle}><span style={nameStyle}>mode</span><span style={valueStyle}>{cfg.device_mode || '…'}</span></span>
+              <span style={kvStyle}><span style={nameStyle}>roles</span><span style={valueStyle}>{(cfg.roles || []).join(' / ') || '…'}</span></span>
+              {cfg.has_hybrid && (
+                <select style={inputStyle} value={meta.electrode}
+                  onChange={(e) => setMetaField('electrode', e.target.value)}>
+                  <option value="">electrode</option>
+                  <option value="dry">dry</option>
+                  <option value="wet">wet</option>
+                </select>
+              )}
+            </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 12 }}>
             <button className="btn btn-cta" disabled={busy} onClick={configure}>Configure session</button>

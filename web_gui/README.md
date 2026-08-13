@@ -103,9 +103,10 @@ Drive a protocol of ground-truth-labelled trials from the web GUI
 `<EXPERIMENT_DATA_DIR>/<session_id>/`:
 
 - `session.json` — hand-filled `meta` (§2 #7: subject/role/session/electrode/date)
-  + the **actual runtime `system` config** at configure time (metric /
-  device_mode / roles / devices — P20: never hand-entered, so the label
-  truth matches the run) + the shuffled protocol (reproducibility)
+  + the **actual runtime `system` config** (metric / device_mode / roles /
+  devices) — supplied by the frontend from its live 01 state and validated
+  by the backend (P20/P21: never hand-entered; has_hybrid covers a
+  single-device hybrid) + the shuffled protocol (reproducibility)
 - `labels.csv` — **E4 label stream**: one row per trial at prompt entry,
   `wall_ts` on the same wall clock as the samples' `row_ts` (EEG-aligned)
 - `trials.csv` — one summary row per trial: truth (§2 #4) + prompt/start/end

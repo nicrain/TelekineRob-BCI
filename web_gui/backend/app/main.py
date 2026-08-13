@@ -342,7 +342,14 @@ def exp_configure(req: ExperimentConfigureRequest) -> dict[str, Any]:
     derived from the live AppConfig so the recorded truth matches the actual
     run. electrode is only recorded when the config includes a hybrid.
     """
-    summary = config_summary(get_config_envelope().config)
+    # P21: the frontend supplies its ACTUAL run config (validated by the
+    # pydantic model: literals + device-count + has_hybrid consistency) and
+    # it is recorded verbatim into session.json's system block. A direct API
+    # caller without a config falls back to the backend AppConfig summary.
+    if req.config is not None:
+        summary = req.config.model_dump()
+    else:
+        summary = config_summary(get_config_envelope().config)
     meta = session_meta_from_request(
         subject=req.meta.subject,
         role=req.meta.role,
@@ -362,16 +369,14 @@ def exp_configure(req: ExperimentConfigureRequest) -> dict[str, Any]:
         seed = req.seed if req.seed is not None else proto["seed"]
         prompt_sec = req.prompt_sec if req.prompt_sec is not None else proto["prompt_sec"]
     session_id = _experiment.configure(meta, trials, shuffle, seed, prompt_sec, system_summary=summary)
-    st = _experiment.state()
-    st["config"] = summary
-    return {"ok": True, "session_id": session_id, "state": st}
+    return {"ok": True, "session_id": session_id, "state": _experiment.state()}
 
 
 @app.get("/api/experiment/state")
 def exp_state() -> dict[str, Any]:
-    st = _experiment.state()
-    st["config"] = config_summary(get_config_envelope().config)  # P20: live, read-only
-    return st
+    # P21: the config display is frontend-real-time (App.jsx 01 props), not a
+    # backend poll — state() carries only the trial machine.
+    return _experiment.state()
 
 
 @app.post("/api/experiment/start")

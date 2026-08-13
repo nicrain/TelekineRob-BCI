@@ -20,7 +20,7 @@ from app.experiment import (
     session_meta_from_request,
     shuffle_trials,
 )
-from app.models import AppConfig, EegConfig, EegConfig2
+from app.models import AppConfig, EegConfig, EegConfig2, ExperimentConfigSummary
 
 
 class _Clock:
@@ -139,6 +139,42 @@ def _cfg(eeg2=None) -> AppConfig:
         eeg=EegConfig(role="speed", policy="tbr", lsl_source_id="gtec_bci_core4"),
         eeg2=eeg2,
     )
+
+
+def test_config_summary_model_validates_frontend_payload():
+    """P21: the frontend-supplied run config is validated — dual requires 2
+    devices, has_hybrid must be consistent with the devices."""
+    good = ExperimentConfigSummary(
+        metric="tbr", device_mode="dual", roles=["speed", "steering"],
+        devices=[
+            {"role": "speed", "device": "headband", "lsl_source_id": "gtec_bci_core4"},
+            {"role": "steering", "device": "hybrid", "lsl_source_id": "gtec_hybrid_black"},
+        ],
+        has_hybrid=True,
+    )
+    assert good.device_mode == "dual"
+
+    # dual declared but only one device → rejected
+    with pytest.raises(ValueError):
+        ExperimentConfigSummary(
+            device_mode="dual",
+            devices=[{"role": "speed", "device": "headband"}],
+            has_hybrid=False,
+        )
+    # hybrid present but has_hybrid=False → rejected
+    with pytest.raises(ValueError):
+        ExperimentConfigSummary(
+            device_mode="single",
+            devices=[{"role": "speed", "device": "hybrid"}],
+            has_hybrid=False,
+        )
+    # single-device hybrid with has_hybrid=True → valid (the P21 fix)
+    single_hybrid = ExperimentConfigSummary(
+        device_mode="single",
+        devices=[{"role": "speed", "device": "hybrid", "lsl_source_id": "gtec_hybrid_black"}],
+        has_hybrid=True,
+    )
+    assert single_hybrid.has_hybrid is True
 
 
 def test_config_summary_single_headband():
