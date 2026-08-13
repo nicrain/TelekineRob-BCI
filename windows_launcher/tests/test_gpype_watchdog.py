@@ -236,6 +236,100 @@ def test_probe_resolve_failure_is_not_alive(monkeypatch):
     assert _probe().data_arrived() is False
 
 
+# --- P18: probe must never TypeError / crash the bridge ------------------
+
+class _FakeInletRaises:
+    """pull_sample itself raises (inlet dropped mid-read)."""
+
+    def pull_sample(self, timeout=None):
+        raise RuntimeError("inlet gone")
+
+
+def test_probe_none_timestamp_is_not_alive(monkeypatch):
+    """P18①: pull_sample returning timestamp=None (stream interrupt / timeout
+    boundary) must not TypeError _fresh — it is simply 'not provably fresh'."""
+    alive = _FakeStream()
+    # scan path: _resolve_alive's _fresh(inlet.pull_sample()) with ts=None
+    pylsl = _FakePylsl([(alive, _FakeInlet(True, None))])
+    monkeypatch.setitem(sys.modules, "pylsl", pylsl)
+
+    assert _probe().data_arrived() is False  # no exception, no false alive
+
+
+def test_probe_non_numeric_timestamp_is_not_alive(monkeypatch):
+    """P18①: a non-numeric timestamp is 'no data', never a crash."""
+    alive = _FakeStream()
+    pylsl = _FakePylsl([(alive, _FakeInlet(True, "bad-ts"))])
+    monkeypatch.setitem(sys.modules, "pylsl", pylsl)
+
+    assert _probe().data_arrived() is False
+
+
+def test_probe_data_arrived_survives_none_timestamp(monkeypatch):
+    """P18②: the re-read path (data_arrived with a latched inlet) tolerates a
+    None timestamp without raising — returns False and keeps counting."""
+    alive = _FakeStream()
+    inlet = _FakeInlet(True, None)
+    pylsl = _FakePylsl([(alive, inlet)])
+    monkeypatch.setitem(sys.modules, "pylsl", pylsl)
+
+    probe = _probe()
+    probe._inlet = inlet  # skip the initial scan → exercise the re-read path
+
+    assert probe.data_arrived() is False
+    assert probe.data_arrived() is False  # keeps monitoring, no crash
+
+
+def test_data_arrived_probe_exception_is_no_data(monkeypatch):
+    """P18②: ANY probe exception (not just None ts) is 'no data' — it must
+    not propagate out of data_arrived."""
+    alive = _FakeStream()
+    inlet = _FakeInletRaises()
+    pylsl = _FakePylsl([(alive, inlet)])
+    monkeypatch.setitem(sys.modules, "pylsl", pylsl)
+
+    probe = _probe()
+    probe._inlet = inlet
+
+    assert probe.data_arrived() is False  # swallowed, not raised
+
+
+class _ProbeRaisingApi:
+    """data_arrived always raises the real-device TypeError — the monitoring
+    loop must survive it (P18③ backstop)."""
+
+    def __init__(self):
+        self.events: list[str] = []
+
+    def build(self) -> None:
+        self.events.append("build")
+
+    def start(self) -> None:
+        self.events.append("start")
+
+    def teardown(self) -> None:
+        self.events.append("teardown")
+
+    def data_arrived(self) -> bool:
+        self.events.append("data")
+        raise TypeError("unsupported operand type(s) for -: 'float' and 'NoneType'")
+
+
+def test_run_survives_probe_exception():
+    """P18③: a probe exception inside the monitoring loop must never kill the
+    bridge — treated as 'no data' and the loop keeps monitoring."""
+    api = _ProbeRaisingApi()
+    sleep = RecordingSleep(calls_before_stop=4)
+    ctl = bridge.BridgeController(api, stall_sec=0, grace_sec=0, sleep=sleep)
+
+    with pytest.raises(KeyboardInterrupt):
+        ctl.run()
+
+    assert api.events[:2] == ["build", "start"]
+    assert api.events.count("teardown") == 0   # never died / rebuilt
+    assert api.events.count("data") >= 3       # kept polling the probe
+
+
 # --- BridgeController: rebuild trigger ----------------------------------
 
 def test_no_rebuild_while_data_flows():

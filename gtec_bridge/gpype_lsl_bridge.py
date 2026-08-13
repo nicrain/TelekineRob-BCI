@@ -141,6 +141,12 @@ class LslWatchdogProbe:
         if sample is None:
             return False
         _, timestamp = sample
+        # P18①: pull_sample can return timestamp=None on the stream-interrupt /
+        # timeout boundary — ``self._now() - None`` would TypeError and the
+        # probe must never crash the bridge. A missing/non-numeric timestamp
+        # simply means "not provably fresh" → no data.
+        if not isinstance(timestamp, (int, float)):
+            return False
         return self._now() - timestamp <= self._freshness_sec
 
     def data_arrived(self) -> bool:
@@ -155,9 +161,13 @@ class LslWatchdogProbe:
             return True  # the scan already confirmed a FRESH sample flows
         try:
             sample = self._inlet.pull_sample(timeout=self.timeout)
+            fresh = self._fresh(sample)
         except Exception:
-            sample = None
-        if self._fresh(sample):
+            # P18②: any probe failure (incl. a None-timestamp TypeError on the
+            # stream boundary) is "no data this round" — keep monitoring, never
+            # let the probe crash the bridge.
+            fresh = False
+        if fresh:
             self._empty_reads = 0
             return True
         self._empty_reads += 1
@@ -292,7 +302,15 @@ class BridgeController:
         stalls = 0
         while True:
             self._sleep(self._poll_sec)
-            if self.api.data_arrived():
+            try:
+                arrived = self.api.data_arrived()
+            except Exception as exc:
+                # P18③ backstop: a probe exception must never kill the bridge —
+                # treat it as "no data" this round and keep the monitoring loop
+                # alive (initial connect still fails fast via build/start).
+                print(f"[WARN] probe failed, ignored: {exc}")
+                arrived = False
+            if arrived:
                 self.watchdog.mark_data()
                 continue
             if self._now() < self._grace_until:
