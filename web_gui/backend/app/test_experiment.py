@@ -239,8 +239,8 @@ def test_session_meta_carries_subject_b():
 
 
 def test_dual_session_dir_name_contains_both_subjects(tmp_path):
-    """P24: the data-dir name carries BOTH operators in dual mode —
-    <subjA>_<subjB>_s<session>_<metric>_<mode>_<electrode|na>_<date>_<epoch>."""
+    """P24/P26: dual mode carries BOTH operators AND the electrode value —
+    <subjA>_<subjB>_s<session>_<metric>_<mode>_<electrode>_<date>_<epoch>."""
     clock = _Clock(0.0)
     sess = ExperimentSession(data_dir=tmp_path, clock=clock)
     sid = sess.configure(
@@ -249,12 +249,40 @@ def test_dual_session_dir_name_contains_both_subjects(tmp_path):
         _trials(1),
     )
     assert sid.startswith("ann_bob_s2_tbr_dual_dry_")
-    # the single-device form is unchanged
+    # a plain single headband (no hybrid) has NO electrode segment at all
     sid_single = sess.configure(
         SessionMeta(subject="ann", session_no=1, metric="tbr", device_mode="single"),
         _trials(1),
     )
-    assert sid_single.startswith("ann_s1_tbr_single_na_")
+    assert sid_single.startswith("ann_s1_tbr_single_")
+    assert "_na_" not in sid_single  # P26: no bare "na" segment
+    assert "dry" not in sid_single
+
+
+def test_session_dir_name_electrode_cases(tmp_path):
+    """P26: single headband → no electrode segment; single hybrid → dry;
+    dual with hybrid → wet."""
+    clock = _Clock(0.0)
+    sess = ExperimentSession(data_dir=tmp_path, clock=clock)
+
+    headband = sess.configure(
+        SessionMeta(subject="ann", session_no=1, metric="tbr", device_mode="single"),
+        _trials(1),
+    )
+    assert headband.startswith("ann_s1_tbr_single_") and "_na_" not in headband
+
+    single_hybrid = sess.configure(
+        SessionMeta(subject="ann", session_no=2, metric="tbr", device_mode="single", electrode="dry"),
+        _trials(1),
+    )
+    assert single_hybrid.startswith("ann_s2_tbr_single_dry_")
+
+    dual = sess.configure(
+        SessionMeta(subject="ann", subject_b="bob", session_no=3, metric="tbr",
+                    device_mode="dual", electrode="wet"),
+        _trials(1),
+    )
+    assert dual.startswith("ann_bob_s3_tbr_dual_wet_")
 
 
 def test_session_json_records_system_config(tmp_path):

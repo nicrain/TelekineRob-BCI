@@ -143,6 +143,16 @@ def test_experiment_panel_electrode_labeled_after_session():
     assert panel.count("style={fieldLabelStyle}") == 12
 
 
+def test_experiment_panel_electrode_dropdown_tweaks():
+    """P26②③: the Electrode dropdown is narrower (minWidth 64) and its
+    options display as Dry / Wet (values stay lowercase dry/wet)."""
+    panel = (APPJSX.parent / "ExperimentPanel.jsx").read_text(encoding="utf-8")
+    assert panel.count("minWidth: 64") >= 2          # single + dual select
+    assert '<option value="dry">Dry</option>' in panel
+    assert '<option value="wet">Wet</option>' in panel
+    assert '<option value="dry">dry</option>' not in panel  # not the old lowercase text
+
+
 def test_experiment_panel_dual_layout_markers():
     """P24+P25: dual device renders a two-row column grid — two Subject inputs
     (A/B), shared Session #/Mode stretched, Electrode N/A + dry/wet (centered),

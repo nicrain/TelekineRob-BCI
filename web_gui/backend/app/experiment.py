@@ -326,15 +326,14 @@ class ExperimentSession:
     def _make_session_id(self, meta: SessionMeta) -> str:
         date = meta.date or time.strftime("%Y-%m-%d", time.localtime(time.time()))
         subject = meta.subject or "subject"
-        # P24: dual mode carries BOTH operators in the dir name —
-        # <subjA>_<subjB>_s<session>_<metric>_<mode>_<electrode|na>_<date>_<epoch>.
-        if meta.subject_b:
-            head = f"{subject}_{meta.subject_b}"
-        else:
-            head = subject
+        # P24/P26: dual mode carries both operators; the electrode segment is
+        # included ONLY when a hybrid is present (electrode non-empty) — a
+        # plain single headband never shows a bare "na".
+        head = f"{subject}_{meta.subject_b}" if meta.subject_b else subject
+        electrode_seg = f"{meta.electrode}_" if meta.electrode else ""
         return (
             f"{head}_s{meta.session_no}_{meta.metric}_{meta.device_mode}_"
-            f"{(meta.electrode or 'na')}_{date}_{int(time.time())}"
+            f"{electrode_seg}{date}_{int(time.time())}"
         )
 
     def _write_session_json(self) -> None:

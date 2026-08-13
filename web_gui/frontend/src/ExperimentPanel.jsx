@@ -156,10 +156,10 @@ export default function ExperimentPanel({ config }) {
                 Electrode
                 {devices.map((d, i) => (
                   d.device === 'hybrid'
-                    ? <select key={i} style={{ ...inputStyle, minWidth: 88 }} value={meta.electrode || 'dry'}
+                    ? <select key={i} style={{ ...inputStyle, minWidth: 64 }} value={meta.electrode || 'dry'}
                         onChange={(e) => setMetaField('electrode', e.target.value)}>
-                        <option value="dry">dry</option>
-                        <option value="wet">wet</option>
+                        <option value="dry">Dry</option>
+                        <option value="wet">Wet</option>
                       </select>
                     // P25②: headband row → N/A, centered to align with the select
                     : <div key={i} style={{ ...rowValueStyle, minWidth: 88, justifyContent: 'center' }}>N/A</div>
@@ -194,10 +194,11 @@ export default function ExperimentPanel({ config }) {
                 {cfg.has_hybrid && (
                   <label style={fieldLabelStyle}>
                     Electrode
-                    <select style={{ ...inputStyle, minWidth: 88 }} value={meta.electrode || 'dry'}
+                    {/* P26②③: dry/wet is short — narrower dropdown, capitalized options */}
+                    <select style={{ ...inputStyle, minWidth: 64 }} value={meta.electrode || 'dry'}
                       onChange={(e) => setMetaField('electrode', e.target.value)}>
-                      <option value="dry">dry</option>
-                      <option value="wet">wet</option>
+                      <option value="dry">Dry</option>
+                      <option value="wet">Wet</option>
                     </select>
                   </label>
                 )}
