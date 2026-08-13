@@ -44,9 +44,10 @@ export default function ExperimentPanel({ config }) {
   const [formOpen, setFormOpen] = useState(false);
   // P20/P21: only subject / session_no are hand-filled; metric/device_mode/
   // roles/devices/has_hybrid come from the LIVE App.jsx 01 config prop (no
-  // backend poll); electrode only when a hybrid is present.
+  // backend poll); electrode only when a hybrid is present. P24: subject_b is
+  // device B's operator (dual mode).
   const [meta, setMeta] = useState({
-    subject: '', role: 'pilot', session_no: 1, electrode: '', date: '',
+    subject: '', subject_b: '', role: 'pilot', session_no: 1, electrode: '', date: '',
   });
 
   function refresh() {
@@ -97,6 +98,8 @@ export default function ExperimentPanel({ config }) {
   const phase = exp?.phase || 'idle';
   const target = exp?.target || null;
   const cfg = config || {};   // P21: the LIVE App.jsx 01 config (props)
+  const isDual = cfg.device_mode === 'dual';   // P24: two-row column grid
+  const devices = cfg.devices || [];
   const idx = (exp?.trial_idx ?? 0) + 1;
   const total = exp?.n_trials ?? 0;
   const remaining = Math.ceil(exp?.remaining_sec ?? 0);
@@ -122,50 +125,97 @@ export default function ExperimentPanel({ config }) {
 
       {(!configured || formOpen) && (
         <div>
-          {/* ③: hand-filled fields carry labels; the read-only actual config
-              sits on the SAME row to the right, names in mono small,
-              values in body text. P22①: electrode follows session_no with a
-              label; its dropdown carries only dry / wet. */}
-          <div style={{ display: 'flex', gap: 28, flexWrap: 'wrap', marginTop: 10, alignItems: 'flex-end' }}>
-            <div style={{ display: 'flex', gap: 12 }}>
-              <label style={fieldLabelStyle}>
+          {/* P24: dual device → a column grid whose values span TWO rows —
+              Subject (A/B), Session #/Mode (shared, stretched), Electrode
+              (device1 n/a, device2 dry/wet), Metric/Roles (per person).
+              single-device mode keeps the layout below unchanged. */}
+          {isDual ? (
+            <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginTop: 10 }}>
+              <div style={fieldLabelStyle}>
                 Subject
-                <input style={inputStyle} placeholder="e.g. S01" value={meta.subject}
+                <input style={inputStyle} placeholder="A" value={meta.subject}
                   onChange={(e) => setMetaField('subject', e.target.value)} />
-              </label>
-              <label style={fieldLabelStyle}>
+                <input style={inputStyle} placeholder="B" value={meta.subject_b}
+                  onChange={(e) => setMetaField('subject_b', e.target.value)} />
+              </div>
+              <div style={fieldLabelStyle}>
                 Session #
-                <input style={{ ...inputStyle, width: 64 }} type="number" min="1"
+                <input style={{ ...inputStyle, width: 64, height: 58 }} type="number" min="1"
                   value={meta.session_no} onChange={(e) => setMetaField('session_no', Number(e.target.value) || 1)} />
-              </label>
-              {cfg.has_hybrid && (
-                <label style={fieldLabelStyle}>
-                  Electrode
-                  <select style={{ ...inputStyle, minWidth: 88 }} value={meta.electrode || 'dry'}
-                    onChange={(e) => setMetaField('electrode', e.target.value)}>
-                    <option value="dry">dry</option>
-                    <option value="wet">wet</option>
-                  </select>
-                </label>
-              )}
-            </div>
-            {/* P23: read-only config is VERTICAL like the hand-filled fields —
-                Title-Case label on top, capitalized value below. */}
-            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', paddingBottom: 6 }}>
-              <span style={fieldLabelStyle}>
-                Metric
-                <span style={valueStyle}>{METRIC_LABEL[cfg.metric] || cfg.metric || '…'}</span>
-              </span>
-              <span style={fieldLabelStyle}>
+              </div>
+              <div style={fieldLabelStyle}>
                 Mode
-                <span style={valueStyle}>{MODE_LABEL[cfg.device_mode] || cfg.device_mode || '…'}</span>
-              </span>
-              <span style={fieldLabelStyle}>
+                <div style={{ ...valueStyle, display: 'flex', alignItems: 'center', height: 58 }}>
+                  {MODE_LABEL[cfg.device_mode] || cfg.device_mode || '…'}
+                </div>
+              </div>
+              <div style={fieldLabelStyle}>
+                Electrode
+                {devices.map((d, i) => (
+                  d.device === 'hybrid'
+                    ? <select key={i} style={{ ...inputStyle, minWidth: 88 }} value={meta.electrode || 'dry'}
+                        onChange={(e) => setMetaField('electrode', e.target.value)}>
+                        <option value="dry">dry</option>
+                        <option value="wet">wet</option>
+                      </select>
+                    : <div key={i} style={valueStyle}>n/a</div>
+                ))}
+              </div>
+              <div style={fieldLabelStyle}>
+                Metric
+                {devices.map((d, i) => (
+                  <div key={i} style={valueStyle}>{METRIC_LABEL[d.metric] || d.metric || '…'}</div>
+                ))}
+              </div>
+              <div style={fieldLabelStyle}>
                 Roles
-                <span style={valueStyle}>{(cfg.roles || []).map((r) => ROLE_LABEL[r] || r).join(' / ') || '…'}</span>
-              </span>
+                {devices.map((d, i) => (
+                  <div key={i} style={valueStyle}>{ROLE_LABEL[d.role] || d.role || '…'}</div>
+                ))}
+              </div>
             </div>
-          </div>
+          ) : (
+            <div style={{ display: 'flex', gap: 28, flexWrap: 'wrap', marginTop: 10, alignItems: 'flex-end' }}>
+              <div style={{ display: 'flex', gap: 12 }}>
+                <label style={fieldLabelStyle}>
+                  Subject
+                  <input style={inputStyle} placeholder="e.g. S01" value={meta.subject}
+                    onChange={(e) => setMetaField('subject', e.target.value)} />
+                </label>
+                <label style={fieldLabelStyle}>
+                  Session #
+                  <input style={{ ...inputStyle, width: 64 }} type="number" min="1"
+                    value={meta.session_no} onChange={(e) => setMetaField('session_no', Number(e.target.value) || 1)} />
+                </label>
+                {cfg.has_hybrid && (
+                  <label style={fieldLabelStyle}>
+                    Electrode
+                    <select style={{ ...inputStyle, minWidth: 88 }} value={meta.electrode || 'dry'}
+                      onChange={(e) => setMetaField('electrode', e.target.value)}>
+                      <option value="dry">dry</option>
+                      <option value="wet">wet</option>
+                    </select>
+                  </label>
+                )}
+              </div>
+              {/* P23: read-only config is VERTICAL like the hand-filled fields —
+                  Title-Case label on top, capitalized value below. */}
+              <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', paddingBottom: 6 }}>
+                <span style={fieldLabelStyle}>
+                  Metric
+                  <span style={valueStyle}>{METRIC_LABEL[cfg.metric] || cfg.metric || '…'}</span>
+                </span>
+                <span style={fieldLabelStyle}>
+                  Mode
+                  <span style={valueStyle}>{MODE_LABEL[cfg.device_mode] || cfg.device_mode || '…'}</span>
+                </span>
+                <span style={fieldLabelStyle}>
+                  Roles
+                  <span style={valueStyle}>{(cfg.roles || []).map((r) => ROLE_LABEL[r] || r).join(' / ') || '…'}</span>
+                </span>
+              </div>
+            </div>
+          )}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 12 }}>
             <button className="btn btn-cta" disabled={busy} onClick={configure}>
               {configured ? 'Configure new session' : 'Configure session'}

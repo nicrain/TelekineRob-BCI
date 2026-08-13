@@ -156,9 +156,9 @@ const SOURCE_ID_TO_BRAND = {
  * hybrid counts even before LSL connects — the backend's lsl_source_id can be
  * empty until a save).
  */
-function experimentConfigFromApp({ role1, role2, metric, device1, device2, source1, source2, dualDevice }) {
-  const devices = [{ role: role1, device: device1, lsl_source_id: source1 || '' }];
-  if (dualDevice) devices.push({ role: role2, device: device2, lsl_source_id: source2 || '' });
+function experimentConfigFromApp({ role1, role2, metric, metric2, device1, device2, source1, source2, dualDevice }) {
+  const devices = [{ role: role1, device: device1, metric, lsl_source_id: source1 || '' }];
+  if (dualDevice) devices.push({ role: role2, device: device2, metric: metric2, lsl_source_id: source2 || '' });
   return {
     metric,
     device_mode: dualDevice ? 'dual' : 'single',
@@ -804,7 +804,7 @@ export default function App() {
   // state (props), not a backend poll — editing 01 re-renders App and the
   // panel updates instantly. has_hybrid covers a single-device hybrid.
   const experimentConfig = experimentConfigFromApp({
-    role1, role2, metric,
+    role1, role2, metric, metric2,
     device1: eegBrand === 'gtec_hybrid' ? 'hybrid' : 'headband',
     device2: eegBrand2 === 'gtec_hybrid' ? 'hybrid' : 'headband',
     source1: BRAND_TO_SOURCE_ID[eegBrand] || '',

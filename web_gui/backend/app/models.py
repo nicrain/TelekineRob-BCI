@@ -110,8 +110,11 @@ class ConfigPatch(BaseModel):
 
 class ExperimentMeta(BaseModel):
     """Hand-filled operator metadata only (P20) — metric / device_mode are
-    derived from the live config at configure time, never hand-entered."""
+    derived from the live config at configure time, never hand-entered.
+    P24: dual mode records BOTH operators — ``subject`` = device A,
+    ``subject_b`` = device B (empty in single mode)."""
     subject: str = ""
+    subject_b: str = ""
     role: str = "pilot"
     session_no: int = 1
     electrode: str = ""  # only meaningful when the config includes a hybrid
@@ -129,6 +132,7 @@ class ExperimentTrial(BaseModel):
 class ExperimentDeviceSummary(BaseModel):
     role: Literal["speed", "steering"] = "speed"
     device: str = ""          # "headband" | "hybrid" | raw source fallback
+    metric: Literal["alpha", "tbr", "ei"] = "tbr"   # P24: per-device metric
     lsl_source_id: str = ""   # raw source id, kept for cross-checking (§2)
 
 

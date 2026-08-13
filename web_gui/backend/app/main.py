@@ -352,6 +352,7 @@ def exp_configure(req: ExperimentConfigureRequest) -> dict[str, Any]:
         summary = config_summary(get_config_envelope().config)
     meta = session_meta_from_request(
         subject=req.meta.subject,
+        subject_b=req.meta.subject_b,
         role=req.meta.role,
         session_no=req.meta.session_no,
         electrode=req.meta.electrode,

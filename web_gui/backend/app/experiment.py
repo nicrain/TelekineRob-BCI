@@ -134,8 +134,12 @@ class TrialSpec:
 
 @dataclass
 class SessionMeta:
-    """§2 #7 session metadata (recorded into session.json)."""
+    """§2 #7 session metadata (recorded into session.json).
+
+    P24: ``subject_b`` is device B's operator (dual mode); empty in single
+    mode. The data-dir name carries both subjects in dual mode."""
     subject: str = ""
+    subject_b: str = ""
     role: str = "pilot"
     session_no: int = 1
     metric: str = "tbr"
@@ -152,6 +156,7 @@ class SessionMeta:
 
 def session_meta_from_request(
     subject: str,
+    subject_b: str,
     role: str,
     session_no: int,
     electrode: str,
@@ -161,9 +166,11 @@ def session_meta_from_request(
     """Build the recorded SessionMeta from hand-filled fields + the ACTUAL
     config summary (P20): metric/device_mode always come from ``summary``
     (never the client); electrode is recorded only when a hybrid is present.
+    P24: ``subject_b`` (device B, dual mode) is carried through.
     """
     return SessionMeta(
         subject=subject,
+        subject_b=subject_b,
         role=role,
         session_no=int(session_no),
         metric=summary["metric"],
@@ -315,8 +322,14 @@ class ExperimentSession:
     def _make_session_id(self, meta: SessionMeta) -> str:
         date = meta.date or time.strftime("%Y-%m-%d", time.localtime(time.time()))
         subject = meta.subject or "subject"
+        # P24: dual mode carries BOTH operators in the dir name —
+        # <subjA>_<subjB>_s<session>_<metric>_<mode>_<electrode|na>_<date>_<epoch>.
+        if meta.subject_b:
+            head = f"{subject}_{meta.subject_b}"
+        else:
+            head = subject
         return (
-            f"{subject}_s{meta.session_no}_{meta.metric}_{meta.device_mode}_"
+            f"{head}_s{meta.session_no}_{meta.metric}_{meta.device_mode}_"
             f"{(meta.electrode or 'na')}_{date}_{int(time.time())}"
         )
 
@@ -327,6 +340,7 @@ class ExperimentSession:
             # P20: meta = hand-filled operator fields only.
             "meta": {
                 "subject": self._meta.subject,
+                "subject_b": self._meta.subject_b,   # P24: device B (dual mode)
                 "role": self._meta.role,
                 "session_no": self._meta.session_no,
                 "electrode": self._meta.electrode,

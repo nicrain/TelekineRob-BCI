@@ -205,7 +205,8 @@ def test_session_meta_derives_metric_and_mode_from_summary():
     """P20: metric/device_mode are never client-supplied — they come from the
     config summary; electrode is recorded when a hybrid is present."""
     meta = session_meta_from_request(
-        subject="s", role="pilot", session_no=3, electrode="wet", date="2026-08-13",
+        subject="s", subject_b="", role="pilot", session_no=3,
+        electrode="wet", date="2026-08-13",
         summary={"metric": "ei", "device_mode": "dual", "has_hybrid": True},
     )
     assert meta.metric == "ei"
@@ -217,10 +218,40 @@ def test_session_meta_derives_metric_and_mode_from_summary():
 def test_session_meta_drops_electrode_without_hybrid():
     """Single headband → electrode is forced empty even if the client sent one."""
     meta = session_meta_from_request(
-        subject="s", role="pilot", session_no=1, electrode="wet", date="",
+        subject="s", subject_b="", role="pilot", session_no=1,
+        electrode="wet", date="",
         summary={"metric": "tbr", "device_mode": "single", "has_hybrid": False},
     )
     assert meta.electrode == ""
+
+
+def test_session_meta_carries_subject_b():
+    """P24: dual mode records BOTH operators — subject_b flows through."""
+    meta = session_meta_from_request(
+        subject="ann", subject_b="bob", role="pilot", session_no=2,
+        electrode="dry", date="2026-08-13",
+        summary={"metric": "tbr", "device_mode": "dual", "has_hybrid": True},
+    )
+    assert meta.subject == "ann" and meta.subject_b == "bob"
+
+
+def test_dual_session_dir_name_contains_both_subjects(tmp_path):
+    """P24: the data-dir name carries BOTH operators in dual mode —
+    <subjA>_<subjB>_s<session>_<metric>_<mode>_<electrode|na>_<date>_<epoch>."""
+    clock = _Clock(0.0)
+    sess = ExperimentSession(data_dir=tmp_path, clock=clock)
+    sid = sess.configure(
+        SessionMeta(subject="ann", subject_b="bob", session_no=2, metric="tbr",
+                    device_mode="dual", electrode="dry"),
+        _trials(1),
+    )
+    assert sid.startswith("ann_bob_s2_tbr_dual_dry_")
+    # the single-device form is unchanged
+    sid_single = sess.configure(
+        SessionMeta(subject="ann", session_no=1, metric="tbr", device_mode="single"),
+        _trials(1),
+    )
+    assert sid_single.startswith("ann_s1_tbr_single_na_")
 
 
 def test_session_json_records_system_config(tmp_path):
@@ -241,6 +272,7 @@ def test_session_json_records_system_config(tmp_path):
     data = json.loads((tmp_path / sess._session_id / "session.json").read_text(encoding="utf-8"))
     assert data["system"] == summary                     # actual config recorded
     assert data["meta"]["subject"] == "s"
+    assert data["meta"]["subject_b"] == ""               # P24: no device B (single)
     assert data["meta"]["electrode"] == "dry"
     assert "metric" not in data["meta"]                  # no hand metric field
     assert "device_mode" not in data["meta"]             # no hand mode field

@@ -138,8 +138,24 @@ def test_experiment_panel_electrode_labeled_after_session():
     assert "Electrode\n" in panel
     assert 'value="dry"' in panel and 'value="wet"' in panel
     assert 'value=""' not in panel  # no empty placeholder option anywhere
-    # 3 hand-filled + 3 read-only fields, all in the vertical labeled layout
-    assert panel.count("style={fieldLabelStyle}") == 6
+    # single mode (6: Subject/Session/Electrode + Metric/Mode/Roles) +
+    # dual mode (6, P24) = 12 labeled fields in the vertical layout
+    assert panel.count("style={fieldLabelStyle}") == 12
+
+
+def test_experiment_panel_dual_layout_markers():
+    """P24: dual device renders a two-row column grid — two Subject inputs
+    (A/B), shared Session #/Mode stretched, Electrode n/a + dry/wet,
+    per-person Metric/Roles; the single-mode layout is unchanged."""
+    panel = (APPJSX.parent / "ExperimentPanel.jsx").read_text(encoding="utf-8")
+    assert "isDual ? (" in panel                        # dual branch present
+    assert 'placeholder="A"' in panel and 'placeholder="B"' in panel  # two subjects
+    assert "meta.subject_b" in panel                    # device B operator
+    assert ">n/a<" in panel                             # device1 electrode n/a
+    assert "height: 58" in panel                        # shared Session #/Mode stretched
+    assert "METRIC_LABEL[d.metric]" in panel            # per-device metric row
+    assert "ROLE_LABEL[d.role]" in panel                # per-device role row
+    assert 'placeholder="e.g. S01"' in panel            # single-mode branch kept
 
 
 def test_experiment_panel_exit_and_reconfigure():
@@ -177,22 +193,23 @@ def _extract_function(src: str, name: str) -> str:
 
 
 def test_experiment_config_from_app_node():
-    """P21②: has_hybrid derives from the DEVICE selection — the three cases:
-    single hybrid, dual-with-hybrid, and only-headband (no electrode)."""
+    """P21② + P24: has_hybrid derives from the DEVICE selection — single
+    hybrid, dual-with-hybrid, only-headband; dual carries a per-device metric
+    and both roles/operators."""
     import subprocess
 
     fn = _extract_function(_app(), "experimentConfigFromApp")
     script = fn + """
 const cases = [
   // single-device hybrid → has_hybrid true, single mode, 1 device
-  [{ role1:'speed', role2:'steering', metric:'tbr', device1:'hybrid', device2:'', source1:'gtec_hybrid_black', source2:'', dualDevice:false },
-   { metric:'tbr', device_mode:'single', roles:['speed'], has_hybrid:true, devCount:1 }],
-  // dual with a hybrid → has_hybrid true, dual mode, 2 devices
-  [{ role1:'speed', role2:'steering', metric:'ei', device1:'headband', device2:'hybrid', source1:'gtec_bci_core4', source2:'gtec_hybrid_black', dualDevice:true },
-   { metric:'ei', device_mode:'dual', roles:['speed','steering'], has_hybrid:true, devCount:2 }],
+  [{ role1:'speed', role2:'steering', metric:'tbr', metric2:'ei', device1:'hybrid', device2:'', source1:'gtec_hybrid_black', source2:'', dualDevice:false },
+   { metric:'tbr', device_mode:'single', roles:['speed'], has_hybrid:true, devCount:1, devMetric:['tbr'] }],
+  // dual with a hybrid → has_hybrid true, dual mode, per-device metrics
+  [{ role1:'speed', role2:'steering', metric:'ei', metric2:'tbr', device1:'headband', device2:'hybrid', source1:'gtec_bci_core4', source2:'gtec_hybrid_black', dualDevice:true },
+   { metric:'ei', device_mode:'dual', roles:['speed','steering'], has_hybrid:true, devCount:2, devMetric:['ei','tbr'] }],
   // only a headband → no hybrid, no electrode
-  [{ role1:'speed', role2:'steering', metric:'alpha', device1:'headband', device2:'', source1:'gtec_bci_core4', source2:'', dualDevice:false },
-   { metric:'alpha', device_mode:'single', roles:['speed'], has_hybrid:false, devCount:1 }],
+  [{ role1:'speed', role2:'steering', metric:'alpha', metric2:'tbr', device1:'headband', device2:'', source1:'gtec_bci_core4', source2:'', dualDevice:false },
+   { metric:'alpha', device_mode:'single', roles:['speed'], has_hybrid:false, devCount:1, devMetric:['alpha'] }],
 ];
 for (const [inp, want] of cases) {
   const got = experimentConfigFromApp(inp);
@@ -203,6 +220,10 @@ for (const [inp, want] of cases) {
   }
   if (got.devices.length !== want.devCount) {
     console.error("FAIL devCount", got.devices.length, want.devCount); process.exit(1);
+  }
+  const dm = got.devices.map((d) => d.metric);
+  if (JSON.stringify(dm) !== JSON.stringify(want.devMetric)) {
+    console.error("FAIL devMetric", JSON.stringify(dm), JSON.stringify(want.devMetric)); process.exit(1);
   }
 }
 console.log("experimentConfigFromApp OK");
