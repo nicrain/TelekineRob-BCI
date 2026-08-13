@@ -1267,7 +1267,6 @@ export default function App() {
                 {[
                   { value: 'thymio',        title: 'Thymio',       desc: 'Real robot' },
                   { value: 'thymio_simu',   title: 'Thymio Simu',  desc: 'Gazebo simulation' },
-                  { value: 'none',          title: 'Sans robot',    desc: 'Waveforms only' },
                 ].map((opt) => (
                   <label
                     key={opt.value}
