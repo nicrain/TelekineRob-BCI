@@ -409,6 +409,10 @@ class EegControlNode(Node):
 
             analysis = {
                 "ts": frame.ts,
+                # P16/E1 (§2 #6): wall-clock when the command was computed —
+                # the experiment recorder compares it to its receive wall
+                # clock for the pipeline/transport latency.
+                "cmd_vel_ts": time.time(),
                 "source": frame.source,
                 "role": "steering" if self._steer_role else "speed",
                 "metrics": frame.metrics,

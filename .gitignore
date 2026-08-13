@@ -41,3 +41,6 @@ AGENTS.md
 windows_launcher/last_url.txt
 windows_launcher/launcher_server.log
 windows_launcher/bridge_*.log
+
+# P16 experiment-mode data (per-session CSVs + labels)
+experiment_data/

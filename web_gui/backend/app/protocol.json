@@ -1,0 +1,31 @@
+{
+  "prompt_sec": 3.0,
+  "shuffle": "balanced",
+  "seed": null,
+  "trials": [
+    { "a_state": "attention", "b_state": "rest", "b_direction": "left",  "duration_sec": 20.0, "rest_sec": 10.0 },
+    { "a_state": "attention", "b_state": "rest", "b_direction": "left",  "duration_sec": 20.0, "rest_sec": 10.0 },
+    { "a_state": "attention", "b_state": "rest", "b_direction": "left",  "duration_sec": 20.0, "rest_sec": 10.0 },
+    { "a_state": "attention", "b_state": "rest", "b_direction": "left",  "duration_sec": 20.0, "rest_sec": 10.0 },
+    { "a_state": "rest",      "b_state": "rest", "b_direction": "left",  "duration_sec": 20.0, "rest_sec": 10.0 },
+    { "a_state": "rest",      "b_state": "rest", "b_direction": "left",  "duration_sec": 20.0, "rest_sec": 10.0 },
+    { "a_state": "rest",      "b_state": "rest", "b_direction": "left",  "duration_sec": 20.0, "rest_sec": 10.0 },
+    { "a_state": "rest",      "b_state": "rest", "b_direction": "left",  "duration_sec": 20.0, "rest_sec": 10.0 },
+    { "a_state": "rest",      "b_state": "attention", "b_direction": "left", "duration_sec": 20.0, "rest_sec": 10.0 },
+    { "a_state": "rest",      "b_state": "attention", "b_direction": "left", "duration_sec": 20.0, "rest_sec": 10.0 },
+    { "a_state": "rest",      "b_state": "attention", "b_direction": "left", "duration_sec": 20.0, "rest_sec": 10.0 },
+    { "a_state": "rest",      "b_state": "attention", "b_direction": "left", "duration_sec": 20.0, "rest_sec": 10.0 },
+    { "a_state": "rest",      "b_state": "rest", "b_direction": "left",  "duration_sec": 20.0, "rest_sec": 10.0 },
+    { "a_state": "rest",      "b_state": "rest", "b_direction": "left",  "duration_sec": 20.0, "rest_sec": 10.0 },
+    { "a_state": "rest",      "b_state": "rest", "b_direction": "left",  "duration_sec": 20.0, "rest_sec": 10.0 },
+    { "a_state": "rest",      "b_state": "rest", "b_direction": "left",  "duration_sec": 20.0, "rest_sec": 10.0 },
+    { "a_state": "attention", "b_state": "attention", "b_direction": "left", "duration_sec": 20.0, "rest_sec": 10.0 },
+    { "a_state": "attention", "b_state": "attention", "b_direction": "left", "duration_sec": 20.0, "rest_sec": 10.0 },
+    { "a_state": "attention", "b_state": "attention", "b_direction": "left", "duration_sec": 20.0, "rest_sec": 10.0 },
+    { "a_state": "attention", "b_state": "attention", "b_direction": "left", "duration_sec": 20.0, "rest_sec": 10.0 },
+    { "a_state": "attention", "b_state": "attention", "b_direction": "right", "duration_sec": 20.0, "rest_sec": 10.0 },
+    { "a_state": "attention", "b_state": "attention", "b_direction": "right", "duration_sec": 20.0, "rest_sec": 10.0 },
+    { "a_state": "attention", "b_state": "attention", "b_direction": "right", "duration_sec": 20.0, "rest_sec": 10.0 },
+    { "a_state": "attention", "b_state": "attention", "b_direction": "right", "duration_sec": 20.0, "rest_sec": 10.0 }
+  ]
+}

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import ReactECharts from 'echarts-for-react';
 import { api, getWsUrl, withWsToken } from './api';
+import ExperimentPanel from './ExperimentPanel';
 
 /* ── Constants ─────────────────────────────────────────── */
 const MAX_POINTS = 140;
@@ -1408,6 +1409,9 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* ── SECTION 4: Experiment mode (P16/E3) ────────── */}
+      <ExperimentPanel />
 
       {/* ── Footer ────────────────────────────────────── */}
       <footer className="footer">

@@ -103,3 +103,32 @@ class WsFrame(BaseModel):
 
 class ConfigPatch(BaseModel):
     patch: dict[str, Any]
+
+
+# --- P16/E1-E4: experiment mode -------------------------------------------
+
+
+class ExperimentMeta(BaseModel):
+    subject: str = ""
+    role: str = "pilot"
+    session_no: int = 1
+    metric: Literal["alpha", "tbr", "ei"] = "tbr"
+    device_mode: Literal["single", "dual"] = "single"
+    electrode: str = ""
+    date: str = ""
+
+
+class ExperimentTrial(BaseModel):
+    a_state: Literal["attention", "rest"] = "attention"
+    b_state: Literal["attention", "rest"] = "rest"
+    b_direction: Literal["left", "right"] = "left"
+    duration_sec: float = 20.0
+    rest_sec: float = 10.0
+
+
+class ExperimentConfigureRequest(BaseModel):
+    meta: ExperimentMeta = Field(default_factory=ExperimentMeta)
+    trials: list[ExperimentTrial] | None = None
+    shuffle: str = ""          # "" → protocol file default
+    seed: int | None = None
+    prompt_sec: float | None = None

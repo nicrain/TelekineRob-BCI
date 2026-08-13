@@ -15,7 +15,19 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .command_runner import cleanup_residual_processes, start_system, stop_system
 from .config_store import get_config_envelope, init_store, patch_config
-from .models import CommandRequest, ConfigPatch
+from .experiment import (
+    DEFAULT_PROTOCOL,
+    ExperimentSession,
+    SessionMeta,
+    TrialSpec,
+    load_protocol,
+    trial_dict,
+)
+from .models import (
+    CommandRequest,
+    ConfigPatch,
+    ExperimentConfigureRequest,
+)
 from .ros_probe import probe_system
 from .signal_subscriber import RosBridge
 
@@ -92,6 +104,7 @@ app.add_middleware(
 )
 
 _subscriber: RosBridge | None = None
+_experiment = ExperimentSession()
 
 
 def _get_subscriber() -> RosBridge:
@@ -104,7 +117,8 @@ def _get_subscriber() -> RosBridge:
 @app.on_event("startup")
 async def _startup() -> None:
     init_store()
-    _get_subscriber()
+    # P16/E1: the experiment recorder receives every raw analysis frame.
+    _get_subscriber().add_frame_handler(_experiment.on_frame)
 
 
 @app.on_event("shutdown")
@@ -286,6 +300,72 @@ async def ws_teleop(websocket: WebSocket) -> None:
             })
     except WebSocketDisconnect:
         return
+
+
+# --------------------------------------------------------------------------- #
+# P16: experiment mode (E1 logging / E3 protocol + prompt UI / E4 labels)
+# --------------------------------------------------------------------------- #
+
+
+@app.get("/api/experiment/protocol")
+def exp_protocol() -> dict[str, Any]:
+    """The default protocol file (trials + shuffle + prompt_sec) for the
+    E3 panel to show before the operator starts."""
+    proto = load_protocol(DEFAULT_PROTOCOL)
+    return {
+        "shuffle": proto["shuffle"],
+        "seed": proto["seed"],
+        "prompt_sec": proto["prompt_sec"],
+        "n_trials": len(proto["trials"]),
+        "trials": [trial_dict(t) for t in proto["trials"]],
+    }
+
+
+@app.post("/api/experiment/configure")
+def exp_configure(req: ExperimentConfigureRequest) -> dict[str, Any]:
+    """Start a session: session metadata + protocol (inline trials, or the
+    default protocol file), shuffle applied, session files opened."""
+    meta = SessionMeta(**req.meta.model_dump())
+    if req.trials is not None:
+        trials = [TrialSpec(**t.model_dump()) for t in req.trials]
+        shuffle = req.shuffle or "none"
+        seed, prompt_sec = req.seed, req.prompt_sec
+    else:
+        proto = load_protocol(DEFAULT_PROTOCOL)
+        trials = proto["trials"]
+        shuffle = req.shuffle or proto["shuffle"]
+        seed = req.seed if req.seed is not None else proto["seed"]
+        prompt_sec = req.prompt_sec if req.prompt_sec is not None else proto["prompt_sec"]
+    session_id = _experiment.configure(meta, trials, shuffle, seed, prompt_sec)
+    return {"ok": True, "session_id": session_id, "state": _experiment.state()}
+
+
+@app.get("/api/experiment/state")
+def exp_state() -> dict[str, Any]:
+    return _experiment.state()
+
+
+@app.post("/api/experiment/start")
+def exp_start() -> dict[str, Any]:
+    return {"ok": _experiment.start(), "state": _experiment.state()}
+
+
+@app.post("/api/experiment/pause")
+def exp_pause() -> dict[str, Any]:
+    _experiment.pause()
+    return {"state": _experiment.state()}
+
+
+@app.post("/api/experiment/resume")
+def exp_resume() -> dict[str, Any]:
+    _experiment.resume()
+    return {"state": _experiment.state()}
+
+
+@app.post("/api/experiment/reset")
+def exp_reset() -> dict[str, Any]:
+    _experiment.reset()
+    return {"state": _experiment.state()}
 
 
 if __name__ == "__main__":

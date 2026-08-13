@@ -48,6 +48,9 @@ class RosBridge:
         self._latest: dict[str, dict[str, Any]] = {}
         self._last_ts: dict[str, float] = {}
         self._msg_count: int = 0
+        # P16/E1: raw-analysis frame handlers (e.g. the experiment recorder).
+        # Called on every parsed analysis message with the raw JSON dict.
+        self._frame_handlers: list = []
         self._twist_queue: queue.Queue = queue.Queue()
         self._twist_publisher: Any = None
         self._twist_topic: str = ""
@@ -70,6 +73,10 @@ class RosBridge:
     def msg_count(self) -> int:
         with self._lock:
             return self._msg_count
+
+    def add_frame_handler(self, handler) -> None:
+        """Register a callback receiving every raw analysis dict (P16/E1)."""
+        self._frame_handlers.append(handler)
 
     # ── Signal data ──────────────────────────────────────────────────────────
 
@@ -258,6 +265,14 @@ class RosBridge:
             data = json.loads(msg.data)
         except (json.JSONDecodeError, AttributeError):
             return
+
+        # P16/E1: fan the raw analysis out to recorders (experiment log). A
+        # handler failure must never break the bridge thread.
+        for handler in list(self._frame_handlers):
+            try:
+                handler(data)
+            except Exception:
+                _log.exception("analysis frame handler failed")
 
         metrics = data.get("metrics", {})
         features = data.get("features", {})

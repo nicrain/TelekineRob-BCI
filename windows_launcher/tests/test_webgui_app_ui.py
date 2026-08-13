@@ -36,3 +36,35 @@ def test_thymio_device_selector_kept():
     src = _app()
     assert "outputMode === 'thymio' ? thymioDevice : ''" in src  # buildPatch device
     assert "outputMode === 'thymio' && (" in src                  # device selector UI
+
+
+# --- P16/E3: experiment-mode panel ----------------------------------------
+
+def test_experiment_panel_wired_into_app():
+    """P16/E3: the experiment panel is imported and rendered by App.jsx (in
+    its own component file — the O5 incremental split)."""
+    src = _app()
+    assert "import ExperimentPanel from './ExperimentPanel';" in src
+    assert "<ExperimentPanel />" in src
+
+
+def test_experiment_panel_markers():
+    """P16/E3: the panel polls the experiment state, configures the session,
+    drives the trial sequence and shows the target + countdown."""
+    panel = (APPJSX.parent / "ExperimentPanel.jsx").read_text(encoding="utf-8")
+    for endpoint in (
+        "/api/experiment/state",
+        "/api/experiment/configure",
+        "/api/experiment/protocol",
+        "/api/experiment/start",
+        "/api/experiment/pause",
+        "/api/experiment/resume",
+        "/api/experiment/reset",
+    ):
+        assert endpoint in panel, f"ExperimentPanel lost {endpoint}"
+    # E3: target + countdown + rest-prompt UX markers
+    assert "STATE_LABEL" in panel
+    assert "DIR_LABEL" in panel
+    assert "remaining" in panel
+    assert "Get ready" in panel
+    assert "Rest — next trial" in panel
