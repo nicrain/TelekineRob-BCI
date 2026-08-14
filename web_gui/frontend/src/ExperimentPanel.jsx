@@ -39,6 +39,20 @@ const METRIC_LABEL = { alpha: 'Alpha', tbr: 'TBR', ei: 'EI' };
 const MODE_LABEL = { single: 'Single', dual: 'Dual' };
 const ROLE_LABEL = { speed: 'Speed', steering: 'Steering' };
 
+// P29 supplement: target-table header — small mono secondary label; per-column
+// alignment overridden on the Subjects header (right, for the colon alignment).
+const thStyle = {
+  fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 400,
+  color: 'var(--f-text-secondary)', paddingBottom: 6, textAlign: 'left',
+};
+
+// P29②: smooth integer-second countdown from an ABSOLUTE wall-clock end
+// timestamp (ms) and the current time (ms). Ticking every ~200 ms, the shown
+// second changes exactly 1 s apart — no uneven 0.5/2 s jumps.
+function countdownSec(endTsMs, nowMs) {
+  return Math.max(0, Math.ceil((endTsMs - nowMs) / 1000));
+}
+
 export default function ExperimentPanel({ config }) {
   const [exp, setExp] = useState(null);
   const [protocol, setProtocol] = useState(null);
@@ -54,6 +68,14 @@ export default function ExperimentPanel({ config }) {
   const [meta, setMeta] = useState({
     subject: '', subject_b: '', role: 'pilot', session_no: 1, electrode: '', date: '',
   });
+  // P29②: `now` ticks every 200 ms so the countdown recomputes from the
+  // absolute phase-end timestamp (end_ts_ms) — steady 1 s steps regardless
+  // of the 500 ms state poll.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 200);
+    return () => clearInterval(t);
+  }, []);
 
   function refresh() {
     api.get('/api/experiment/state').then((r) => setExp(r.data)).catch(() => {});
@@ -107,7 +129,11 @@ export default function ExperimentPanel({ config }) {
   const devices = cfg.devices || [];
   const idx = (exp?.trial_idx ?? 0) + 1;
   const total = exp?.n_trials ?? 0;
-  const remaining = Math.ceil(exp?.remaining_sec ?? 0);
+  // P29②: prefer the absolute phase-end timestamp + the 200 ms `now` tick;
+  // fall back to the polled remaining_sec (older backend / pre-configure).
+  const remaining = exp?.end_ts_ms
+    ? countdownSec(exp.end_ts_ms, now)
+    : Math.ceil(exp?.remaining_sec ?? 0);
   const configured = !!exp?.configured;
 
   const targetOn = phase === 'prompt' || phase === 'trial';
@@ -268,38 +294,54 @@ export default function ExperimentPanel({ config }) {
           </div>
 
           {target && targetOn && (
-            <div style={{ textAlign: 'center', padding: '14px 0' }}>
-              {/* P28③: one row per REAL device, mapped by role — speed reads
-                  a_state, steering reads b_state + b_direction — each row
-                  labeled with the actual subject name. One device = one row
-                  whatever its role; dual = two rows. No hardcoded A:/B: lines.
-                  Focus is blue, Relax is green (no warning red). */}
-              {devices.map((d, i) => {
-                const isSpeed = d.role === 'speed';
-                const state = isSpeed ? target.a_state : target.b_state;
-                const isFocus = state === 'attention';
-                const subject = devices.length > 1
-                  ? (i === 0 ? meta.subject : meta.subject_b)
-                  : meta.subject;
-                return (
-                  <div key={i} style={{
-                    fontSize: 26, fontWeight: 700, letterSpacing: 1,
-                    fontFamily: 'var(--font-mono)', marginTop: i ? 8 : 0,
-                    color: isFocus ? 'var(--f-info)' : 'var(--f-ok)',
-                  }}>
-                    {subject}: {STATE_LABEL[state]}
-                    {!isSpeed && ` · ${DIR_LABEL[target.b_direction]}`}
-                  </div>
-                );
-              })}
-              <div style={{ fontSize: 34, fontFamily: 'var(--font-mono)', marginTop: 8 }}>
+            <div style={{ padding: '14px 0' }}>
+              {/* P29 supplement: the target display is a table on top of the
+                  P28 role mapping — Subjects | Actions | Direction, one row
+                  per REAL device (single = one, dual = two). P29①: subject
+                  names are plain text color. P29④: the Subjects column is
+                  right-aligned fixed width so the colons line up; Action text
+                  left-aligned, not all centered. P29③: Direction is a small
+                  muted mono cell — steering only (speed shows the em dash). */}
+              <table style={{ margin: '0 auto', borderCollapse: 'collapse', textAlign: 'left' }}>
+                <thead>
+                  <tr>
+                    <th style={{ ...thStyle, textAlign: 'right', paddingRight: 10 }}>Subjects</th>
+                    <th style={thStyle}>Actions</th>
+                    <th style={{ ...thStyle, paddingLeft: 18 }}>Direction</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {devices.map((d, i) => {
+                    const isSpeed = d.role === 'speed';
+                    const state = isSpeed ? target.a_state : target.b_state;
+                    const isFocus = state === 'attention';
+                    const subject = devices.length > 1
+                      ? (i === 0 ? meta.subject : meta.subject_b)
+                      : meta.subject;
+                    return (
+                      <tr key={i}>
+                        <td style={{ textAlign: 'right', width: 120, color: 'var(--f-text-primary)', fontFamily: 'var(--font-display)', padding: '3px 10px 3px 0' }}>
+                          {subject}:
+                        </td>
+                        <td style={{ color: isFocus ? 'var(--f-info)' : 'var(--f-ok)', fontWeight: 600, fontSize: 16, padding: '3px 0' }}>
+                          {STATE_LABEL[state]}
+                        </td>
+                        <td style={{ fontSize: 12, color: 'var(--f-text-secondary)', fontFamily: 'var(--font-mono)', padding: '3px 0 3px 18px' }}>
+                          {isSpeed ? '—' : DIR_LABEL[target.b_direction]}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              <div style={{ fontSize: 34, fontFamily: 'var(--font-mono)', marginTop: 8, textAlign: 'center' }}>
                 {remaining}s
               </div>
-              <div style={{ fontSize: 13, color: 'var(--f-text-secondary)' }}>
+              <div style={{ fontSize: 13, color: 'var(--f-text-secondary)', textAlign: 'center' }}>
                 Trial {idx} / {total}
               </div>
               {phase === 'prompt' && (
-                <div style={{ color: 'var(--f-info)', fontSize: 13 }}>Get ready — trial starts soon</div>
+                <div style={{ color: 'var(--f-info)', fontSize: 13, textAlign: 'center' }}>Get ready — trial starts soon</div>
               )}
             </div>
           )}

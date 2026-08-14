@@ -484,6 +484,13 @@ class ExperimentSession:
                     if trial is not None else None
                 ),
                 "remaining_sec": round(remaining, 2),
+                # P29②: absolute wall-clock END timestamp (ms) of the current
+                # phase, so the frontend can render a SMOOTH countdown (ticks
+                # ~200 ms, integer second changes exactly 1 s apart) instead of
+                # jittering on the 500 ms state poll. Default clock is
+                # time.time (epoch s); *1000 aligns with browser Date.now().
+                "end_ts_ms": int(self._phase_until * 1000)
+                if self._phase in (PHASE_PROMPT, PHASE_TRIAL, PHASE_REST) else 0,
                 "trial_elapsed": round((now - self._trial_start), 2) if self._phase == PHASE_TRIAL else 0.0,
             }
 

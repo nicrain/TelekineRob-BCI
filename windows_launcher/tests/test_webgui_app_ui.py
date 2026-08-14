@@ -107,6 +107,72 @@ def test_experiment_target_role_mapped_rows():
     assert "devices.length > 1" in panel and ": meta.subject" in panel
 
 
+# --- P29: target table + smooth countdown + style tweaks -------------------
+
+def test_experiment_target_countdown_smooth_node():
+    """P29②: the countdown is a pure function over an ABSOLUTE phase-end
+    timestamp and `now` — Math.max(0, Math.ceil((endTs-now)/1000)) — so a
+    fixed ~200 ms tick changes the shown second exactly 1 s apart."""
+    import subprocess
+    panel = (APPJSX.parent / "ExperimentPanel.jsx").read_text(encoding="utf-8")
+    # the panel ticks `now` every 200 ms and recomputes from end_ts_ms
+    assert "setInterval(() => setNow(Date.now()), 200)" in panel
+    assert "countdownSec(exp.end_ts_ms, now)" in panel
+    assert "remaining_sec ?? 0" in panel  # fallback kept
+    fn = _extract_function(panel, "countdownSec")
+    script = fn + """
+const cases = [
+  [100000, 90000, 10],   // 10.0 s left → 10
+  [100000, 97000, 3],    // 3.0 s left → 3
+  [100000, 99999, 1],    // 1 ms left → still 1
+  [100000, 100000, 0],   // exactly at the end → 0
+  [100000, 105000, 0],   // past the end → clamped to 0
+];
+for (const [endTs, now, want] of cases) {
+  const got = countdownSec(endTs, now);
+  if (got !== want) { console.error("FAIL", endTs, now, "got", got, "want", want); process.exit(1); }
+}
+console.log("countdownSec OK");
+"""
+    r = subprocess.run(["node", "-e", script], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    assert "OK" in r.stdout
+
+
+def test_experiment_target_subject_plain_color():
+    """P29①: the subject NAME is plain text color (--f-text-primary), not an
+    accent color; the Focus/Relax state color is kept on the Actions cell."""
+    panel = (APPJSX.parent / "ExperimentPanel.jsx").read_text(encoding="utf-8")
+    # the Subjects cell: right-aligned fixed width + plain text color
+    assert "textAlign: 'right', width: 120, color: 'var(--f-text-primary)'" in panel
+    # only the Actions cell carries the state color
+    assert "color: isFocus ? 'var(--f-info)' : 'var(--f-ok)'" in panel
+
+
+def test_experiment_target_table_header_and_direction():
+    """P29 supplement: the target display is a table with a Subjects | Actions
+    | Direction header, one row per REAL device; the Direction column is a
+    small muted mono cell that only carries a value for steering roles (speed
+    shows the em dash), and the Subjects column is right-aligned fixed width so
+    the colons align across rows."""
+    panel = (APPJSX.parent / "ExperimentPanel.jsx").read_text(encoding="utf-8")
+    # header row
+    assert "<th" in panel
+    assert "Subjects</th>" in panel
+    assert "Actions</th>" in panel
+    assert "Direction</th>" in panel
+    # rows per real device (single = one, dual = two)
+    assert "<tbody>" in panel
+    assert "<tr key={i}>" in panel
+    assert "devices.map((d, i)" in panel
+    # Direction column: small muted mono, steering only
+    assert "fontSize: 12, color: 'var(--f-text-secondary)', fontFamily: 'var(--font-mono)'" in panel
+    assert "isSpeed ? '—' : DIR_LABEL[target.b_direction]" in panel
+    # Subjects column right-aligned fixed width (colon alignment across rows)
+    assert "{subject}:" in panel
+    assert "textAlign: 'right', width: 120" in panel
+
+
 def test_experiment_panel_metadata_autoconfig():
     """P20+P21: metric/device_mode/roles come from the LIVE App.jsx 01 config
     prop (no hand selects, no backend poll); electrode is conditional on

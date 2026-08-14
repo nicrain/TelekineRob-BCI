@@ -330,10 +330,12 @@ def test_session_runs_protocol_with_recording(tmp_path):
     st = sess.state()
     assert st["phase"] == "prompt" and st["trial_idx"] == 0
     assert st["target"]["a_state"] == "attention"
+    assert st["end_ts_ms"] == 1000  # P29②: absolute phase-end (prompt_sec=1 → ms)
 
     # enter trial 0
     clock.advance(1.5)
     assert sess.state()["phase"] == "trial"
+    assert sess.state()["end_ts_ms"] == 5500  # P29②: trial 0 ends at t=5.5
 
     # record three analysis frames during the trial; the node's wall clock
     # (cmd_vel_ts) sits just before the session's receive clock → 10 ms
@@ -349,6 +351,7 @@ def test_session_runs_protocol_with_recording(tmp_path):
     # trial 0 ends → rest
     clock.advance(2.5)  # now 5.5 = phase_until → rest
     assert sess.state()["phase"] == "rest"
+    assert sess.state()["end_ts_ms"] == 7500  # P29②: rest ends at t=7.5
 
     # rest ends → next trial prompt → its trial
     clock.advance(2.5)  # now 8.0 = rest end → prompt for trial 1
@@ -363,6 +366,7 @@ def test_session_runs_protocol_with_recording(tmp_path):
     clock.advance(2.0)
     assert sess.state()["phase"] == "done"
     assert sess.state()["n_trials"] == 2
+    assert sess.state()["end_ts_ms"] == 0  # P29②: no active phase → 0
 
     # ── E1: on-disk artifacts ─────────────────────────────
     sdir = tmp_path / sid
