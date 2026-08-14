@@ -17,6 +17,7 @@ from app.experiment import (
     balanced_shuffle,
     config_summary,
     load_protocol,
+    save_protocol,
     session_meta_from_request,
     shuffle_trials,
 )
@@ -86,6 +87,34 @@ def test_load_protocol_rejects_bad_shuffle(tmp_path):
     p.write_text(json.dumps({"shuffle": "nope", "trials": [_frame_spec()]}))
     with pytest.raises(ValueError):
         load_protocol(p)
+
+
+def test_save_protocol_round_trip(tmp_path):
+    """P30: save_protocol persists a generated protocol (TrialSpec or plain
+    dict rows) that load_protocol reads back — the new default protocol.json
+    is viewable/reusable. None prompt_sec/seed are coerced to a loadable file."""
+    p = tmp_path / "protocol.json"
+    save_protocol(p, {
+        "shuffle": "balanced",
+        "seed": None,
+        "prompt_sec": None,
+        "trials": [
+            TrialSpec(a_state="attention", b_state="rest", b_direction="left", duration_sec=20, rest_sec=10),
+            TrialSpec(a_state="rest", b_state="attention", b_direction="right", duration_sec=20, rest_sec=10),
+        ],
+    })
+    proto = load_protocol(p)
+    assert proto["shuffle"] == "balanced"
+    assert proto["prompt_sec"] == pytest.approx(3.0)   # None coerced to default
+    assert proto["seed"] is None
+    assert [vars(t) for t in proto["trials"]] == [
+        {"a_state": "attention", "b_state": "rest", "b_direction": "left", "duration_sec": 20.0, "rest_sec": 10.0},
+        {"a_state": "rest", "b_state": "attention", "b_direction": "right", "duration_sec": 20.0, "rest_sec": 10.0},
+    ]
+    # plain dict rows are accepted too (a bare API caller shape)
+    save_protocol(p, {"shuffle": "random", "prompt_sec": 4.0, "trials": [_frame_spec()]})
+    assert load_protocol(p)["shuffle"] == "random"
+    assert load_protocol(p)["prompt_sec"] == pytest.approx(4.0)
 
 
 def _frame_spec():
