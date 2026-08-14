@@ -55,7 +55,6 @@ def test_experiment_panel_markers():
     for endpoint in (
         "/api/experiment/state",
         "/api/experiment/configure",
-        "/api/experiment/protocol",
         "/api/experiment/start",
         "/api/experiment/pause",
         "/api/experiment/resume",
@@ -176,11 +175,12 @@ def test_experiment_target_table_header_and_direction():
 # --- P30/P32/P33: protocol generator --------------------------------------
 
 def test_experiment_protocol_generator_markers():
-    """P33: the generator has a TOTAL-trials field ("trials") and an
+    """P33+P34: the generator has a TOTAL-trials field ("trials") and an
     "inter-trial (sec)" break — no prompt config and no Template shown
-    (auto-follows 01, internal only); Preview only computes/displays,
-    Configure is what hands the trials to the session; empty subjects default
-    to S01 (single) / A, B (dual)."""
+    (auto-follows 01, internal only). P34: Configure ALWAYS builds the
+    protocol from the CURRENT field values (no Preview gate — fill it and it
+    runs); Preview only computes/displays and lists the FULL trial list, with
+    a "+N more" line only when capped. Empty subjects default to S01 / A / B."""
     panel = (APPJSX.parent / "ExperimentPanel.jsx").read_text(encoding="utf-8")
     # fields: "trials" (total) + "inter-trial (sec)"; no prompt config
     assert "trials\n" in panel            # "trials" label (own line)
@@ -188,18 +188,45 @@ def test_experiment_protocol_generator_markers():
     assert "promptSec" not in panel       # no prompt field
     assert "trials per state" not in panel
     # no Template dropdown / label in the config area (auto, internal only)
-    assert "templateFor(cfg)" in panel    # still derived internally
-    assert "TEMPLATE_LABEL" not in panel  # not displayed
+    assert "templateFor(cfg)" in panel
+    assert "TEMPLATE_LABEL" not in panel
     assert "setTemplate" not in panel
-    # Preview only computes; Configure sends the previewed protocol
-    assert "Preview" in panel
+    # P34①: Configure always generates from the CURRENT field values — no
+    # "must Preview" gate, so what you fill is what runs.
     assert "function preview()" in panel
-    assert "buildProtocol(cfg," in panel
-    assert "trials: genProto.trials" in panel
-    assert "genProto ? {" in panel        # manual JSON fallback kept
+    assert "const proto = buildProtocol(cfg," in panel
+    assert "trials: proto.trials" in panel
+    assert "genProto ? {" not in panel    # no preview-required fallback
+    # info line reflects the current field values (what Configure runs)
+    assert "} trials · shuffle {shuffleMode} · 3s prompt" in panel
+    # P34②: preview lists the full list; truncation marked +N more
+    assert "PREVIEW_MAX" in panel
+    assert "genProto.trials.slice(0, PREVIEW_MAX)" in panel
+    assert "+{genProto.trials.length - PREVIEW_MAX} more" in panel
     # subject defaults (single S01 / dual A, B)
     assert "|| 'S01'" in panel and "|| 'A'" in panel and "|| 'B'" in panel
     assert 'placeholder="e.g. A"' in panel and 'placeholder="e.g. B"' in panel
+
+
+def test_experiment_prompt_vs_trial_visual_distinction():
+    """P34③: the prompt phase is visually distinct from the trial phase — the
+    prompt countdown is its own info-blue box ("Get ready" + blue countdown +
+    "prompt countdown" label), while the trial shows the Subjects/Actions/
+    Direction target table + countdown. No combined target&&targetOn gate."""
+    panel = (APPJSX.parent / "ExperimentPanel.jsx").read_text(encoding="utf-8")
+    # distinct phase blocks
+    assert "phase === 'prompt' && (" in panel
+    assert "phase === 'trial' && target && (" in panel
+    # prompt: own style — info-blue tint + label + blue countdown
+    assert "Get ready — trial starts soon" in panel
+    assert "background: 'rgba(76,152,185,.08)'" in panel
+    assert "prompt countdown" in panel
+    assert "color: 'var(--f-info)', marginTop: 4" in panel
+    # the old combined gate is gone (prompt no longer renders the target table)
+    assert "target && targetOn &&" not in panel
+    # the trial block keeps the role-mapped table
+    assert "devices.map((d, i)" in panel
+    assert "isFocus ? 'var(--f-info)' : 'var(--f-ok)'" in panel
 
 
 def test_experiment_protocol_generator_node():

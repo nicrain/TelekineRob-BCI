@@ -53,6 +53,10 @@ function countdownSec(endTsMs, nowMs) {
   return Math.max(0, Math.ceil((endTsMs - nowMs) / 1000));
 }
 
+// P34②: the Preview lists the full trial list up to this cap; beyond it a
+// "+N more" line is shown (never a silent truncation).
+const PREVIEW_MAX = 20;
+
 // P33⑧: formal template names — A Forward/Stop (single + speed), B Steering +
 // Direction (single + steering), Dual Collaborative (dual). The template
 // AUTO-follows the live 01 config (no dropdown; P33⑦: not shown in the config
@@ -196,7 +200,6 @@ function buildProtocol(cfg, opts) {
 
 export default function ExperimentPanel({ config }) {
   const [exp, setExp] = useState(null);
-  const [protocol, setProtocol] = useState(null);
   const [busy, setBusy] = useState(false);
   // P22②: after Configure the session view shows; formOpen lets the operator
   // EXIT back to the form (to re-configure / open a new session) — no one-way
@@ -217,11 +220,13 @@ export default function ExperimentPanel({ config }) {
     const t = setInterval(() => setNow(Date.now()), 200);
     return () => clearInterval(t);
   }, []);
-  // P33: protocol generator — total trials + durations + shuffle → Preview
-  // builds the ACTIVE template (auto-derived from cfg) via buildProtocol and
-  // displays the trials; Configure hands them to the session (falls back to
-  // the saved default protocol.json when nothing was previewed). No prompt
-  // field — the prompt time is a fixed 3 s default (P33③).
+  // P34①: protocol generator — total trials + durations + shuffle. Preview
+  // only computes + displays (no system effect); Configure ALWAYS builds the
+  // protocol from the CURRENT field values and hands it to the session — no
+  // "must Preview first" gate, killing the "fill 8 but run 24" trap. The repo
+  // default protocol.json is only the backend's fallback for callers that send
+  // no trials (hand-written JSON / API); the UI always sends field-derived
+  // trials. No prompt field — fixed 3 s default (P33③).
   const [trials, setTrials] = useState(8);
   const [duration, setDuration] = useState(20);
   const [restSec, setRestSec] = useState(10);
@@ -235,10 +240,6 @@ export default function ExperimentPanel({ config }) {
     refresh();
     const t = setInterval(refresh, 500);
     return () => clearInterval(t);
-  }, []);
-
-  useEffect(() => {
-    api.get('/api/experiment/protocol').then((r) => setProtocol(r.data)).catch(() => {});
   }, []);
 
   function setMetaField(key, value) {
@@ -257,9 +258,12 @@ export default function ExperimentPanel({ config }) {
       // P21: send the live 01 config; the backend validates it and records it
       // into session.json's system block. P22②: re-configuring is allowed —
       // the backend starts a fresh session; flip back to the session view.
-      // P30: when the operator generated a protocol, send it (trials are in
-      // final run order — buildProtocol already applied shuffle); otherwise
-      // the backend uses the saved default protocol.json.
+      // P34①: Configure ALWAYS builds the protocol from the CURRENT field
+      // values (no Preview gate) — what you filled is what runs. The trials
+      // are in final run order (buildProtocol applied shuffle).
+      const proto = buildProtocol(cfg, {
+        trials: trials, duration_sec: duration, rest_sec: restSec, shuffle: shuffleMode,
+      });
       const r = await api.post('/api/experiment/configure', {
         meta: {
           // P33⑥: empty subject falls back to a name so the target display is
@@ -270,12 +274,10 @@ export default function ExperimentPanel({ config }) {
           date: new Date().toISOString().slice(0, 10),
         },
         config: cfg,
-        ...(genProto ? {
-          trials: genProto.trials,
-          shuffle: genProto.shuffle,
-          seed: genProto.seed,
-          prompt_sec: genProto.prompt_sec,
-        } : {}),
+        trials: proto.trials,
+        shuffle: proto.shuffle,
+        seed: proto.seed,
+        prompt_sec: proto.prompt_sec,
       });
       if (r.data?.state) setExp(r.data.state);
       setFormOpen(false);
@@ -309,7 +311,6 @@ export default function ExperimentPanel({ config }) {
     : Math.ceil(exp?.remaining_sec ?? 0);
   const configured = !!exp?.configured;
 
-  const targetOn = phase === 'prompt' || phase === 'trial';
   const phaseBadgeStyle = {
     padding: '2px 8px', borderRadius: 2, fontSize: 12, fontFamily: 'var(--font-mono)',
     background: phase === 'trial' ? 'rgba(3,144,74,.15)' : (phase === 'prompt' ? 'rgba(241,58,44,.15)' : 'rgba(76,152,185,.15)'),
@@ -468,11 +469,18 @@ export default function ExperimentPanel({ config }) {
             {genProto && (
               <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--f-text-secondary)', marginTop: 8 }}>
                 <div>{genProto.n_trials} trials · shuffle {genProto.shuffle} · {genProto.prompt_sec}s prompt</div>
-                {genProto.trials.slice(0, 4).map((tr, i) => (
+                {/* P34②: list the FULL trial list (no "8 trials but 4 rows"
+                    illusion); only when capped is a "+N more" line shown. */}
+                {genProto.trials.slice(0, PREVIEW_MAX).map((tr, i) => (
                   <div key={i} style={{ color: 'var(--f-text-primary)' }}>
                     {i + 1}: a={tr.a_state} · b={tr.b_state} · dir={tr.b_direction}
                   </div>
                 ))}
+                {genProto.trials.length > PREVIEW_MAX && (
+                  <div style={{ color: 'var(--f-text-secondary)' }}>
+                    +{genProto.trials.length - PREVIEW_MAX} more
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -480,10 +488,11 @@ export default function ExperimentPanel({ config }) {
             <button className="btn btn-cta" disabled={busy} onClick={configure}>
               {configured ? 'Configure new session' : 'Configure session'}
             </button>
+            {/* P34①: the info line always reflects what Configure will run —
+                the CURRENT field values (buildProtocol yields exactly the
+                trials field, so no extra computation needed). */}
             <span style={{ fontSize: 12, color: 'var(--f-text-secondary)' }}>
-              {(genProto || protocol)
-                ? `${(genProto || protocol).n_trials} trials · shuffle ${(genProto || protocol).shuffle} · ${(genProto || protocol).prompt_sec}s prompt`
-                : 'loading protocol…'}
+              {trials} trials · shuffle {shuffleMode} · 3s prompt
             </span>
             {configured && exp?.session_id && (
               <span style={{ fontSize: 12, color: 'var(--f-text-secondary)', fontFamily: 'var(--font-mono)' }}>
@@ -516,7 +525,25 @@ export default function ExperimentPanel({ config }) {
             <button className="btn btn-ghost" onClick={() => setFormOpen(true)}>Exit</button>
           </div>
 
-          {target && targetOn && (
+          {/* P34③: prompt phase is its OWN distinct block — info-blue tinted
+              box + "Get ready" + blue countdown, clearly NOT the trial target
+              (which shows the Subjects/Actions/Direction table instead). The
+              3-2-1 prompt countdown can never be mistaken for the trial one. */}
+          {phase === 'prompt' && (
+            <div style={{ textAlign: 'center', padding: '12px 0', marginTop: 8, background: 'rgba(76,152,185,.08)', border: '1px solid rgba(76,152,185,.25)', borderRadius: 2 }}>
+              <div style={{ fontSize: 13, fontFamily: 'var(--font-mono)', color: 'var(--f-info)' }}>
+                Get ready — trial starts soon
+              </div>
+              <div style={{ fontSize: 34, fontFamily: 'var(--font-mono)', color: 'var(--f-info)', marginTop: 4 }}>
+                {remaining}s
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--f-text-secondary)', marginTop: 2 }}>
+                prompt countdown · Trial {idx} / {total}
+              </div>
+            </div>
+          )}
+
+          {phase === 'trial' && target && (
             <div style={{ padding: '14px 0' }}>
               {/* P29 supplement: the target display is a table on top of the
                   P28 role mapping — Subjects | Actions | Direction, one row
@@ -562,9 +589,6 @@ export default function ExperimentPanel({ config }) {
               <div style={{ fontSize: 13, color: 'var(--f-text-secondary)', textAlign: 'center' }}>
                 Trial {idx} / {total}
               </div>
-              {phase === 'prompt' && (
-                <div style={{ color: 'var(--f-info)', fontSize: 13, textAlign: 'center' }}>Get ready — trial starts soon</div>
-              )}
             </div>
           )}
 
