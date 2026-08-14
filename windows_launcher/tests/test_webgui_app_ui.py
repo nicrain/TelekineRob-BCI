@@ -173,68 +173,100 @@ def test_experiment_target_table_header_and_direction():
     assert "textAlign: 'right', width: 120" in panel
 
 
-# --- P30: protocol generator ----------------------------------------------
+# --- P30/P32: protocol generator ------------------------------------------
 
 def test_experiment_protocol_generator_markers():
-    """P30: the panel has a protocol generator — template dropdown + n /
-    duration / rest / prompt / shuffle params, a Generate button that builds
-    the trials via buildProtocol and shows a preview, and Configure sends the
-    generated trials to the backend (falling back to the default protocol.json
-    when nothing was generated)."""
+    """P32: the generator AUTO-follows the live 01 config — NO template
+    dropdown (template derived from cfg: single speed / single steering /
+    dual); params are trials-per-state / duration / rest / prompt / shuffle;
+    Generate builds the trials via buildProtocol and shows a preview;
+    Configure sends the generated trials (falling back to the saved default
+    protocol.json when nothing was generated)."""
     panel = (APPJSX.parent / "ExperimentPanel.jsx").read_text(encoding="utf-8")
-    # templates + params
-    assert "buildProtocol(" in panel
-    for tpl in ("'a_only'", "'b_steering'", "'b_blink'", "'dual_joint'"):
-        assert tpl in panel, f"missing template {tpl}"
+    # auto template from the live config — no dropdown, 3 templates only
+    assert "templateFor(cfg)" in panel
+    assert "TEMPLATE_LABEL[templateFor(cfg)]" in panel
+    assert "TEMPLATE_OPTIONS" not in panel
+    assert "setTemplate" not in panel
+    for old in ("'a_only'", "'b_blink'", "'dual_joint'"):
+        assert old not in panel, f"old template {old} still present"
+    # params + label
+    assert "trials per state" in panel
+    assert "shuffleMode" in panel
     assert "Generate" in panel
-    assert "TEMPLATE_OPTIONS.map((o)" in panel
-    # preview shows a few generated trials
+    assert "buildProtocol(cfg," in panel
+    # preview + configure payload
     assert "genProto.trials.slice(0, 4)" in panel
-    # Configure sends the generated protocol (optional — default kept)
     assert "trials: genProto.trials" in panel
     assert "shuffle: genProto.shuffle" in panel
     assert "prompt_sec: genProto.prompt_sec" in panel
-    assert "seed: genProto.seed" in panel
     # hand-written protocol.json remains the fallback entry (no forced gen)
     assert "genProto ? {" in panel
 
 
 def test_experiment_protocol_generator_node():
-    """P30: buildProtocol generates the per-template target combos and applies
-    shuffle — none keeps block order, random is seeded-deterministic, balanced
-    round-robins over condition buckets (no adjacent identical targets)."""
+    """P32: buildProtocol derives the template from cfg (single speed /
+    single steering / dual), each totals 2n trials, and every dimension state
+    appears exactly n times (dual 3D, steering 2D) — odd n rounds via the
+    balanced remainder. Shuffle still works (balanced → no adjacent repeats)."""
     import subprocess
     panel = (APPJSX.parent / "ExperimentPanel.jsx").read_text(encoding="utf-8")
-    src = "\n\n".join(_extract_function(panel, n) for n in ("mulberry32", "shuffleTrials", "buildProtocol"))
+    src = "\n\n".join(_extract_function(panel, n) for n in
+                      ("mulberry32", "shuffleTrials", "templateFor", "aSpeedTrials",
+                       "steeringTrials", "dualTrials", "buildProtocol"))
     script = src + """
 function eq(name, got, want) {
   if (JSON.stringify(got) !== JSON.stringify(want)) {
     console.error("FAIL " + name, "got", JSON.stringify(got), "want", JSON.stringify(want)); process.exit(1);
   }
 }
-// A-only n=2: 4 trials — a attention×2 then rest×2, b rest throughout
-let p = buildProtocol('a_only', { n: 2, duration_sec: 20, rest_sec: 10, shuffle: 'none' });
-eq("a_only.n", p.n_trials, 4);
-eq("a_only.states", p.trials.map((t) => t.a_state + "/" + t.b_state),
-   ["attention/rest", "attention/rest", "rest/rest", "rest/rest"]);
-eq("a_only.dur", p.trials[0].duration_sec, 20);
-// B-steering n=1: b attention then rest, a rest throughout
-p = buildProtocol('b_steering', { n: 1, shuffle: 'none' });
-eq("b_steering.states", p.trials.map((t) => t.a_state + "/" + t.b_state), ["rest/attention", "rest/rest"]);
-// B-blink n=2: b attention always, direction left×2 then right×2
-p = buildProtocol('b_blink', { n: 2, shuffle: 'none' });
-eq("b_blink.dirs", p.trials.map((t) => t.b_direction), ["left", "left", "right", "right"]);
-eq("b_blink.b", p.trials.every((t) => t.a_state === "rest" && t.b_state === "attention"), true);
-// Dual-joint n=1: all 8 (a, b, direction) combos appear once
-p = buildProtocol('dual_joint', { n: 1, shuffle: 'none' });
-eq("dual_joint.n", p.n_trials, 8);
-eq("dual_joint.unique", new Set(p.trials.map((t) => t.a_state + "/" + t.b_state + "/" + t.b_direction)).size, 8);
+function count(arr, fn) { return arr.filter(fn).length; }
+const speedCfg = { device_mode: 'single', roles: ['speed'] };
+const steerCfg = { device_mode: 'single', roles: ['steering'] };
+const dualCfg = { device_mode: 'dual', roles: ['speed', 'steering'] };
+// a-speed n=2: 4 trials (2n) — a attention 2 + rest 2, b rest / dir left fixed
+let p = buildProtocol(speedCfg, { n: 2, duration_sec: 20, rest_sec: 10, shuffle: 'none' });
+eq("a_speed.template", p.template, 'a_speed');
+eq("a_speed.n", p.n_trials, 4);
+eq("a_speed.a", count(p.trials, (t) => t.a_state === "attention"), 2);
+eq("a_speed.a_rest", count(p.trials, (t) => t.a_state === "rest"), 2);
+eq("a_speed.b_fixed", p.trials.every((t) => t.b_state === "rest" && t.b_direction === "left"), true);
+eq("a_speed.dur", p.trials[0].duration_sec, 20);
+// b-steering+blink n=4 (even): 8 trials (2n), b_state n/n and direction n/n
+p = buildProtocol(steerCfg, { n: 4, shuffle: 'none' });
+eq("b_steering.template", p.template, 'b_steering');
+eq("b_steering.n", p.n_trials, 8);
+eq("b_steering.b", count(p.trials, (t) => t.b_state === "attention"), 4);
+eq("b_steering.b_rest", count(p.trials, (t) => t.b_state === "rest"), 4);
+eq("b_steering.left", count(p.trials, (t) => t.b_direction === "left"), 4);
+eq("b_steering.right", count(p.trials, (t) => t.b_direction === "right"), 4);
+eq("b_steering.a_rest", p.trials.every((t) => t.a_state === "rest"), true);
+// b-steering+blink n=3 (odd): 6 trials, still n/n on both dimensions
+p = buildProtocol(steerCfg, { n: 3, shuffle: 'none' });
+eq("b_steering_odd.n", p.n_trials, 6);
+eq("b_steering_odd.b", count(p.trials, (t) => t.b_state === "attention"), 3);
+eq("b_steering_odd.left", count(p.trials, (t) => t.b_direction === "left"), 3);
+// dual n=4 (even): 8 trials (2n), all three dimensions n/n, 8 combos × 1
+p = buildProtocol(dualCfg, { n: 4, shuffle: 'none' });
+eq("dual.template", p.template, 'dual');
+eq("dual.n", p.n_trials, 8);
+eq("dual.a", count(p.trials, (t) => t.a_state === "attention"), 4);
+eq("dual.a_rest", count(p.trials, (t) => t.a_state === "rest"), 4);
+eq("dual.b", count(p.trials, (t) => t.b_state === "attention"), 4);
+eq("dual.left", count(p.trials, (t) => t.b_direction === "left"), 4);
+eq("dual.combos", new Set(p.trials.map((t) => t.a_state + "/" + t.b_state + "/" + t.b_direction)).size, 8);
+// dual n=3 (odd): 6 trials, still n/n on all three dimensions
+p = buildProtocol(dualCfg, { n: 3, shuffle: 'none' });
+eq("dual_odd.n", p.n_trials, 6);
+eq("dual_odd.a", count(p.trials, (t) => t.a_state === "attention"), 3);
+eq("dual_odd.b", count(p.trials, (t) => t.b_state === "attention"), 3);
+eq("dual_odd.left", count(p.trials, (t) => t.b_direction === "left"), 3);
 // random is seeded-deterministic
-const r1 = buildProtocol('a_only', { n: 4, shuffle: 'random', seed: 7 }).trials;
-const r2 = buildProtocol('a_only', { n: 4, shuffle: 'random', seed: 7 }).trials;
+const r1 = buildProtocol(dualCfg, { n: 4, shuffle: 'random', seed: 7 }).trials;
+const r2 = buildProtocol(dualCfg, { n: 4, shuffle: 'random', seed: 7 }).trials;
 eq("random.seeded", r1.map((t) => t.a_state).join(), r2.map((t) => t.a_state).join());
 // balanced round-robins: never two adjacent trials with the same target key
-const b = buildProtocol('dual_joint', { n: 3, shuffle: 'balanced', seed: 3 }).trials;
+const b = buildProtocol(dualCfg, { n: 4, shuffle: 'balanced', seed: 3 }).trials;
 let adjacent = 0;
 for (let i = 1; i < b.length; i++) {
   const k0 = b[i - 1].a_state + "/" + b[i - 1].b_state + "/" + b[i - 1].b_direction;

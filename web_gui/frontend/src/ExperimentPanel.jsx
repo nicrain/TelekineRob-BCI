@@ -53,13 +53,23 @@ function countdownSec(endTsMs, nowMs) {
   return Math.max(0, Math.ceil((endTsMs - nowMs) / 1000));
 }
 
-// P30: protocol-generator templates — each maps (a_state, b_state, b_direction).
-const TEMPLATE_OPTIONS = [
-  { value: 'a_only', label: 'A-only (speed: focus/relax)' },
-  { value: 'b_steering', label: 'B-steering (turns)' },
-  { value: 'b_blink', label: 'B-blink (direction)' },
-  { value: 'dual_joint', label: 'Dual-joint (both)' },
-];
+// P32: the template AUTO-follows the live 01 config (device_mode + roles) —
+// no manual dropdown. Single speed → a-speed, single steering →
+// b-steering+blink, dual → dual. 3 templates, each totaling 2n trials so
+// they are comparable.
+const TEMPLATE_LABEL = {
+  a_speed: 'a-speed (single: focus/relax)',
+  b_steering: 'b-steering + blink (single: turns)',
+  dual: 'dual (both devices)',
+};
+
+// P32: derive the active template from the live config.
+function templateFor(cfg) {
+  const mode = cfg?.device_mode || 'single';
+  if (mode === 'dual') return 'dual';
+  const role = (cfg?.roles || [])[0];
+  return role === 'steering' ? 'b_steering' : 'a_speed';
+}
 
 // P30: seeded PRNG (mulberry32) so random/balanced shuffle is reproducible.
 function mulberry32(a) {
@@ -113,10 +123,63 @@ function shuffleTrials(trials, mode, seed) {
   return out;
 }
 
-// P30: generate a template's trials then apply shuffle. Returns the FINAL
-// protocol — the trials are already in run order, so Configure posts them
-// verbatim (the backend applies none) and the preview equals the run.
-function buildProtocol(template, opts) {
+// P32: trial generators — n = trials PER DIMENSION STATE; each template totals
+// 2n (comparable). Focus and blink share the SAME trial, so no "per combo × n"
+// double-counting: the 2n trials are distributed so every dimension state
+// appears exactly n times (odd n rounds via a balanced remainder).
+
+// a-speed: b_state rest + b_direction left throughout; a_state attention × n
+// then rest × n (2n total).
+function aSpeedTrials(n, push) {
+  for (let i = 0; i < n; i++) push('attention', 'rest', 'left');
+  for (let i = 0; i < n; i++) push('rest', 'rest', 'left');
+}
+
+// b-steering+blink: a_state rest throughout; b_state balanced (n attention +
+// n rest) AND b_direction balanced (n left + n right) → 4 combos ≈ n/2 each
+// (2n total, no double-counting).
+function steeringTrials(n, push) {
+  const base = Math.floor(n / 2);
+  for (const b of ['attention', 'rest']) {
+    for (const d of ['left', 'right']) {
+      for (let i = 0; i < base; i++) push('rest', b, d);
+    }
+  }
+  if (n % 2 === 1) {   // odd n: the two remainder trials land on opposite corners
+    push('rest', 'attention', 'left');
+    push('rest', 'rest', 'right');
+  }
+}
+
+// dual: all three dimensions balanced — a_state n/n, b_state n/n,
+// b_direction n/n → 8 combos ≈ n/4 each (2n total, 3D balanced).
+function dualTrials(n, push) {
+  const base = Math.floor(n / 4);
+  for (const a of ['attention', 'rest']) {
+    for (const b of ['attention', 'rest']) {
+      for (const d of ['left', 'right']) {
+        for (let i = 0; i < base; i++) push(a, b, d);
+      }
+    }
+  }
+  const rem = n % 4;   // the remainder adds exactly rem to every dimension state
+  const extras = {
+    0: [],
+    1: [['attention', 'attention', 'left'], ['rest', 'rest', 'right']],
+    2: [['attention', 'attention', 'left'], ['attention', 'attention', 'right'],
+        ['rest', 'rest', 'left'], ['rest', 'rest', 'right']],
+    3: [['attention', 'attention', 'left'], ['rest', 'rest', 'right'],
+        ['attention', 'attention', 'left'], ['attention', 'attention', 'right'],
+        ['rest', 'rest', 'left'], ['rest', 'rest', 'right']],
+  }[rem];
+  for (const [a, b, d] of extras) push(a, b, d);
+}
+
+// P32: generate the ACTIVE template's trials (auto-derived from cfg) then
+// apply shuffle. Returns the FINAL protocol — the trials are already in run
+// order, so Configure posts them verbatim (the backend applies none) and the
+// preview equals the run.
+function buildProtocol(cfg, opts) {
   const o = opts || {};
   const n = Math.max(1, Math.floor(o.n || 1));
   const duration_sec = o.duration_sec != null ? o.duration_sec : 20;
@@ -124,34 +187,18 @@ function buildProtocol(template, opts) {
   const prompt_sec = o.prompt_sec != null ? o.prompt_sec : 3;
   const shuffle = o.shuffle || 'balanced';
   const seed = o.seed != null ? o.seed : null;
+  const template = templateFor(cfg);
   const t = [];
   const push = (a, b, d) => t.push({ a_state: a, b_state: b, b_direction: d, duration_sec, rest_sec });
-  if (template === 'a_only') {
-    // b rest throughout; a attention × n then rest × n
-    for (let i = 0; i < n; i++) push('attention', 'rest', 'left');
-    for (let i = 0; i < n; i++) push('rest', 'rest', 'left');
+  if (template === 'a_speed') {
+    aSpeedTrials(n, push);
   } else if (template === 'b_steering') {
-    // a rest throughout; b attention × n then rest × n
-    for (let i = 0; i < n; i++) push('rest', 'attention', 'left');
-    for (let i = 0; i < n; i++) push('rest', 'rest', 'left');
-  } else if (template === 'b_blink') {
-    // a rest, b attention throughout; direction left × n then right × n
-    for (let i = 0; i < n; i++) push('rest', 'attention', 'left');
-    for (let i = 0; i < n; i++) push('rest', 'attention', 'right');
-  } else if (template === 'dual_joint') {
-    // every (a, b, direction) combo × n — the joint balanced design
-    for (const a of ['attention', 'rest']) {
-      for (const b of ['attention', 'rest']) {
-        for (const d of ['left', 'right']) {
-          for (let i = 0; i < n; i++) push(a, b, d);
-        }
-      }
-    }
+    steeringTrials(n, push);
   } else {
-    throw new Error(`unknown template ${template}`);
+    dualTrials(n, push);
   }
   const trials = shuffleTrials(t, shuffle, seed);
-  return { trials, n_trials: trials.length, shuffle, seed, prompt_sec };
+  return { trials, n_trials: trials.length, shuffle, seed, prompt_sec, template };
 }
 
 export default function ExperimentPanel({ config }) {
@@ -177,10 +224,10 @@ export default function ExperimentPanel({ config }) {
     const t = setInterval(() => setNow(Date.now()), 200);
     return () => clearInterval(t);
   }, []);
-  // P30: protocol generator — template + per-condition params → buildProtocol
-  // on Generate; the result is sent to Configure (falls back to the saved
-  // default protocol.json when nothing was generated).
-  const [template, setTemplate] = useState('a_only');
+  // P32: protocol generator — n + durations + shuffle → Generate builds the
+  // ACTIVE template (auto-derived from cfg) via buildProtocol; the result is
+  // sent to Configure (falls back to the saved default protocol.json when
+  // nothing was generated).
   const [nTrials, setNTrials] = useState(4);
   const [duration, setDuration] = useState(20);
   const [restSec, setRestSec] = useState(10);
@@ -206,7 +253,7 @@ export default function ExperimentPanel({ config }) {
   }
 
   function generate() {
-    setGenProto(buildProtocol(template, {
+    setGenProto(buildProtocol(cfg, {
       n: nTrials, duration_sec: duration, rest_sec: restSec,
       prompt_sec: promptSec, shuffle: shuffleMode,
     }));
@@ -387,21 +434,19 @@ export default function ExperimentPanel({ config }) {
               to the backend, which records them in session.json (P31: NOT
               written back to the repo protocol.json — reuse is by regenerating
               in the panel). Without Generate, Configure keeps the saved
-              default — a hand-written protocol.json stays a valid entry. */}
+              default — a hand-written protocol.json stays a valid entry.
+              P32: the template AUTO-follows the 01 config (no dropdown);
+              n = trials PER STATE (each template totals 2n); rest_sec is the
+              inter-trial break. */}
           <div style={{ marginTop: 12, padding: 10, border: '1px solid var(--f-border-strong)', borderRadius: 2 }}>
             <span className="section-label">Protocol</span>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end', marginTop: 6 }}>
-              <label style={fieldLabelStyle}>
+              <span style={fieldLabelStyle}>
                 Template
-                <select style={{ ...inputStyle, width: 200 }} value={template}
-                  onChange={(e) => setTemplate(e.target.value)}>
-                  {TEMPLATE_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
-                  ))}
-                </select>
-              </label>
+                <span style={valueStyle}>{TEMPLATE_LABEL[templateFor(cfg)] || '…'}</span>
+              </span>
               <label style={fieldLabelStyle}>
-                n / condition
+                trials per state
                 <input style={{ ...inputStyle, width: 48 }} type="number" min="1" value={nTrials}
                   onChange={(e) => setNTrials(Number(e.target.value) || 1)} />
               </label>
