@@ -67,7 +67,44 @@ def test_experiment_panel_markers():
     assert "DIR_LABEL" in panel
     assert "remaining" in panel
     assert "Get ready" in panel
-    assert "Rest — next trial" in panel
+    assert "Break — next trial" in panel  # P28: between-trials rest is Break
+
+
+# --- P28: experiment target-display UX -------------------------------------
+
+def test_experiment_target_style_markers():
+    """P28①②: the three target states are visually distinct and English only —
+    Focus = blue (--f-info), Relax = green (--f-ok), Break = neutral gray +
+    timer icon + 'next trial in Xs' countdown. No warning red, no Chinese."""
+    panel = (APPJSX.parent / "ExperimentPanel.jsx").read_text(encoding="utf-8")
+    # Focus / Relax label the per-row target STATE (replaces ATTENTION/REST)
+    assert "STATE_LABEL = { attention: 'Focus', rest: 'Relax' }" in panel
+    # color keyed by the STATE — Focus blue, Relax green
+    assert "isFocus ? 'var(--f-info)' : 'var(--f-ok)'" in panel
+    # Break: between-trials rest — timer icon + countdown, neutral gray
+    assert "⏱ Break — next trial in {remaining}s" in panel
+    # the old warning-red target color is gone; no Chinese labels anywhere
+    assert "'var(--f-red)'" not in panel
+    for zh in ("注意", "放松", "休息", "方向"):
+        assert zh not in panel
+
+
+def test_experiment_target_role_mapped_rows():
+    """P28③: target rows are mapped per REAL device by role — speed → a_state,
+    steering → b_state + b_direction — and labeled with the actual subject
+    name; single device renders one row (whatever its role), dual renders two.
+    The old hardcoded A:/B: lines are gone."""
+    panel = (APPJSX.parent / "ExperimentPanel.jsx").read_text(encoding="utf-8")
+    # rows come from the device list, not hardcoded lines
+    assert "devices.map((d, i)" in panel
+    assert "isSpeed ? target.a_state : target.b_state" in panel
+    assert "DIR_LABEL[target.b_direction]" in panel
+    # no hardcoded A:/B: target lines remain
+    assert "A: {STATE_LABEL" not in panel
+    assert "B: {STATE_LABEL" not in panel
+    # subject name per row — single → subject, dual → subject / subject_b
+    assert "i === 0 ? meta.subject : meta.subject_b" in panel
+    assert "devices.length > 1" in panel and ": meta.subject" in panel
 
 
 def test_experiment_panel_metadata_autoconfig():

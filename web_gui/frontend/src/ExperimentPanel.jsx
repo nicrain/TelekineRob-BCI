@@ -10,8 +10,10 @@ markers here are pinned by windows_launcher/tests/test_webgui_app_ui.py.
 import { useEffect, useState } from 'react';
 import { api } from './api';
 
-const PHASE_LABELS = { idle: 'Idle', prompt: 'Prompt', trial: 'Trial', rest: 'Rest', paused: 'Paused', done: 'Done' };
-const STATE_LABEL = { attention: 'ATTENTION', rest: 'REST' };
+const PHASE_LABELS = { idle: 'Idle', prompt: 'Prompt', trial: 'Trial', rest: 'Break', paused: 'Paused', done: 'Done' };
+// P28②: the per-row target STATE reads Focus (attention, blue) / Relax (rest,
+// green); Break is the between-trials rest phase shown below the badge.
+const STATE_LABEL = { attention: 'Focus', rest: 'Relax' };
 const DIR_LABEL = { left: 'LEFT', right: 'RIGHT' };
 
 const inputStyle = {
@@ -267,24 +269,48 @@ export default function ExperimentPanel({ config }) {
 
           {target && targetOn && (
             <div style={{ textAlign: 'center', padding: '14px 0' }}>
-              <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: 1, fontFamily: 'var(--font-mono)', color: 'var(--f-red)' }}>
-                A: {STATE_LABEL[target.a_state]}
-              </div>
-              <div style={{ fontSize: 17, marginTop: 4 }}>
-                B: {STATE_LABEL[target.b_state]} · direction {DIR_LABEL[target.b_direction]}
-              </div>
+              {/* P28③: one row per REAL device, mapped by role — speed reads
+                  a_state, steering reads b_state + b_direction — each row
+                  labeled with the actual subject name. One device = one row
+                  whatever its role; dual = two rows. No hardcoded A:/B: lines.
+                  Focus is blue, Relax is green (no warning red). */}
+              {devices.map((d, i) => {
+                const isSpeed = d.role === 'speed';
+                const state = isSpeed ? target.a_state : target.b_state;
+                const isFocus = state === 'attention';
+                const subject = devices.length > 1
+                  ? (i === 0 ? meta.subject : meta.subject_b)
+                  : meta.subject;
+                return (
+                  <div key={i} style={{
+                    fontSize: 26, fontWeight: 700, letterSpacing: 1,
+                    fontFamily: 'var(--font-mono)', marginTop: i ? 8 : 0,
+                    color: isFocus ? 'var(--f-info)' : 'var(--f-ok)',
+                  }}>
+                    {subject}: {STATE_LABEL[state]}
+                    {!isSpeed && ` · ${DIR_LABEL[target.b_direction]}`}
+                  </div>
+                );
+              })}
               <div style={{ fontSize: 34, fontFamily: 'var(--font-mono)', marginTop: 8 }}>
                 {remaining}s
               </div>
+              <div style={{ fontSize: 13, color: 'var(--f-text-secondary)' }}>
+                Trial {idx} / {total}
+              </div>
               {phase === 'prompt' && (
-                <div style={{ color: 'var(--f-warn)', fontSize: 13 }}>Get ready — trial starts soon</div>
+                <div style={{ color: 'var(--f-info)', fontSize: 13 }}>Get ready — trial starts soon</div>
               )}
             </div>
           )}
 
           {phase === 'rest' && (
             <div style={{ textAlign: 'center', padding: '14px 0', color: 'var(--f-text-secondary)' }}>
-              <div style={{ fontSize: 20 }}>Rest — next trial in {remaining}s</div>
+              {/* P28①: Break is the BETWEEN-trials rest — neutral gray + timer
+                  icon + 'next trial in Xs' countdown. It is NOT the per-row
+                  Relax target shown inside a trial (that is green, with the
+                  trial timer above) — the two never mix. */}
+              <div style={{ fontSize: 20 }}>⏱ Break — next trial in {remaining}s</div>
             </div>
           )}
 
