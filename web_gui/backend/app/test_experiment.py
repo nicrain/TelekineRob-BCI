@@ -17,7 +17,6 @@ from app.experiment import (
     balanced_shuffle,
     config_summary,
     load_protocol,
-    save_protocol,
     session_meta_from_request,
     shuffle_trials,
 )
@@ -89,32 +88,12 @@ def test_load_protocol_rejects_bad_shuffle(tmp_path):
         load_protocol(p)
 
 
-def test_save_protocol_round_trip(tmp_path):
-    """P30: save_protocol persists a generated protocol (TrialSpec or plain
-    dict rows) that load_protocol reads back — the new default protocol.json
-    is viewable/reusable. None prompt_sec/seed are coerced to a loadable file."""
-    p = tmp_path / "protocol.json"
-    save_protocol(p, {
-        "shuffle": "balanced",
-        "seed": None,
-        "prompt_sec": None,
-        "trials": [
-            TrialSpec(a_state="attention", b_state="rest", b_direction="left", duration_sec=20, rest_sec=10),
-            TrialSpec(a_state="rest", b_state="attention", b_direction="right", duration_sec=20, rest_sec=10),
-        ],
-    })
-    proto = load_protocol(p)
-    assert proto["shuffle"] == "balanced"
-    assert proto["prompt_sec"] == pytest.approx(3.0)   # None coerced to default
-    assert proto["seed"] is None
-    assert [vars(t) for t in proto["trials"]] == [
-        {"a_state": "attention", "b_state": "rest", "b_direction": "left", "duration_sec": 20.0, "rest_sec": 10.0},
-        {"a_state": "rest", "b_state": "attention", "b_direction": "right", "duration_sec": 20.0, "rest_sec": 10.0},
-    ]
-    # plain dict rows are accepted too (a bare API caller shape)
-    save_protocol(p, {"shuffle": "random", "prompt_sec": 4.0, "trials": [_frame_spec()]})
-    assert load_protocol(p)["shuffle"] == "random"
-    assert load_protocol(p)["prompt_sec"] == pytest.approx(4.0)
+def test_save_protocol_removed():
+    """P31: save_protocol was deleted — a generated protocol is session-local
+    (recorded in session.json's protocol + trials blocks), never written back
+    to the repo protocol.json, so a real-device Configure cannot dirty git."""
+    import app.experiment as experiment_mod
+    assert not hasattr(experiment_mod, "save_protocol")
 
 
 def _frame_spec():
@@ -337,6 +316,9 @@ def test_session_json_records_system_config(tmp_path):
     assert "metric" not in data["meta"]                  # no hand metric field
     assert "device_mode" not in data["meta"]             # no hand mode field
     assert data["protocol"]["n_trials"] == 1
+    # P31: the (shuffled) trials actually used are recorded verbatim in
+    # session.json — reuse is by regenerating in the panel, no repo file.
+    assert data["trials"] == [vars(t) for t in _trials(1)]
 
 
 # --- session state machine (E3) + recording (E1) + labels (E4) ------------

@@ -636,26 +636,3 @@ def load_protocol(path: str | Path) -> dict:
 
 
 DEFAULT_PROTOCOL = Path(__file__).resolve().parent / "protocol.json"
-
-
-def save_protocol(path: str | Path, protocol: dict) -> None:
-    """Persist a protocol (trials + shuffle + seed + prompt_sec) to JSON.
-
-    P30: the frontend's generated protocol is written as the NEW default
-    protocol.json so it is viewable/reusable (Generate overwrites the default;
-    a hand-edited protocol.json is still honored whenever the frontend does
-    NOT send inline trials). ``trials`` may be TrialSpec objects or plain
-    dicts; prompt_sec/seed are coerced so a None from a bare API caller still
-    yields a loadable file.
-    """
-    trials = protocol.get("trials", [])
-    row = lambda t: trial_dict(t) if hasattr(t, "a_state") else dict(t)  # noqa: E731
-    data = {
-        "prompt_sec": float(protocol.get("prompt_sec") or PROMPT_SEC),
-        "shuffle": protocol.get("shuffle") or "none",
-        "seed": protocol.get("seed"),
-        "trials": [row(t) for t in trials],
-    }
-    with open(Path(path), "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
-        f.write("\n")

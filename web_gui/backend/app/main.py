@@ -21,7 +21,6 @@ from .experiment import (
     TrialSpec,
     config_summary,
     load_protocol,
-    save_protocol,
     session_meta_from_request,
     trial_dict,
 )
@@ -364,17 +363,13 @@ def exp_configure(req: ExperimentConfigureRequest) -> dict[str, Any]:
         trials = [TrialSpec(**t.model_dump()) for t in req.trials]
         # P30: the frontend's buildProtocol already applied shuffle — the order
         # it sends is final (WYSIWYG preview == run), so the session uses it
-        # verbatim. The generated protocol is ALSO saved as the new default
-        # protocol.json (viewable/reusable); a hand-written protocol.json is
-        # still honored whenever trials are NOT sent.
+        # verbatim. P31: the generated trials are NOT written back to the repo
+        # protocol.json (that would dirty the git worktree on every Configure) —
+        # they are fully recorded in session.json's protocol + trials blocks,
+        # and reuse is by regenerating in the panel. A hand-written
+        # protocol.json is still honored whenever trials are NOT sent.
         shuffle = "none"
         seed, prompt_sec = req.seed, req.prompt_sec
-        save_protocol(DEFAULT_PROTOCOL, {
-            "shuffle": req.shuffle or "none",
-            "seed": seed,
-            "prompt_sec": prompt_sec,
-            "trials": trials,
-        })
     else:
         proto = load_protocol(DEFAULT_PROTOCOL)
         trials = proto["trials"]

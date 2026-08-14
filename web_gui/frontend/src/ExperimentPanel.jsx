@@ -384,8 +384,9 @@ export default function ExperimentPanel({ config }) {
           )}
           {/* P30: protocol generator — template + params → Generate builds
               the trials (pure buildProtocol) → preview → Configure sends them
-              to the backend (which saves them as the new default
-              protocol.json). Without Generate, Configure keeps the saved
+              to the backend, which records them in session.json (P31: NOT
+              written back to the repo protocol.json — reuse is by regenerating
+              in the panel). Without Generate, Configure keeps the saved
               default — a hand-written protocol.json stays a valid entry. */}
           <div style={{ marginTop: 12, padding: 10, border: '1px solid var(--f-border-strong)', borderRadius: 2 }}>
             <span className="section-label">Protocol</span>
