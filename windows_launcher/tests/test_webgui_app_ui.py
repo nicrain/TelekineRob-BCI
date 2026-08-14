@@ -102,9 +102,9 @@ def test_experiment_target_role_mapped_rows():
     # no hardcoded A:/B: target lines remain
     assert "A: {STATE_LABEL" not in panel
     assert "B: {STATE_LABEL" not in panel
-    # subject name per row — single → subject, dual → subject / subject_b
-    assert "i === 0 ? meta.subject : meta.subject_b" in panel
-    assert "devices.length > 1" in panel and ": meta.subject" in panel
+    # subject name per row — via subjectLabel (P33⑥ defaults: S01 / A / B)
+    assert "subjectLabel(meta, i, devices.length > 1)" in panel
+    assert "devices.length > 1" in panel and "|| 'S01'" in panel
 
 
 # --- P29: target table + smooth countdown + style tweaks -------------------
@@ -173,47 +173,48 @@ def test_experiment_target_table_header_and_direction():
     assert "textAlign: 'right', width: 120" in panel
 
 
-# --- P30/P32: protocol generator ------------------------------------------
+# --- P30/P32/P33: protocol generator --------------------------------------
 
 def test_experiment_protocol_generator_markers():
-    """P32: the generator AUTO-follows the live 01 config — NO template
-    dropdown (template derived from cfg: single speed / single steering /
-    dual); params are trials-per-state / duration / rest / prompt / shuffle;
-    Generate builds the trials via buildProtocol and shows a preview;
-    Configure sends the generated trials (falling back to the saved default
-    protocol.json when nothing was generated)."""
+    """P33: the generator has a TOTAL-trials field ("trials") and an
+    "inter-trial (sec)" break — no prompt config and no Template shown
+    (auto-follows 01, internal only); Preview only computes/displays,
+    Configure is what hands the trials to the session; empty subjects default
+    to S01 (single) / A, B (dual)."""
     panel = (APPJSX.parent / "ExperimentPanel.jsx").read_text(encoding="utf-8")
-    # auto template from the live config — no dropdown, 3 templates only
-    assert "templateFor(cfg)" in panel
-    assert "TEMPLATE_LABEL[templateFor(cfg)]" in panel
-    assert "TEMPLATE_OPTIONS" not in panel
+    # fields: "trials" (total) + "inter-trial (sec)"; no prompt config
+    assert "trials\n" in panel            # "trials" label (own line)
+    assert "inter-trial (sec)\n" in panel
+    assert "promptSec" not in panel       # no prompt field
+    assert "trials per state" not in panel
+    # no Template dropdown / label in the config area (auto, internal only)
+    assert "templateFor(cfg)" in panel    # still derived internally
+    assert "TEMPLATE_LABEL" not in panel  # not displayed
     assert "setTemplate" not in panel
-    for old in ("'a_only'", "'b_blink'", "'dual_joint'"):
-        assert old not in panel, f"old template {old} still present"
-    # params + label
-    assert "trials per state" in panel
-    assert "shuffleMode" in panel
-    assert "Generate" in panel
+    # Preview only computes; Configure sends the previewed protocol
+    assert "Preview" in panel
+    assert "function preview()" in panel
     assert "buildProtocol(cfg," in panel
-    # preview + configure payload
-    assert "genProto.trials.slice(0, 4)" in panel
     assert "trials: genProto.trials" in panel
-    assert "shuffle: genProto.shuffle" in panel
-    assert "prompt_sec: genProto.prompt_sec" in panel
-    # hand-written protocol.json remains the fallback entry (no forced gen)
-    assert "genProto ? {" in panel
+    assert "genProto ? {" in panel        # manual JSON fallback kept
+    # subject defaults (single S01 / dual A, B)
+    assert "|| 'S01'" in panel and "|| 'A'" in panel and "|| 'B'" in panel
+    assert 'placeholder="e.g. A"' in panel and 'placeholder="e.g. B"' in panel
 
 
 def test_experiment_protocol_generator_node():
-    """P32: buildProtocol derives the template from cfg (single speed /
-    single steering / dual), each totals 2n trials, and every dimension state
-    appears exactly n times (dual 3D, steering 2D) — odd n rounds via the
-    balanced remainder. Shuffle still works (balanced → no adjacent repeats)."""
+    """P33: buildProtocol derives the template from cfg (single speed →
+    forward_stop, single steering → steering_direction, dual →
+    collaborative), produces EXACTLY the requested total T trials, and
+    balances every dimension state ≈ T/2 (odd T rounds). subjectLabel falls
+    back to S01 / A / B when empty. Shuffle still works (balanced → no
+    adjacent repeats)."""
     import subprocess
     panel = (APPJSX.parent / "ExperimentPanel.jsx").read_text(encoding="utf-8")
     src = "\n\n".join(_extract_function(panel, n) for n in
-                      ("mulberry32", "shuffleTrials", "templateFor", "aSpeedTrials",
-                       "steeringTrials", "dualTrials", "buildProtocol"))
+                      ("mulberry32", "shuffleTrials", "templateFor", "subjectLabel",
+                       "forwardStopTrials", "steeringDirectionTrials",
+                       "collaborativeTrials", "buildProtocol"))
     script = src + """
 function eq(name, got, want) {
   if (JSON.stringify(got) !== JSON.stringify(want)) {
@@ -224,49 +225,62 @@ function count(arr, fn) { return arr.filter(fn).length; }
 const speedCfg = { device_mode: 'single', roles: ['speed'] };
 const steerCfg = { device_mode: 'single', roles: ['steering'] };
 const dualCfg = { device_mode: 'dual', roles: ['speed', 'steering'] };
-// a-speed n=2: 4 trials (2n) — a attention 2 + rest 2, b rest / dir left fixed
-let p = buildProtocol(speedCfg, { n: 2, duration_sec: 20, rest_sec: 10, shuffle: 'none' });
-eq("a_speed.template", p.template, 'a_speed');
-eq("a_speed.n", p.n_trials, 4);
-eq("a_speed.a", count(p.trials, (t) => t.a_state === "attention"), 2);
-eq("a_speed.a_rest", count(p.trials, (t) => t.a_state === "rest"), 2);
-eq("a_speed.b_fixed", p.trials.every((t) => t.b_state === "rest" && t.b_direction === "left"), true);
-eq("a_speed.dur", p.trials[0].duration_sec, 20);
-// b-steering+blink n=4 (even): 8 trials (2n), b_state n/n and direction n/n
-p = buildProtocol(steerCfg, { n: 4, shuffle: 'none' });
-eq("b_steering.template", p.template, 'b_steering');
-eq("b_steering.n", p.n_trials, 8);
-eq("b_steering.b", count(p.trials, (t) => t.b_state === "attention"), 4);
-eq("b_steering.b_rest", count(p.trials, (t) => t.b_state === "rest"), 4);
-eq("b_steering.left", count(p.trials, (t) => t.b_direction === "left"), 4);
-eq("b_steering.right", count(p.trials, (t) => t.b_direction === "right"), 4);
-eq("b_steering.a_rest", p.trials.every((t) => t.a_state === "rest"), true);
-// b-steering+blink n=3 (odd): 6 trials, still n/n on both dimensions
-p = buildProtocol(steerCfg, { n: 3, shuffle: 'none' });
-eq("b_steering_odd.n", p.n_trials, 6);
-eq("b_steering_odd.b", count(p.trials, (t) => t.b_state === "attention"), 3);
-eq("b_steering_odd.left", count(p.trials, (t) => t.b_direction === "left"), 3);
-// dual n=4 (even): 8 trials (2n), all three dimensions n/n, 8 combos × 1
-p = buildProtocol(dualCfg, { n: 4, shuffle: 'none' });
-eq("dual.template", p.template, 'dual');
-eq("dual.n", p.n_trials, 8);
-eq("dual.a", count(p.trials, (t) => t.a_state === "attention"), 4);
-eq("dual.a_rest", count(p.trials, (t) => t.a_state === "rest"), 4);
-eq("dual.b", count(p.trials, (t) => t.b_state === "attention"), 4);
-eq("dual.left", count(p.trials, (t) => t.b_direction === "left"), 4);
-eq("dual.combos", new Set(p.trials.map((t) => t.a_state + "/" + t.b_state + "/" + t.b_direction)).size, 8);
-// dual n=3 (odd): 6 trials, still n/n on all three dimensions
-p = buildProtocol(dualCfg, { n: 3, shuffle: 'none' });
-eq("dual_odd.n", p.n_trials, 6);
-eq("dual_odd.a", count(p.trials, (t) => t.a_state === "attention"), 3);
-eq("dual_odd.b", count(p.trials, (t) => t.b_state === "attention"), 3);
-eq("dual_odd.left", count(p.trials, (t) => t.b_direction === "left"), 3);
+// A Forward/Stop T=4: exactly 4 trials, a 2/2, b rest + dir left fixed
+let p = buildProtocol(speedCfg, { trials: 4, duration_sec: 20, rest_sec: 10, shuffle: 'none' });
+eq("forward.template", p.template, 'forward_stop');
+eq("forward.n", p.n_trials, 4);
+eq("forward.a", count(p.trials, (t) => t.a_state === "attention"), 2);
+eq("forward.a_rest", count(p.trials, (t) => t.a_state === "rest"), 2);
+eq("forward.b_fixed", p.trials.every((t) => t.b_state === "rest" && t.b_direction === "left"), true);
+eq("forward.dur", p.trials[0].duration_sec, 20);
+// A Forward/Stop T=5 (odd): 5 trials, a 3/2 (ceil rounds attention)
+p = buildProtocol(speedCfg, { trials: 5, shuffle: 'none' });
+eq("forward_odd.n", p.n_trials, 5);
+eq("forward_odd.a", count(p.trials, (t) => t.a_state === "attention"), 3);
+eq("forward_odd.a_rest", count(p.trials, (t) => t.a_state === "rest"), 2);
+// B Steering + Direction T=8: 8 trials, b_state 4/4, direction 4/4, a rest
+p = buildProtocol(steerCfg, { trials: 8, shuffle: 'none' });
+eq("steering.template", p.template, 'steering_direction');
+eq("steering.n", p.n_trials, 8);
+eq("steering.b", count(p.trials, (t) => t.b_state === "attention"), 4);
+eq("steering.b_rest", count(p.trials, (t) => t.b_state === "rest"), 4);
+eq("steering.left", count(p.trials, (t) => t.b_direction === "left"), 4);
+eq("steering.right", count(p.trials, (t) => t.b_direction === "right"), 4);
+eq("steering.a_rest", p.trials.every((t) => t.a_state === "rest"), true);
+// B Steering + Direction T=7 (odd): 7 trials, b_state 4/3 and dir 3/4
+p = buildProtocol(steerCfg, { trials: 7, shuffle: 'none' });
+eq("steering_odd.n", p.n_trials, 7);
+eq("steering_odd.b", count(p.trials, (t) => t.b_state === "attention"), 4);
+eq("steering_odd.b_rest", count(p.trials, (t) => t.b_state === "rest"), 3);
+eq("steering_odd.left", count(p.trials, (t) => t.b_direction === "left"), 3);
+eq("steering_odd.right", count(p.trials, (t) => t.b_direction === "right"), 4);
+// Dual Collaborative T=8: 8 trials, all three dimensions 4/4, 8 combos × 1
+p = buildProtocol(dualCfg, { trials: 8, shuffle: 'none' });
+eq("collab.template", p.template, 'collaborative');
+eq("collab.n", p.n_trials, 8);
+eq("collab.a", count(p.trials, (t) => t.a_state === "attention"), 4);
+eq("collab.a_rest", count(p.trials, (t) => t.a_state === "rest"), 4);
+eq("collab.b", count(p.trials, (t) => t.b_state === "attention"), 4);
+eq("collab.left", count(p.trials, (t) => t.b_direction === "left"), 4);
+eq("collab.combos", new Set(p.trials.map((t) => t.a_state + "/" + t.b_state + "/" + t.b_direction)).size, 8);
+// Dual Collaborative T=9 (odd): 9 trials, a/b/left 5/4
+p = buildProtocol(dualCfg, { trials: 9, shuffle: 'none' });
+eq("collab_odd.n", p.n_trials, 9);
+eq("collab_odd.a", count(p.trials, (t) => t.a_state === "attention"), 5);
+eq("collab_odd.b", count(p.trials, (t) => t.b_state === "attention"), 5);
+eq("collab_odd.left", count(p.trials, (t) => t.b_direction === "left"), 5);
+// subjectLabel defaults (single S01 / dual A, B)
+eq("subj.single_empty", subjectLabel({}, 0, false), 'S01');
+eq("subj.single_set", subjectLabel({ subject: 'X' }, 0, false), 'X');
+eq("subj.dual_a_empty", subjectLabel({}, 0, true), 'A');
+eq("subj.dual_b_empty", subjectLabel({}, 1, true), 'B');
+eq("subj.dual_set", subjectLabel({ subject: 'X', subject_b: 'Y' }, 1, true), 'Y');
 // random is seeded-deterministic
-const r1 = buildProtocol(dualCfg, { n: 4, shuffle: 'random', seed: 7 }).trials;
-const r2 = buildProtocol(dualCfg, { n: 4, shuffle: 'random', seed: 7 }).trials;
+const r1 = buildProtocol(dualCfg, { trials: 8, shuffle: 'random', seed: 7 }).trials;
+const r2 = buildProtocol(dualCfg, { trials: 8, shuffle: 'random', seed: 7 }).trials;
 eq("random.seeded", r1.map((t) => t.a_state).join(), r2.map((t) => t.a_state).join());
 // balanced round-robins: never two adjacent trials with the same target key
-const b = buildProtocol(dualCfg, { n: 4, shuffle: 'balanced', seed: 3 }).trials;
+const b = buildProtocol(dualCfg, { trials: 8, shuffle: 'balanced', seed: 3 }).trials;
 let adjacent = 0;
 for (let i = 1; i < b.length; i++) {
   const k0 = b[i - 1].a_state + "/" + b[i - 1].b_state + "/" + b[i - 1].b_direction;
@@ -350,9 +364,9 @@ def test_experiment_panel_electrode_labeled_after_session():
     assert 'value="dry"' in panel and 'value="wet"' in panel
     assert 'value=""' not in panel  # no empty placeholder option anywhere
     # single mode (6: Subject/Session/Electrode + Metric/Mode/Roles) +
-    # dual mode (6, P24) + protocol generator (6, P30: Template / n /
-    # duration / rest / prompt / shuffle) = 18 labeled fields
-    assert panel.count("style={fieldLabelStyle}") == 18
+    # dual mode (6, P24) + protocol generator (4, P33: trials / inter-trial /
+    # duration / shuffle; no prompt, no Template label) = 16 labeled fields
+    assert panel.count("style={fieldLabelStyle}") == 16
 
 
 def test_experiment_panel_electrode_dropdown_tweaks():
@@ -372,7 +386,7 @@ def test_experiment_panel_field_order():
     panel = (APPJSX.parent / "ExperimentPanel.jsx").read_text(encoding="utf-8")
     # dual branch (first in source): A input → Session → Electrode → Metric → Roles → Mode
     # (label text with \n avoids matching comments like "Session #/Mode")
-    assert (panel.index('placeholder="A"')
+    assert (panel.index('placeholder="e.g. A"')
             < panel.index("Session #\n")
             < panel.index("Electrode\n")
             < panel.index("Metric\n")
@@ -390,7 +404,7 @@ def test_experiment_panel_dual_layout_markers():
     per-person Metric/Roles with proper row spacing; single-mode unchanged."""
     panel = (APPJSX.parent / "ExperimentPanel.jsx").read_text(encoding="utf-8")
     assert "isDual ? (" in panel                        # dual branch present
-    assert 'placeholder="A"' in panel and 'placeholder="B"' in panel  # two subjects
+    assert 'placeholder="e.g. A"' in panel and 'placeholder="e.g. B"' in panel  # two subjects
     assert "meta.subject_b" in panel                    # device B operator
     assert ">N/A<" in panel                             # device1 electrode, centered
     assert "justifyContent: 'center'" in panel          # N/A aligns with the select

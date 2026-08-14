@@ -53,22 +53,22 @@ function countdownSec(endTsMs, nowMs) {
   return Math.max(0, Math.ceil((endTsMs - nowMs) / 1000));
 }
 
-// P32: the template AUTO-follows the live 01 config (device_mode + roles) —
-// no manual dropdown. Single speed → a-speed, single steering →
-// b-steering+blink, dual → dual. 3 templates, each totaling 2n trials so
-// they are comparable.
-const TEMPLATE_LABEL = {
-  a_speed: 'a-speed (single: focus/relax)',
-  b_steering: 'b-steering + blink (single: turns)',
-  dual: 'dual (both devices)',
-};
-
-// P32: derive the active template from the live config.
+// P33⑧: formal template names — A Forward/Stop (single + speed), B Steering +
+// Direction (single + steering), Dual Collaborative (dual). The template
+// AUTO-follows the live 01 config (no dropdown; P33⑦: not shown in the config
+// area — internal only).
 function templateFor(cfg) {
   const mode = cfg?.device_mode || 'single';
-  if (mode === 'dual') return 'dual';
+  if (mode === 'dual') return 'collaborative';
   const role = (cfg?.roles || [])[0];
-  return role === 'steering' ? 'b_steering' : 'a_speed';
+  return role === 'steering' ? 'steering_direction' : 'forward_stop';
+}
+
+// P33⑥: default subject names when left empty — single → S01, dual → A / B —
+// so the target display always has a name.
+function subjectLabel(meta, index, isDual) {
+  if (!isDual) return (meta && meta.subject) || 'S01';
+  return index === 0 ? ((meta && meta.subject) || 'A') : ((meta && meta.subject_b) || 'B');
 }
 
 // P30: seeded PRNG (mulberry32) so random/balanced shuffle is reproducible.
@@ -123,82 +123,75 @@ function shuffleTrials(trials, mode, seed) {
   return out;
 }
 
-// P32: trial generators — n = trials PER DIMENSION STATE; each template totals
-// 2n (comparable). Focus and blink share the SAME trial, so no "per combo × n"
-// double-counting: the 2n trials are distributed so every dimension state
-// appears exactly n times (odd n rounds via a balanced remainder).
+// P33: trial generators — the field is the TOTAL trial count T; each template
+// produces exactly T trials, balancing every dimension state ≈ T/2 (odd T
+// rounds). Focus and blink share the same trial, so no "per combo × n"
+// double-counting.
 
-// a-speed: b_state rest + b_direction left throughout; a_state attention × n
-// then rest × n (2n total).
-function aSpeedTrials(n, push) {
-  for (let i = 0; i < n; i++) push('attention', 'rest', 'left');
-  for (let i = 0; i < n; i++) push('rest', 'rest', 'left');
+// A Forward/Stop (single + speed): b_state rest + b_direction left
+// throughout; a_state attention ≈ T/2 then rest ≈ T/2.
+function forwardStopTrials(total, push) {
+  const att = Math.ceil(total / 2);
+  const rest = Math.floor(total / 2);
+  for (let i = 0; i < att; i++) push('attention', 'rest', 'left');
+  for (let i = 0; i < rest; i++) push('rest', 'rest', 'left');
 }
 
-// b-steering+blink: a_state rest throughout; b_state balanced (n attention +
-// n rest) AND b_direction balanced (n left + n right) → 4 combos ≈ n/2 each
-// (2n total, no double-counting).
-function steeringTrials(n, push) {
-  const base = Math.floor(n / 2);
-  for (const b of ['attention', 'rest']) {
-    for (const d of ['left', 'right']) {
-      for (let i = 0; i < base; i++) push('rest', b, d);
-    }
-  }
-  if (n % 2 === 1) {   // odd n: the two remainder trials land on opposite corners
-    push('rest', 'attention', 'left');
-    push('rest', 'rest', 'right');
+// B Steering + Direction (single + steering): a_state rest throughout;
+// b_state ≈ T/2 attention + ≈ T/2 rest AND b_direction ≈ T/2 left + ≈ T/2
+// right — round-robin the 4 (b_state × direction) combos so every dimension
+// stays balanced within one trial of T/2.
+function steeringDirectionTrials(total, push) {
+  const combos = [
+    ['attention', 'left'], ['rest', 'right'],
+    ['attention', 'right'], ['rest', 'left'],
+  ];
+  for (let i = 0; i < total; i++) {
+    const [b, d] = combos[i % 4];
+    push('rest', b, d);
   }
 }
 
-// dual: all three dimensions balanced — a_state n/n, b_state n/n,
-// b_direction n/n → 8 combos ≈ n/4 each (2n total, 3D balanced).
-function dualTrials(n, push) {
-  const base = Math.floor(n / 4);
+// Dual Collaborative (dual): all three dimensions balanced — a_state ≈ T/2,
+// b_state ≈ T/2, b_direction ≈ T/2 — round-robin the 8 (a, b, direction)
+// combos so every dimension stays balanced within one trial of T/2.
+function collaborativeTrials(total, push) {
+  const combos = [];
   for (const a of ['attention', 'rest']) {
     for (const b of ['attention', 'rest']) {
-      for (const d of ['left', 'right']) {
-        for (let i = 0; i < base; i++) push(a, b, d);
-      }
+      for (const d of ['left', 'right']) combos.push([a, b, d]);
     }
   }
-  const rem = n % 4;   // the remainder adds exactly rem to every dimension state
-  const extras = {
-    0: [],
-    1: [['attention', 'attention', 'left'], ['rest', 'rest', 'right']],
-    2: [['attention', 'attention', 'left'], ['attention', 'attention', 'right'],
-        ['rest', 'rest', 'left'], ['rest', 'rest', 'right']],
-    3: [['attention', 'attention', 'left'], ['rest', 'rest', 'right'],
-        ['attention', 'attention', 'left'], ['attention', 'attention', 'right'],
-        ['rest', 'rest', 'left'], ['rest', 'rest', 'right']],
-  }[rem];
-  for (const [a, b, d] of extras) push(a, b, d);
+  for (let i = 0; i < total; i++) {
+    const [a, b, d] = combos[i % 8];
+    push(a, b, d);
+  }
 }
 
-// P32: generate the ACTIVE template's trials (auto-derived from cfg) then
+// P33: generate the ACTIVE template's trials (auto-derived from cfg) then
 // apply shuffle. Returns the FINAL protocol — the trials are already in run
 // order, so Configure posts them verbatim (the backend applies none) and the
-// preview equals the run.
+// preview equals the run. prompt_sec is a FIXED default (P33③); rest_sec is
+// the inter-trial break (P33②, JSON field unchanged).
 function buildProtocol(cfg, opts) {
   const o = opts || {};
-  const n = Math.max(1, Math.floor(o.n || 1));
+  const total = Math.max(1, Math.floor(o.trials || 1));
   const duration_sec = o.duration_sec != null ? o.duration_sec : 20;
   const rest_sec = o.rest_sec != null ? o.rest_sec : 10;
-  const prompt_sec = o.prompt_sec != null ? o.prompt_sec : 3;
   const shuffle = o.shuffle || 'balanced';
   const seed = o.seed != null ? o.seed : null;
   const template = templateFor(cfg);
   const t = [];
   const push = (a, b, d) => t.push({ a_state: a, b_state: b, b_direction: d, duration_sec, rest_sec });
-  if (template === 'a_speed') {
-    aSpeedTrials(n, push);
-  } else if (template === 'b_steering') {
-    steeringTrials(n, push);
+  if (template === 'forward_stop') {
+    forwardStopTrials(total, push);
+  } else if (template === 'steering_direction') {
+    steeringDirectionTrials(total, push);
   } else {
-    dualTrials(n, push);
+    collaborativeTrials(total, push);
   }
   const trials = shuffleTrials(t, shuffle, seed);
-  return { trials, n_trials: trials.length, shuffle, seed, prompt_sec, template };
+  return { trials, n_trials: trials.length, shuffle, seed, prompt_sec: 3, template };
 }
 
 export default function ExperimentPanel({ config }) {
@@ -224,14 +217,14 @@ export default function ExperimentPanel({ config }) {
     const t = setInterval(() => setNow(Date.now()), 200);
     return () => clearInterval(t);
   }, []);
-  // P32: protocol generator — n + durations + shuffle → Generate builds the
-  // ACTIVE template (auto-derived from cfg) via buildProtocol; the result is
-  // sent to Configure (falls back to the saved default protocol.json when
-  // nothing was generated).
-  const [nTrials, setNTrials] = useState(4);
+  // P33: protocol generator — total trials + durations + shuffle → Preview
+  // builds the ACTIVE template (auto-derived from cfg) via buildProtocol and
+  // displays the trials; Configure hands them to the session (falls back to
+  // the saved default protocol.json when nothing was previewed). No prompt
+  // field — the prompt time is a fixed 3 s default (P33③).
+  const [trials, setTrials] = useState(8);
   const [duration, setDuration] = useState(20);
   const [restSec, setRestSec] = useState(10);
-  const [promptSec, setPromptSec] = useState(3);
   const [shuffleMode, setShuffleMode] = useState('balanced');
   const [genProto, setGenProto] = useState(null);
 
@@ -252,10 +245,9 @@ export default function ExperimentPanel({ config }) {
     setMeta((m) => ({ ...m, [key]: value }));
   }
 
-  function generate() {
+  function preview() {
     setGenProto(buildProtocol(cfg, {
-      n: nTrials, duration_sec: duration, rest_sec: restSec,
-      prompt_sec: promptSec, shuffle: shuffleMode,
+      trials: trials, duration_sec: duration, rest_sec: restSec, shuffle: shuffleMode,
     }));
   }
 
@@ -269,7 +261,14 @@ export default function ExperimentPanel({ config }) {
       // final run order — buildProtocol already applied shuffle); otherwise
       // the backend uses the saved default protocol.json.
       const r = await api.post('/api/experiment/configure', {
-        meta: { ...meta, date: new Date().toISOString().slice(0, 10) },
+        meta: {
+          // P33⑥: empty subject falls back to a name so the target display is
+          // never blank — single → S01, dual → A / B.
+          ...meta,
+          subject: meta.subject || (cfg.device_mode === 'dual' ? 'A' : 'S01'),
+          subject_b: meta.subject_b || 'B',
+          date: new Date().toISOString().slice(0, 10),
+        },
         config: cfg,
         ...(genProto ? {
           trials: genProto.trials,
@@ -339,9 +338,9 @@ export default function ExperimentPanel({ config }) {
             <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginTop: 10 }}>
               <div style={fieldLabelStyle}>
                 Subject
-                <input style={inputStyle} placeholder="A" value={meta.subject}
+                <input style={inputStyle} placeholder="e.g. A" value={meta.subject}
                   onChange={(e) => setMetaField('subject', e.target.value)} />
-                <input style={inputStyle} placeholder="B" value={meta.subject_b}
+                <input style={inputStyle} placeholder="e.g. B" value={meta.subject_b}
                   onChange={(e) => setMetaField('subject_b', e.target.value)} />
               </div>
               <div style={fieldLabelStyle}>
@@ -429,41 +428,31 @@ export default function ExperimentPanel({ config }) {
               </div>
             </div>
           )}
-          {/* P30: protocol generator — template + params → Generate builds
-              the trials (pure buildProtocol) → preview → Configure sends them
-              to the backend, which records them in session.json (P31: NOT
-              written back to the repo protocol.json — reuse is by regenerating
-              in the panel). Without Generate, Configure keeps the saved
-              default — a hand-written protocol.json stays a valid entry.
-              P32: the template AUTO-follows the 01 config (no dropdown);
-              n = trials PER STATE (each template totals 2n); rest_sec is the
-              inter-trial break. */}
+          {/* P33: protocol generator — the field "trials" is the TOTAL trial
+              count T (every template produces exactly T, dimensions balanced
+              ≈ T/2); "inter-trial (sec)" is the break between trials (JSON
+              field rest_sec unchanged). No template shown (auto-follows 01,
+              P33⑦) and no prompt field (fixed 3 s default, P33③). Preview
+              only computes and displays; Configure is what actually hands the
+              protocol to the session (session.json only, never the repo json
+              — P31). */}
           <div style={{ marginTop: 12, padding: 10, border: '1px solid var(--f-border-strong)', borderRadius: 2 }}>
             <span className="section-label">Protocol</span>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end', marginTop: 6 }}>
-              <span style={fieldLabelStyle}>
-                Template
-                <span style={valueStyle}>{TEMPLATE_LABEL[templateFor(cfg)] || '…'}</span>
-              </span>
               <label style={fieldLabelStyle}>
-                trials per state
-                <input style={{ ...inputStyle, width: 48 }} type="number" min="1" value={nTrials}
-                  onChange={(e) => setNTrials(Number(e.target.value) || 1)} />
+                trials
+                <input style={{ ...inputStyle, width: 48 }} type="number" min="1" value={trials}
+                  onChange={(e) => setTrials(Number(e.target.value) || 1)} />
+              </label>
+              <label style={fieldLabelStyle}>
+                inter-trial (sec)
+                <input style={{ ...inputStyle, width: 56 }} type="number" min="0" value={restSec}
+                  onChange={(e) => setRestSec(Number(e.target.value) || 0)} />
               </label>
               <label style={fieldLabelStyle}>
                 duration
                 <input style={{ ...inputStyle, width: 48 }} type="number" min="1" value={duration}
                   onChange={(e) => setDuration(Number(e.target.value) || 1)} />
-              </label>
-              <label style={fieldLabelStyle}>
-                rest
-                <input style={{ ...inputStyle, width: 48 }} type="number" min="0" value={restSec}
-                  onChange={(e) => setRestSec(Number(e.target.value) || 0)} />
-              </label>
-              <label style={fieldLabelStyle}>
-                prompt
-                <input style={{ ...inputStyle, width: 48 }} type="number" min="0" value={promptSec}
-                  onChange={(e) => setPromptSec(Number(e.target.value) || 0)} />
               </label>
               <label style={fieldLabelStyle}>
                 shuffle
@@ -474,7 +463,7 @@ export default function ExperimentPanel({ config }) {
                   <option value="balanced">balanced</option>
                 </select>
               </label>
-              <button className="btn btn-cta" onClick={generate}>Generate</button>
+              <button className="btn btn-cta" onClick={preview}>Preview</button>
             </div>
             {genProto && (
               <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--f-text-secondary)', marginTop: 8 }}>
@@ -549,9 +538,8 @@ export default function ExperimentPanel({ config }) {
                     const isSpeed = d.role === 'speed';
                     const state = isSpeed ? target.a_state : target.b_state;
                     const isFocus = state === 'attention';
-                    const subject = devices.length > 1
-                      ? (i === 0 ? meta.subject : meta.subject_b)
-                      : meta.subject;
+                    // P33⑥: default subject name when empty — single S01, dual A/B.
+                    const subject = subjectLabel(meta, i, devices.length > 1);
                     return (
                       <tr key={i}>
                         <td style={{ textAlign: 'right', width: 120, color: 'var(--f-text-primary)', fontFamily: 'var(--font-display)', padding: '3px 10px 3px 0' }}>
