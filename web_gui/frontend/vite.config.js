@@ -9,11 +9,14 @@ export default defineConfig({
     allowedHosts: ['eeg.zhaoyu.wang'],
     proxy: {
       '/api': {
-        target: 'http://localhost:8010',
+        // P37①: the backend uvicorn binds IPv4 127.0.0.1:8010 only; in WSL2
+        // `localhost` can resolve to ::1 → proxy ECONNREFUSED. Explicit IPv4
+        // removes the ambiguity.
+        target: 'http://127.0.0.1:8010',
         changeOrigin: true,
       },
       '/ws': {
-        target: 'ws://localhost:8010',
+        target: 'ws://127.0.0.1:8010',
         ws: true,
       },
     },
