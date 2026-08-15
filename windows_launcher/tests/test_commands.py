@@ -5,11 +5,14 @@ from commands import (
     build_bridge_command,
     build_portproxy_add_cmd,
     build_portproxy_delete_cmd,
+    build_portproxy_show_cmd,
     build_start_web_cmds,
     build_sync_cmd,
+    build_uac_fix_cmd,
     build_usbipd_attach_cmd,
     build_wsl_hostname_cmd,
     build_wsl_system_running_cmd,
+    parse_portproxy_5173_connectaddress,
 )
 
 
@@ -36,6 +39,38 @@ def test_portproxy_add_cmd_shape():
         "netsh", "interface", "portproxy", "add", "v4tov4",
         "listenport=5173", "listenaddress=0.0.0.0",
         "connectport=5173", "connectaddress=172.27.42.5",
+    ]
+
+
+def test_portproxy_show_cmd_shape():
+    """P42①: READ the rules — no admin needed."""
+    assert build_portproxy_show_cmd() == ["netsh", "interface", "portproxy", "show", "all"]
+
+
+def test_parse_portproxy_5173_connectaddress():
+    """P42①: numeric matching — localized headers (English / Chinese /
+    French) never matter; numbers do. Missing rule → None."""
+    # English headers
+    en = (
+        "Listen on ipaddress             Port  Connect to ip address  Port\n"
+        "-----------------------------  ------  ----------------------  -----\n"
+        "0.0.0.0                         5173    172.27.0.2             5173\n"
+        "0.0.0.0                         8010    127.0.0.1             8010\n"
+    )
+    assert parse_portproxy_5173_connectaddress(en) == "172.27.0.2"
+    # French headers (Ecouter ...) — localization-independent matching
+    fr = "Ecouter ip adresse  Port  Connecter a ip  Port\n0.0.0.0  5173  172.27.9.9  5173\n"
+    assert parse_portproxy_5173_connectaddress(fr) == "172.27.9.9"
+    # no 5173 rule / empty → None
+    assert parse_portproxy_5173_connectaddress("0.0.0.0  8010  127.0.0.1  8010\n") is None
+    assert parse_portproxy_5173_connectaddress("") is None
+
+
+def test_build_uac_fix_cmd_shape():
+    """P42③: raise the standard UAC prompt to run the fix script elevated."""
+    assert build_uac_fix_cmd("C:\\tmp\\o2-lan-fix.ps1") == [
+        "powershell", "-NoProfile", "-Command",
+        "Start-Process powershell -Verb runas -ArgumentList '-File', 'C:\\tmp\\o2-lan-fix.ps1'",
     ]
 
 

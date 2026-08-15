@@ -32,6 +32,9 @@ class LauncherState:
         self.system_msg = ""
         self.devices: Dict[str, str] = {n: DEVICE_DISCONNECTED for n in device_names}
         self.device_msgs: Dict[str, str] = {n: "" for n in device_names}
+        # P42: LAN portproxy health — ok | stale | unresolved (the status area
+        # shows the one-click fix prompt only while stale).
+        self.lan_forward = "ok"
 
     # --- mutators (server calls these after IO succeeds/fails) ----------
 
@@ -70,4 +73,5 @@ def status_payload(state: LauncherState) -> dict:
             name: {"state": st, "message": state.device_msgs[name]}
             for name, st in state.devices.items()
         },
+        "lan_forward": state.lan_forward,   # P42: ok | stale | unresolved
     }

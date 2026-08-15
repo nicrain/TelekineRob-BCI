@@ -99,6 +99,34 @@ def build_portproxy_add_cmd(listen_address: str, port: int, connect_address: str
     ]
 
 
+def build_portproxy_show_cmd() -> List[str]:
+    """P42①: READ the current portproxy rules — a read needs NO admin."""
+    return ["netsh", "interface", "portproxy", "show", "all"]
+
+
+def parse_portproxy_5173_connectaddress(show_output: str) -> Optional[str]:
+    """P42①: the 5173 rule's connectaddress from ``netsh ... portproxy show``
+    output. Matched NUMERICALLY (the listening-side port == 5173), never by
+    header text — localized headers (Chinese / French / ...) differ but the
+    numbers don't. Returns None when there is no 5173 rule."""
+    for line in show_output.splitlines():
+        fields = line.split()
+        # data row: listenaddress  listenport  connectaddress  connectport
+        if len(fields) >= 4 and fields[1].isdigit() and int(fields[1]) == 5173:
+            return fields[2]
+    return None
+
+
+def build_uac_fix_cmd(ps1_path: str) -> List[str]:
+    """P42③: raise the standard UAC prompt to run the fix script ELEVATED —
+    ``Start-Process powershell -Verb runas -ArgumentList '-File', '<ps1>'``.
+    Quoting stays clean because the .ps1 holds the netsh commands verbatim."""
+    return [
+        "powershell", "-NoProfile", "-Command",
+        f"Start-Process powershell -Verb runas -ArgumentList '-File', '{ps1_path}'",
+    ]
+
+
 def build_sync_cmd(
     tool: str,
     src: str,

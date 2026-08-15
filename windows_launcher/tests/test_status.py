@@ -57,6 +57,18 @@ def test_status_system_running_message_present():
     assert payload["system"]["state"] == "running"
     assert payload["system"]["message"] == "System ready"
     assert set(payload["devices"]) == {"headband", "hybrid", "thymio"}
+    # P42: the payload carries the LAN-forward health; after start with no
+    # 5173 rule in the (fake) netsh show it is stale → the fix prompt shows.
+    assert payload["lan_forward"] == "stale"
+
+
+def test_status_lan_forward_starts_ok():
+    """P42: lan_forward defaults to 'ok' before any system start (a fresh
+    launcher never shows the fix prompt until start detects a stale rule)."""
+    app = LauncherApp(
+        load_config(REPO_CONFIG), executor=FakeExecutor(), ready_check=lambda u, t: True
+    )
+    assert app.state.lan_forward == "ok"
 
 
 # --- P10②: usbipd reconcile --------------------------------------------

@@ -252,3 +252,17 @@ console.log("webUrlWithTheme OK");
     r = subprocess.run(["node", "-e", script], capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
     assert "OK" in r.stdout
+
+
+def test_lan_forward_fix_markers():
+    """P42②③: the stale-forwarding prompt + one-click UAC fix button +
+    /lan-forward/fix endpoint are wired (English, no CJK in code)."""
+    html = INDEX.read_text(encoding="utf-8")
+    assert 'id="lan-forward"' in html
+    assert "renderLanForward" in html
+    assert "fixLanForward" in html
+    assert "/lan-forward/fix" in html
+    assert 'lan_forward !== "stale"' in html
+    assert "LAN forwarding needs an update" in html
+    assert "Fix LAN forwarding" in html
+    assert "Start-Process" not in html  # the UAC spawn is server-side only

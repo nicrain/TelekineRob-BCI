@@ -106,6 +106,13 @@
   #msg.error { border-color:var(--f-warn); color:var(--f-warn); background:var(--f-input-bg); }
   #msg .close { float:right; cursor:pointer; color:var(--f-text-secondary); }
 
+  /* ---------- P42: stale LAN forwarding prompt ---------- */
+  #lan-forward { margin-top:8px; }
+  #lan-forward .lan-warn {
+    font-size:13px; color:var(--f-warn); padding:8px; margin-bottom:6px;
+    border:1px solid var(--f-warn); border-radius:var(--radius);
+  }
+
   /* ---------- main ---------- */
   #main { flex:1; display:flex; flex-direction:column; }
   #mainbar {
@@ -145,6 +152,8 @@
     <div id="devices-list"></div>
     <div class="group-label">Operations</div>
     <div id="ops-list"></div>
+    <!-- P42: stale LAN forwarding → non-tech prompt + one-click UAC fix -->
+    <div id="lan-forward"></div>
     <div class="group-label">Log</div>
     <button class="btn" id="log-btn" disabled onclick="viewLog()">View Log</button>
   </aside>
@@ -383,6 +392,24 @@ function renderSystem() {
      created) — touching them here would fight the rebuild every poll. */
 }
 
+/* ---------- P42: LAN forwarding (non-tech prompt + one-click fix) -------- */
+function renderLanForward() {
+  const box = document.getElementById("lan-forward");
+  if (!G.status || G.status.lan_forward !== "stale") {
+    box.innerHTML = "";
+    return;
+  }
+  box.innerHTML =
+    '<div class="group-label">LAN Forwarding</div>' +
+    '<div class="lan-warn">LAN forwarding needs an update</div>' +
+    '<button class="btn" id="lan-fix-btn" onclick="fixLanForward()" style="width:100%">Fix LAN forwarding</button>';
+}
+async function fixLanForward() {
+  const r = await api("/lan-forward/fix", {});
+  showMsg(r.message || (r.ok ? "Done" : "Failed"), !r.ok);
+  pollStatus();   // re-render — the state may have flipped to ok
+}
+
 /* ---------- Actions ---------- */
 async function toggleDevice(id, currentlyOn) {
   const path = currentlyOn ? "/disconnect-device" : "/connect-device";
@@ -413,7 +440,7 @@ async function pollStatus() {
   /* P10①: renderOps FIRST so the ops buttons are created with their
      disabled state before anything else reads them; renderSystem only
      paints the system dot/label. */
-  renderOps(); renderDevices(); renderSystem();
+  renderOps(); renderDevices(); renderSystem(); renderLanForward();
   updateMainArea();
   G.prevRunning = G.status.system.state === "running";
 }

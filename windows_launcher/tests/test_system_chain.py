@@ -26,9 +26,9 @@ def test_start_system_success_sequence():
     result = app.start_system()
 
     assert result["ok"] is True
-    # P41: the message carries the LAN-forward note (portproxy always re-hung)
-    assert "System started and ready" in result["message"]
-    assert "LAN forward" in result["message"]
+    # P42: the message is clean — LAN-forward tech detail stays in the log,
+    # the status area carries the stale/ok state instead.
+    assert result["message"] == "System started and ready"
     assert app.state.system == "running"
     # order: wsl readiness (systemctl) → sync windows_launcher → gtec_bridge
     assert "is-system-running" in ex.run_calls[0][-1]
@@ -186,50 +186,107 @@ def test_frontend_cmd_pins_5173_strict():
     assert "--strictPort" in cmd
 
 
-# --- P39/P41: LAN portproxy auto re-hang ----------------------------------
+# --- P39/P41/P42: LAN portproxy — re-hang + stale detection + UAC fix -----
 
 def test_start_system_hangs_portproxy():
     """P41: start_system resolves the CURRENT WSL IP and idempotently
     re-hangs the 5173 portproxy on LISTEN 0.0.0.0 — delete the old rule then
-    add listen=0.0.0.0 → connect=wsl_ip (frontend only). No IP config."""
+    add listen=0.0.0.0 → connect=wsl_ip (frontend only). No IP config. The
+    re-hang is best-effort (log-only); P42 detection reports the real state."""
     app, ex = _make_app(wsl_ip="172.27.42.5")
     result = app.start_system()
     assert result["ok"] is True
-    assert "LAN forward" in result["message"]
-    assert "http://0.0.0.0:5173" in result["message"]
-    netsh = [c for c in ex.run_calls if c[0] == "netsh"]
+    assert result["message"] == "System started and ready"   # P42: no LAN tech detail
+    # best-effort re-hang: delete + add (the show read below is detection)
+    netsh = [c for c in ex.run_calls if c[0] == "netsh" and c[3] in ("delete", "add")]
     assert len(netsh) == 2
     assert netsh[0][3] == "delete" and "listenaddress=0.0.0.0" in netsh[0][-1]
     assert netsh[1][3] == "add"
     assert "connectaddress=172.27.42.5" in netsh[1][-1]
+    # P42: default show output has no 5173 rule → stale (fix prompt shows)
+    assert app.state.lan_forward == "stale"
 
 
 def test_start_system_wsl_ip_empty_warns_not_blocks():
-    """P39②/④: if hostname -I returns nothing, Start still succeeds with a
-    warning — forwarding is not the system."""
+    """P39②/④ + P42: if hostname -I returns nothing, Start still succeeds;
+    lan_forward becomes 'unresolved' (no fix possible without the WSL IP)."""
     app, ex = _make_app(wsl_ip="")
     result = app.start_system()
     assert result["ok"] is True
-    assert "could not resolve the WSL IP" in result["message"]
+    assert app.state.lan_forward == "unresolved"
     assert not any(c[0] == "netsh" for c in ex.run_calls)
 
 
 def test_start_system_portproxy_failure_does_not_block():
-    """P39④: netsh failure (e.g. needs admin) surfaces the exact manual
-    command but Start System still succeeds."""
+    """P39④/P42: netsh WRITE failure (e.g. needs admin) never blocks Start —
+    the read-based detection still runs and the stale state shows the fix
+    prompt."""
     app, ex = _make_app()
     real_run = ex.run
 
     def failing_run(cmd, *, timeout, cwd=None):
-        if cmd[0] == "netsh":
+        if cmd[0] == "netsh" and len(cmd) > 3 and cmd[3] in ("delete", "add"):
             raise RuntimeError("access denied — run as admin")
         return real_run(cmd, timeout=timeout, cwd=cwd)
 
     ex.run = failing_run
     result = app.start_system()
     assert result["ok"] is True
-    assert "run manually as admin" in result["message"]
-    assert "netsh interface portproxy add v4tov4 listenport=5173" in result["message"]
+    assert app.state.lan_forward == "stale"
+
+
+# --- P42: stale-forwarding detection + one-click UAC fix ------------------
+
+def test_detect_lan_forward_ok_when_rule_matches():
+    """P42①: the 5173 rule's connectaddress == the CURRENT WSL IP → ok (no
+    fix prompt)."""
+    app, _ = _make_app(
+        wsl_ip="172.27.42.5",
+        portproxy_show="0.0.0.0  5173  172.27.42.5  5173\n",
+    )
+    assert app.start_system()["ok"] is True
+    assert app.state.lan_forward == "ok"
+
+
+def test_detect_lan_forward_stale_when_rule_differs_or_missing():
+    """P42①: rule points at an OLD WSL IP, or the rule is missing → stale."""
+    app, _ = _make_app(
+        wsl_ip="172.27.42.5",
+        portproxy_show="0.0.0.0  5173  172.27.0.2  5173\n",   # old IP
+    )
+    assert app.start_system()["ok"] is True
+    assert app.state.lan_forward == "stale"
+    app2, _ = _make_app(wsl_ip="172.27.42.5", portproxy_show="")   # rule missing
+    app2.start_system()
+    assert app2.state.lan_forward == "stale"
+
+
+def test_fix_lan_forward_uac_ok():
+    """P42③: the fix raises UAC (Start-Process -Verb runas), waits for the
+    elevated script's done-marker, re-runs detection and reports updated."""
+    import tempfile
+    app, ex = _make_app(wsl_ip="172.27.42.5")
+    tmp = Path(tempfile.mkdtemp())
+    ps1, marker = tmp / "fix.ps1", tmp / "done.txt"
+    marker.write_text("done")                          # elevated script finished
+    app._write_portproxy_ps1 = lambda wsl_ip: (ps1, marker)
+    ex.portproxy_show = "0.0.0.0  5173  172.27.42.5  5173\n"   # now healthy
+    result = app.fix_lan_forward(wait_sec=1)
+    assert result == {"ok": True, "message": "LAN forwarding updated"}
+    assert app.state.lan_forward == "ok"
+    assert any("Start-Process powershell -Verb runas" in c[-1] for c in ex.spawn_calls)
+
+
+def test_fix_lan_forward_stale_when_uac_denied():
+    """P42③: no marker (user clicked No / UAC denied) → stays stale."""
+    import tempfile
+    app, ex = _make_app(wsl_ip="172.27.42.5")
+    tmp = Path(tempfile.mkdtemp())
+    ps1, marker = tmp / "fix.ps1", tmp / "done.txt"   # marker never appears
+    app._write_portproxy_ps1 = lambda wsl_ip: (ps1, marker)
+    result = app.fix_lan_forward(wait_sec=0.2)
+    assert result["ok"] is False
+    assert app.state.lan_forward == "stale"
 
 
 def test_start_system_accepts_degraded_systemd():

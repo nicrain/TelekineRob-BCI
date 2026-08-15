@@ -17,6 +17,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import urllib.error
@@ -32,14 +33,17 @@ from commands import (
     build_ide_open_cmd,
     build_portproxy_add_cmd,
     build_portproxy_delete_cmd,
+    build_portproxy_show_cmd,
     build_python_script_cmd,
     build_start_web_cmds,
     build_sync_cmd,
+    build_uac_fix_cmd,
     build_usbipd_attach_cmd,
     build_usbipd_detach_cmd,
     build_wsl_cd_cmd,
     build_wsl_hostname_cmd,
     build_wsl_system_running_cmd,
+    parse_portproxy_5173_connectaddress,
 )
 from config import load_config
 from state import (
@@ -153,6 +157,8 @@ class LauncherApp:
         self._lock = threading.RLock()
         self._web_procs: List[subprocess.Popen] = []
         self._device_procs: Dict[str, subprocess.Popen] = {}
+        # P42: temp .ps1 + done-marker for the one-click UAC LAN-forward fix.
+        self._ps1_dir = Path(tempfile.gettempdir()) / "o2_lan_forward"
         # IDE-mode devices run no launcher process — LSL presence is their
         # truth. The reconcile probe is throttled (avoid a subprocess every
         # 1.5 s poll) via this per-device last-check timestamp (P8d).
@@ -358,15 +364,13 @@ class LauncherApp:
                 float(self.config["web"].get("ready_timeout_sec", 60)),
             ):
                 raise RuntimeError("web service not ready (timeout) — check the frontend")
-            # P39: (re)hang the LAN portproxy once WSL + web are up. A
-            # forwarding failure only surfaces as a message — it must never
-            # block the system start.
-            lan_note = self._ensure_portproxy()
+            # P39/P41/P42: best-effort (re)hang (log-only) then READ the real
+            # forwarding state. A stale forward only shows the fix prompt in
+            # the status area — it never blocks the system start.
+            self._ensure_portproxy()
+            self._detect_lan_forward()
             self.state.set_system(SYSTEM_RUNNING, "System ready")
-            msg = "System started and ready"
-            if lan_note:
-                msg += f" — {lan_note}"
-            return {"ok": True, "message": msg}
+            return {"ok": True, "message": "System started and ready"}
         except Exception as exc:
             self._clear_web_procs()   # P38③: no leak on failure
             self.state.set_system(SYSTEM_ERROR, friendly_error(exc, "Start System"))
@@ -462,36 +466,89 @@ class LauncherApp:
         fields = (result.stdout or "").split()
         return fields[0] if fields else ""
 
-    def _ensure_portproxy(self) -> str:
-        """P41: (re)hang the LAN portproxy for the FRONTEND port (5173) only —
-        the backend stays loopback. LISTEN on 0.0.0.0 (real-device verified:
-        coexists with WSL's localhost forwarding — both localhost:5173 and the
-        LAN 192.168.x:5173 work), CONNECT to the CURRENT WSL IP resolved at
-        Start. Idempotent: delete the old rule (ignore errors) then add, so a
-        WSL IP change is covered on every Start — zero manual IP config.
-        Returns a status/warning string; a forwarding failure NEVER blocks
-        Start System (forwarding ≠ system)."""
+    def _ensure_portproxy(self) -> None:
+        """P41: best-effort NON-ELEVATED (re)hang of the LAN portproxy —
+        LISTEN 0.0.0.0:5173 → the CURRENT WSL IP. Typically needs admin (the
+        P42 UAC fix does the elevated run), so the outcome is LOG-ONLY; the
+        status area reflects the REAL state via ``_detect_lan_forward``."""
         try:
             wsl_ip = self._resolve_wsl_ip()
             if not wsl_ip:
-                return "LAN forward: could not resolve the WSL IP (hostname -I empty)"
+                print("[lan-forward] could not resolve the current WSL IP (hostname -I)")
+                return
             try:
-                self.executor.run(
-                    build_portproxy_delete_cmd("0.0.0.0"), timeout=20
-                )
+                self.executor.run(build_portproxy_delete_cmd("0.0.0.0"), timeout=20)
             except Exception:
                 pass  # delete on a missing rule errors — that's fine
             self.executor.run(
                 build_portproxy_add_cmd("0.0.0.0", 5173, wsl_ip), timeout=20
             )
-            return f"LAN forward: http://0.0.0.0:5173 → {wsl_ip}:5173"
+            print(f"[lan-forward] re-hung 0.0.0.0:5173 → {wsl_ip}:5173 (best-effort)")
         except Exception as exc:
-            return (
-                f"LAN forward failed (run manually as admin): "
-                f"netsh interface portproxy add v4tov4 listenport=5173 "
-                f"listenaddress=0.0.0.0 connectport=5173 "
-                f"connectaddress=<wsl-ip> — {exc}"
-            )
+            print(f"[lan-forward] best-effort re-hang failed — use the UAC fix: {exc}")
+
+    def _detect_lan_forward(self) -> str:
+        """P42①: READ the current portproxy rules (read needs NO admin) and
+        compare the 5173 rule's connectaddress to the CURRENT WSL IP. Sets
+        ``state.lan_forward``: 'ok' | 'stale' (rule missing or connectaddress
+        differs) | 'unresolved' (WSL IP not resolvable)."""
+        wsl_ip = self._resolve_wsl_ip()
+        if not wsl_ip:
+            self.state.lan_forward = "unresolved"
+            return "unresolved"
+        result = self.executor.run(build_portproxy_show_cmd(), timeout=20)
+        current = parse_portproxy_5173_connectaddress(result.stdout or "")
+        state = "ok" if (current is not None and current == wsl_ip) else "stale"
+        self.state.lan_forward = state
+        return state
+
+    def _write_portproxy_ps1(self, wsl_ip: str):
+        """P42③: temp .ps1 with the fixed netsh delete+add (connectaddress =
+        the CURRENT WSL IP) plus a done-marker write. Returns (ps1, marker)."""
+        self._ps1_dir.mkdir(parents=True, exist_ok=True)
+        tag = str(int(time.time() * 1000))
+        ps1 = self._ps1_dir / f"o2-lan-forward-{tag}.ps1"
+        marker = self._ps1_dir / f"o2-lan-forward-{tag}.done"
+        ps1.write_text(
+            "$ErrorActionPreference = 'Continue'\n"
+            "netsh interface portproxy delete v4tov4 listenport=5173 listenaddress=0.0.0.0\n"
+            f"netsh interface portproxy add v4tov4 listenport=5173 listenaddress=0.0.0.0 "
+            f"connectport=5173 connectaddress={wsl_ip}\n"
+            f"Set-Content -Path '{marker}' -Value done\n",
+            encoding="utf-8",
+        )
+        return ps1, marker
+
+    def _wait_for_marker(self, marker: Path, wait_sec: float) -> bool:
+        deadline = time.time() + wait_sec
+        while time.time() < deadline:
+            if marker.exists():
+                return True
+            time.sleep(0.3)
+        return False
+
+    def _fix_lan_forward(self, wait_sec: float = 30.0) -> dict:
+        """P42③: one-click UAC repair — write a temp .ps1 (fixed netsh
+        delete+add, connectaddress = the CURRENT WSL IP), then
+        ``Start-Process -Verb runas`` raises the standard UAC prompt. The
+        elevated script writes a done-marker; we wait for it, then re-run
+        detection to confirm. User clicking No (UAC denied) → no marker →
+        stays stale."""
+        wsl_ip = self._resolve_wsl_ip()
+        if not wsl_ip:
+            return {"ok": False, "message": "LAN forward fix: could not resolve the current WSL IP"}
+        ps1_path, marker = self._write_portproxy_ps1(wsl_ip)
+        self.executor.spawn(build_uac_fix_cmd(str(ps1_path)))
+        self._wait_for_marker(marker, wait_sec)
+        self._detect_lan_forward()
+        if self.state.lan_forward == "ok":
+            return {"ok": True, "message": "LAN forwarding updated"}
+        return {"ok": False, "message": "LAN forwarding still stale — click Yes in the UAC prompt and retry"}
+
+    def fix_lan_forward(self, wait_sec: float = 30.0) -> dict:
+        """P42③: public entry for the one-click fix (POST /lan-forward/fix)."""
+        with self._lock:
+            return self._fix_lan_forward(wait_sec)
 
     def _spawn_web_services(self) -> None:
         for cmd in build_start_web_cmds(self.config):
@@ -922,6 +979,9 @@ class Handler(BaseHTTPRequestHandler):
                 result = app.connect_device(self._read_json().get("device", ""))
             elif path == "/disconnect-device":
                 result = app.disconnect_device(self._read_json().get("device", ""))
+            elif path == "/lan-forward/fix":
+                # P42③: one-click UAC repair for the stale LAN forwarding.
+                result = app.fix_lan_forward()
             elif path == "/shutdown":
                 # P1: windowless service needs an explicit stop. Delete the
                 # pidfile, reply 200, then stop serve_forever from a worker
