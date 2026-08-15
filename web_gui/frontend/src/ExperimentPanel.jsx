@@ -83,13 +83,15 @@ function subjectLabel(meta, index, cfg) {
   return index === 0 ? ((meta && meta.subject) || 'A') : ((meta && meta.subject_b) || 'B');
 }
 
-// P35/P36: subject defaults — single: subject role-aware (A/B), subject_b ""
-// (a single device has no device-B operator, always cleared); dual: subject →
-// A, subject_b → B.
+// P35/P36 + O36: subject defaults — single: subject role-aware (A/B),
+// subject_b "" (a single device has no device-B operator, always cleared);
+// dual: subject → A, subject_b → B, BOTH slot-based (never roles[0] — the
+// role selects are free, so a dual with device A = steering must NOT default
+// to B, which would collide with device B's B).
 function subjectDefaults(meta, cfg) {
   const dual = cfg?.device_mode === 'dual';
   return {
-    subject: meta.subject || singleSubjectDefault(cfg),
+    subject: meta.subject || (dual ? 'A' : singleSubjectDefault(cfg)),
     subject_b: dual ? (meta.subject_b || 'B') : '',
   };
 }

@@ -304,12 +304,17 @@ eq("subj.single_steer_empty", subjectLabel({}, 0, steerCfg), 'B');
 eq("subj.dual_a_empty", subjectLabel({}, 0, dualCfg), 'A');
 eq("subj.dual_b_empty", subjectLabel({}, 1, dualCfg), 'B');
 eq("subj.dual_set", subjectLabel({ subject: 'X', subject_b: 'Y' }, 1, dualCfg), 'Y');
-// subjectDefaults (P35: single keeps subject_b EMPTY; P36: role-aware A/B)
+// subjectDefaults (P35: single keeps subject_b EMPTY; P36: role-aware A/B;
+// O36: dual is SLOT-based — never roles[0], so dual + device A=steering
+// must not default subject to 'B' (would collide with device B's B))
 eq("defs.single_speed_empty", subjectDefaults({}, speedCfg), { subject: 'A', subject_b: '' });
 eq("defs.single_steer_empty", subjectDefaults({}, steerCfg), { subject: 'B', subject_b: '' });
 eq("defs.single_filled", subjectDefaults({ subject: 'X', subject_b: 'Y' }, speedCfg), { subject: 'X', subject_b: '' });
 eq("defs.dual_empty", subjectDefaults({}, dualCfg), { subject: 'A', subject_b: 'B' });
 eq("defs.dual_filled", subjectDefaults({ subject: 'X', subject_b: 'Y' }, dualCfg), { subject: 'X', subject_b: 'Y' });
+eq("defs.dual_steeringA", subjectDefaults({}, { device_mode: 'dual', roles: ['steering', 'speed'] }), { subject: 'A', subject_b: 'B' });
+eq("subj.dual_steeringA_slot0", subjectLabel({}, 0, { device_mode: 'dual', roles: ['steering', 'speed'] }), 'A');
+eq("subj.dual_steeringA_slot1", subjectLabel({}, 1, { device_mode: 'dual', roles: ['steering', 'speed'] }), 'B');
 // random is seeded-deterministic
 const r1 = buildProtocol(dualCfg, { trials: 8, shuffle: 'random', seed: 7 }).trials;
 const r2 = buildProtocol(dualCfg, { trials: 8, shuffle: 'random', seed: 7 }).trials;
