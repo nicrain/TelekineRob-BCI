@@ -345,6 +345,10 @@ class LauncherApp:
         try:
             self._detect_wsl()
             self._sync_files()
+            # P38①/③: pre-clean before spawning — a retry must not leak a
+            # zombie vite/app.main, and 5173/8010 are free to re-bind.
+            self._clear_web_procs()
+            self._run_web_stop_cmd()
             self._spawn_web_services()
             if not self._wait_ready(
                 self.config["web"]["url"],
@@ -354,6 +358,7 @@ class LauncherApp:
             self.state.set_system(SYSTEM_RUNNING, "System ready")
             return {"ok": True, "message": "System started and ready"}
         except Exception as exc:
+            self._clear_web_procs()   # P38③: no leak on failure
             self.state.set_system(SYSTEM_ERROR, friendly_error(exc, "Start System"))
             return {"ok": False, "message": self.state.system_msg}
 
@@ -415,6 +420,28 @@ class LauncherApp:
             if not result.ok(codes):
                 raise RuntimeError(f"sync of {rel} failed (exit {result.exit_code})")
 
+    def _run_web_stop_cmd(self) -> None:
+        """P38①: pkill any leftover web processes in WSL (app.main + vite) so
+        a (re)start begins with 5173/8010 free — idempotent retries."""
+        stop_cmd = self.config["web"].get("stop_cmd")
+        if not stop_cmd:
+            return
+        self.executor.run(
+            build_wsl_cd_cmd(
+                self.config["wsl"]["distro"],
+                self.config["wsl"]["repo_path"],
+                stop_cmd,
+            ),
+            timeout=30,
+        )
+
+    def _clear_web_procs(self) -> None:
+        """P38③: terminate + drop the tracked web processes — called before a
+        (re)spawn and on the failure path so no zombie vite leaks."""
+        for proc in self._web_procs:
+            self._terminate_proc(proc)
+        self._web_procs.clear()
+
     def _spawn_web_services(self) -> None:
         for cmd in build_start_web_cmds(self.config):
             self._web_procs.append(self.executor.spawn(cmd))
@@ -432,9 +459,7 @@ class LauncherApp:
             for proc in self._device_procs.values():
                 self._terminate_proc(proc)
             self._device_procs.clear()
-            for proc in self._web_procs:
-                self._terminate_proc(proc)
-            self._web_procs.clear()
+            self._clear_web_procs()
             if self.config["wsl"].get("stop_wsl", True):
                 try:
                     self.executor.run(
@@ -464,19 +489,10 @@ class LauncherApp:
                 return {"ok": False, "message": "System not running — nothing to restart"}
             self.state.set_system(SYSTEM_STARTING, "Restarting web services…")
         try:
-            stop_cmd = self.config["web"].get("stop_cmd")
-            if stop_cmd:
-                self.executor.run(
-                    build_wsl_cd_cmd(
-                        self.config["wsl"]["distro"],
-                        self.config["wsl"]["repo_path"],
-                        stop_cmd,
-                    ),
-                    timeout=30,
-                )
-            for proc in self._web_procs:
-                self._terminate_proc(proc)
-            self._web_procs.clear()
+            # P38①/③: pre-clean (pkill leftovers) then drop old handles before
+            # respawning; on failure the NEW spawns are cleaned too.
+            self._run_web_stop_cmd()
+            self._clear_web_procs()
             self._spawn_web_services()
             if not self._wait_ready(
                 self.config["web"]["url"],
@@ -486,6 +502,7 @@ class LauncherApp:
             self.state.set_system(SYSTEM_RUNNING, "System ready")
             return {"ok": True, "message": "Web services restarted"}
         except Exception as exc:
+            self._clear_web_procs()   # P38③: no leak on failure
             self.state.set_system(SYSTEM_ERROR, friendly_error(exc, "Restart Web"))
             return {"ok": False, "message": self.state.system_msg}
 

@@ -138,6 +138,51 @@ def test_restart_web_respawns_services():
     assert any("pkill" in c[-1] for c in ex.run_calls)
 
 
+# --- P38: web idempotency — zombie vite leak + port drift -----------------
+
+def test_start_system_precleans_leftover_web():
+    """P38①: start_system runs the WSL stop_cmd (pkill app.main + vite)
+    BEFORE spawning the web services — a retry frees 5173/8010 first, so
+    nothing stacks up. Order: detect (systemctl) → sync (robocopy ×2) →
+    pre-clean (pkill) → spawns."""
+    app, ex = _make_app()
+    assert app.start_system()["ok"] is True
+    pkill_idx = next(i for i, c in enumerate(ex.run_calls) if "pkill" in c[-1])
+    assert pkill_idx >= 3                    # after detect + 2 syncs
+    assert ex.run_calls[pkill_idx][-1].count("pkill") == 2   # app.main + npm run dev
+    assert len(ex.spawn_calls) == 2
+
+
+def test_start_system_failure_cleans_web_procs():
+    """P38③: when start fails (web not ready), the web processes spawned THIS
+    round are terminated — no zombie vite leaks into a retry."""
+    app, ex = _make_app(ready=False)
+    result = app.start_system()
+    assert result["ok"] is False
+    assert len(ex.spawn_calls) == 2
+    assert app._web_procs == []              # cleaned up on failure
+
+
+def test_restart_web_failure_cleans_web_procs():
+    """P38③: restart_web failure also clears this round's web processes."""
+    app, ex = _make_app()
+    assert app.start_system()["ok"] is True
+    app._ready_check = lambda url, t: False  # force the respawn to time out
+    result = app.restart_web()
+    assert result["ok"] is False
+    assert app._web_procs == []              # new spawns cleaned on failure
+
+
+def test_frontend_cmd_pins_5173_strict():
+    """P38②: frontend_cmd pins vite to 5173 with --strictPort — an occupied
+    port fails visibly instead of silently drifting to 5174+ (which the
+    hardcoded localhost:5173 probe could never reach)."""
+    cfg = load_config(REPO_CONFIG)
+    cmd = cfg["web"]["frontend_cmd"]
+    assert "--port 5173" in cmd
+    assert "--strictPort" in cmd
+
+
 def test_start_system_accepts_degraded_systemd():
     """O31: real systemd reports degraded with exit code 1 — the OUTPUT is
     authoritative, so degraded@exit1 must still mean "booted and ready"."""
