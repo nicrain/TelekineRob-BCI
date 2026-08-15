@@ -75,6 +75,17 @@ function subjectLabel(meta, index, isDual) {
   return index === 0 ? ((meta && meta.subject) || 'A') : ((meta && meta.subject_b) || 'B');
 }
 
+// P35: subject defaults BY MODE — single: subject → S01, subject_b → "" (a
+// single device has no device-B operator, so subject_b is always cleared);
+// dual: subject → A, subject_b → B.
+function subjectDefaults(meta, cfg) {
+  const dual = cfg?.device_mode === 'dual';
+  return {
+    subject: meta.subject || (dual ? 'A' : 'S01'),
+    subject_b: dual ? (meta.subject_b || 'B') : '',
+  };
+}
+
 // P30: seeded PRNG (mulberry32) so random/balanced shuffle is reproducible.
 function mulberry32(a) {
   return function () {
@@ -264,15 +275,16 @@ export default function ExperimentPanel({ config }) {
       const proto = buildProtocol(cfg, {
         trials: trials, duration_sec: duration, rest_sec: restSec, shuffle: shuffleMode,
       });
+      // P35: subject defaults by mode — single: S01 + empty subject_b (no
+      // device B), dual: A / B. So the dir name never gains a bogus "B"
+      // segment in single mode.
+      const metaPayload = {
+        ...meta,
+        ...subjectDefaults(meta, cfg),
+        date: new Date().toISOString().slice(0, 10),
+      };
       const r = await api.post('/api/experiment/configure', {
-        meta: {
-          // P33⑥: empty subject falls back to a name so the target display is
-          // never blank — single → S01, dual → A / B.
-          ...meta,
-          subject: meta.subject || (cfg.device_mode === 'dual' ? 'A' : 'S01'),
-          subject_b: meta.subject_b || 'B',
-          date: new Date().toISOString().slice(0, 10),
-        },
+        meta: metaPayload,
         config: cfg,
         trials: proto.trials,
         shuffle: proto.shuffle,

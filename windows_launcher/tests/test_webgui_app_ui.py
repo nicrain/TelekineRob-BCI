@@ -240,8 +240,9 @@ def test_experiment_protocol_generator_node():
     panel = (APPJSX.parent / "ExperimentPanel.jsx").read_text(encoding="utf-8")
     src = "\n\n".join(_extract_function(panel, n) for n in
                       ("mulberry32", "shuffleTrials", "templateFor", "subjectLabel",
-                       "forwardStopTrials", "steeringDirectionTrials",
-                       "collaborativeTrials", "buildProtocol"))
+                       "subjectDefaults", "forwardStopTrials",
+                       "steeringDirectionTrials", "collaborativeTrials",
+                       "buildProtocol"))
     script = src + """
 function eq(name, got, want) {
   if (JSON.stringify(got) !== JSON.stringify(want)) {
@@ -302,6 +303,11 @@ eq("subj.single_set", subjectLabel({ subject: 'X' }, 0, false), 'X');
 eq("subj.dual_a_empty", subjectLabel({}, 0, true), 'A');
 eq("subj.dual_b_empty", subjectLabel({}, 1, true), 'B');
 eq("subj.dual_set", subjectLabel({ subject: 'X', subject_b: 'Y' }, 1, true), 'Y');
+// subjectDefaults by mode (P35): single keeps subject_b EMPTY (no device B)
+eq("defs.single_empty", subjectDefaults({}, { device_mode: 'single' }), { subject: 'S01', subject_b: '' });
+eq("defs.single_filled", subjectDefaults({ subject: 'X', subject_b: 'Y' }, { device_mode: 'single' }), { subject: 'X', subject_b: '' });
+eq("defs.dual_empty", subjectDefaults({}, { device_mode: 'dual' }), { subject: 'A', subject_b: 'B' });
+eq("defs.dual_filled", subjectDefaults({ subject: 'X', subject_b: 'Y' }, { device_mode: 'dual' }), { subject: 'X', subject_b: 'Y' });
 // random is seeded-deterministic
 const r1 = buildProtocol(dualCfg, { trials: 8, shuffle: 'random', seed: 7 }).trials;
 const r2 = buildProtocol(dualCfg, { trials: 8, shuffle: 'random', seed: 7 }).trials;
