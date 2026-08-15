@@ -23,17 +23,18 @@ def test_wsl_hostname_cmd_shape():
 
 def test_portproxy_delete_cmd_shape():
     """P39③: drop the OLD rule before re-adding (idempotent re-hang)."""
-    assert build_portproxy_delete_cmd("192.168.10.136") == [
+    assert build_portproxy_delete_cmd("0.0.0.0") == [
         "netsh", "interface", "portproxy", "delete", "v4tov4",
-        "listenport=5173", "listenaddress=192.168.10.136",
+        "listenport=5173", "listenaddress=0.0.0.0",
     ]
 
 
 def test_portproxy_add_cmd_shape():
-    """P39③: LAN listen 5173 → current WSL IP 5173 (frontend only)."""
-    assert build_portproxy_add_cmd("192.168.10.136", 5173, "172.27.42.5") == [
+    """P41: LISTEN 0.0.0.0:5173 (coexists with WSL localhost forwarding) →
+    current WSL IP 5173 (frontend only)."""
+    assert build_portproxy_add_cmd("0.0.0.0", 5173, "172.27.42.5") == [
         "netsh", "interface", "portproxy", "add", "v4tov4",
-        "listenport=5173", "listenaddress=192.168.10.136",
+        "listenport=5173", "listenaddress=0.0.0.0",
         "connectport=5173", "connectaddress=172.27.42.5",
     ]
 

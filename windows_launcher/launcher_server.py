@@ -463,33 +463,33 @@ class LauncherApp:
         return fields[0] if fields else ""
 
     def _ensure_portproxy(self) -> str:
-        """P39: (re)hang the LAN portproxy for the FRONTEND port (5173) only —
-        the backend stays loopback. Idempotent: delete the old rule (ignore
-        errors) then add with the CURRENT WSL IP, so a WSL IP change is
-        covered on every Start. Returns a status/warning string; a forwarding
-        failure NEVER blocks Start System (forwarding ≠ system)."""
-        lan_ip = self.config["web"].get("lan_ip") or ""
-        if not lan_ip:
-            return ""
+        """P41: (re)hang the LAN portproxy for the FRONTEND port (5173) only —
+        the backend stays loopback. LISTEN on 0.0.0.0 (real-device verified:
+        coexists with WSL's localhost forwarding — both localhost:5173 and the
+        LAN 192.168.x:5173 work), CONNECT to the CURRENT WSL IP resolved at
+        Start. Idempotent: delete the old rule (ignore errors) then add, so a
+        WSL IP change is covered on every Start — zero manual IP config.
+        Returns a status/warning string; a forwarding failure NEVER blocks
+        Start System (forwarding ≠ system)."""
         try:
             wsl_ip = self._resolve_wsl_ip()
             if not wsl_ip:
                 return "LAN forward: could not resolve the WSL IP (hostname -I empty)"
             try:
                 self.executor.run(
-                    build_portproxy_delete_cmd(lan_ip), timeout=20
+                    build_portproxy_delete_cmd("0.0.0.0"), timeout=20
                 )
             except Exception:
                 pass  # delete on a missing rule errors — that's fine
             self.executor.run(
-                build_portproxy_add_cmd(lan_ip, 5173, wsl_ip), timeout=20
+                build_portproxy_add_cmd("0.0.0.0", 5173, wsl_ip), timeout=20
             )
-            return f"LAN forward: http://{lan_ip}:5173 → {wsl_ip}:5173"
+            return f"LAN forward: http://0.0.0.0:5173 → {wsl_ip}:5173"
         except Exception as exc:
             return (
                 f"LAN forward failed (run manually as admin): "
                 f"netsh interface portproxy add v4tov4 listenport=5173 "
-                f"listenaddress={lan_ip} connectport=5173 "
+                f"listenaddress=0.0.0.0 connectport=5173 "
                 f"connectaddress=<wsl-ip> — {exc}"
             )
 

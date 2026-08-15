@@ -25,7 +25,10 @@ def test_start_system_success_sequence():
     app, ex = _make_app()
     result = app.start_system()
 
-    assert result == {"ok": True, "message": "System started and ready"}
+    assert result["ok"] is True
+    # P41: the message carries the LAN-forward note (portproxy always re-hung)
+    assert "System started and ready" in result["message"]
+    assert "LAN forward" in result["message"]
     assert app.state.system == "running"
     # order: wsl readiness (systemctl) → sync windows_launcher → gtec_bridge
     assert "is-system-running" in ex.run_calls[0][-1]
@@ -183,37 +186,28 @@ def test_frontend_cmd_pins_5173_strict():
     assert "--strictPort" in cmd
 
 
-# --- P39: LAN portproxy auto re-hang --------------------------------------
+# --- P39/P41: LAN portproxy auto re-hang ----------------------------------
 
-def test_start_system_hangs_portproxy_when_lan_configured():
-    """P39③: with web.lan_ip set, start_system resolves the CURRENT WSL IP
-    and idempotently re-hangs the 5173 portproxy — delete the old rule then
-    add listen=lan_ip → connect=wsl_ip (frontend only)."""
+def test_start_system_hangs_portproxy():
+    """P41: start_system resolves the CURRENT WSL IP and idempotently
+    re-hangs the 5173 portproxy on LISTEN 0.0.0.0 — delete the old rule then
+    add listen=0.0.0.0 → connect=wsl_ip (frontend only). No IP config."""
     app, ex = _make_app(wsl_ip="172.27.42.5")
-    app.config["web"]["lan_ip"] = "192.168.10.136"
     result = app.start_system()
     assert result["ok"] is True
     assert "LAN forward" in result["message"]
-    assert "http://192.168.10.136:5173" in result["message"]
+    assert "http://0.0.0.0:5173" in result["message"]
     netsh = [c for c in ex.run_calls if c[0] == "netsh"]
     assert len(netsh) == 2
-    assert netsh[0][3] == "delete" and "listenaddress=192.168.10.136" in netsh[0][-1]
+    assert netsh[0][3] == "delete" and "listenaddress=0.0.0.0" in netsh[0][-1]
     assert netsh[1][3] == "add"
     assert "connectaddress=172.27.42.5" in netsh[1][-1]
-
-
-def test_start_system_skips_portproxy_without_lan_ip():
-    """P39①: lan_ip empty (default) → no netsh at all — LAN forwarding off."""
-    app, ex = _make_app()
-    assert app.start_system()["ok"] is True
-    assert not any(c[0] == "netsh" for c in ex.run_calls)
 
 
 def test_start_system_wsl_ip_empty_warns_not_blocks():
     """P39②/④: if hostname -I returns nothing, Start still succeeds with a
     warning — forwarding is not the system."""
     app, ex = _make_app(wsl_ip="")
-    app.config["web"]["lan_ip"] = "192.168.10.136"
     result = app.start_system()
     assert result["ok"] is True
     assert "could not resolve the WSL IP" in result["message"]
@@ -224,7 +218,6 @@ def test_start_system_portproxy_failure_does_not_block():
     """P39④: netsh failure (e.g. needs admin) surfaces the exact manual
     command but Start System still succeeds."""
     app, ex = _make_app()
-    app.config["web"]["lan_ip"] = "192.168.10.136"
     real_run = ex.run
 
     def failing_run(cmd, *, timeout, cwd=None):

@@ -138,23 +138,23 @@ TelekineRob-BCI/
 
 **定案**：LAN 访问 = **NAT + `netsh interface portproxy`**，**只转 5173（前端）**，后端 8010 保持 loopback 不外露（后端经 vite 代理可达，无需直连）。
 
-**前提（P40①，P37 交叉引用）**：转发生效依赖 backend_cmd 已设 **`export WEB_GUI_FRONTEND_ORIGIN=*`**——否则 LAN 浏览器 WS 握手被后端 origin 白名单拒（页面能加载、波形/意图流不推）。`lan_ip` 与 `backend_cmd` 都属**机器本地**项，需**一起手动同步**到真机 config.json，缺一不可。
+**前提（P40①，P37 交叉引用）**：转发生效依赖 backend_cmd 已设 **`export WEB_GUI_FRONTEND_ORIGIN=*`**——否则 LAN 浏览器 WS 握手被后端 origin 白名单拒（页面能加载、波形/意图流不推）。`backend_cmd` 属**机器本地**项，需手动同步到真机 config.json。
 
-**config.json**：`web.lan_ip` 填**你自己的局域网 IP**（如 `192.168.10.136`；手填比多网卡自动探测稳健）。留空 = 关闭 LAN 转发。
+**config.json**：**无需任何 IP 字段**（P41）——launcher 每次 Start 自动解析 WSL IP，netsh 监听 0.0.0.0（真机已验证与本机 localhost 转发共存：本机 `localhost:5173` 与局域网 `192.168.x:5173` 双 curl 均通过）。LAN IP / WSL IP 怎么变都不用碰配置。
 
 **自动重挂（推荐）**：每次 Start System、WSL ready 后，launcher 自动：
 1. `wsl -d <distro> -e bash -lc "hostname -I"` 解析当前 WSL IP（172.27.x 首段——WSL 重启会变）；
    > **多网卡注意（P40③）**：`hostname -I` 取首段依赖接口序；多网卡 / VM 桥接口序变化时转发会指向错误 IP（Start 仍成功，提示消息误导）。真机验证转发地址正确；必要时改显式网卡（如 `ip -4 addr show eth0` 取 `inet`）。
-2. `netsh interface portproxy delete`（旧）+ `add v4tov4 listenport=5173 listenaddress=<LAN-IP> connectport=5173 connectaddress=<WSL-IP>` 幂等重挂，覆盖 WSL IP 变化。
+2. `netsh interface portproxy delete`（旧）+ `add v4tov4 listenport=5173 listenaddress=0.0.0.0 connectport=5173 connectaddress=<WSL-IP>` 幂等重挂，覆盖 WSL IP 变化。
 
 **手动执行（netsh 失败时）**——需**管理员** CMD：
 ```
-netsh interface portproxy delete v4tov4 listenport=5173 listenaddress=<LAN-IP>
-netsh interface portproxy add v4tov4 listenport=5173 listenaddress=<LAN-IP> connectport=5173 connectaddress=<WSL-IP>
+netsh interface portproxy delete v4tov4 listenport=5173 listenaddress=0.0.0.0
+netsh interface portproxy add v4tov4 listenport=5173 listenaddress=0.0.0.0 connectport=5173 connectaddress=<WSL-IP>
 ```
 转发失败**不阻塞** Start System（转发 ≠ 系统）；侧栏/日志会提示确切命令。`netsh portproxy show all` 可查当前规则。
 
-**安全警告（P40②）**：`WEB_GUI_ALLOW_REAL_COMMANDS` **默认 `true`** + 控制 token **默认空** + lan_ip 转发 + origin 放开 ⇒ **任意 LAN 客户端可 POST `/api/system/start`、`/ws/teleop` 驱动真机**。**untrusted LAN 建议设 `WEB_GUI_CONTROL_TOKEN`**（前端已支持 token 自动获取——经 vite 代理走 loopback 源读 `/api/config/control_token`，M4-3 环回校验不拦，浏览器自动附带 Bearer/`?token=`）；**trusted LAN 可保持空**。
+**安全警告（P40②）**：`WEB_GUI_ALLOW_REAL_COMMANDS` **默认 `true`** + 控制 token **默认空** + 0.0.0.0 转发 + origin 放开 ⇒ **任意 LAN 客户端可 POST `/api/system/start`、`/ws/teleop` 驱动真机**。**untrusted LAN 建议设 `WEB_GUI_CONTROL_TOKEN`**（前端已支持 token 自动获取——经 vite 代理走 loopback 源读 `/api/config/control_token`，M4-3 环回校验不拦，浏览器自动附带 Bearer/`?token=`）；**trusted LAN 可保持空**。
 
 **防火墙**：Windows 防火墙需放行**入站 5173**，否则 LAN 浏览器连不上：
 ```
@@ -194,6 +194,7 @@ netsh advfirewall firewall add rule name="O2-vite" dir=in action=allow protocol=
 
 | 2026-08-11 | 真机 headband 稳定性收官验证通过：**P12 看门狗**（宽限期/选活 outlet/见过数据才判停）无 churn；**P13 样本时效**（launcher + 桥探针 freshness 3s）断电正确变灰、重开自动变绿；open_in_ide 120s 宽限连接不闪红 | headband 全链路（连接/断电检测/自动恢复）真机通过；🟡 残留：stop_system 不清 _stalled（P11 复审）、P13 信息性连接线程计数 edge——均非阻塞，下批可选 |
 | 2026-08-11 | 真机 UX/健壮性 **P10 完成**：① 状态实时——前端 pollStatus 顺序 bug（renderOps 重建抹掉 disabled）→ disabled 移创建处 + 轮询 renderOps 先行；`_reconcile_system_health`（running 但 web 不可达 → error，节流 `web.health_interval_sec` 10s）。② Thymio 幂等——`_reconcile_usbipd`（ttyACM0 对齐真实 attach，停机不探测）+ `_connect_usbipd` 幂等。③ Start/Restart——`opControl` 纯函数（running→"Restart System" POST /restart-system）+ 服务端 stop→start。④ gpype 桥重连——`DataWatchdog`+`LslWatchdogProbe`+`BridgeController`（停滞→teardown+重建+backoff） | +19 launcher 测试 → 114；config 加 health_interval_sec + thymio.reconcile_sec |
+| 2026-08-15 | **P41** 完成（portproxy listenaddress 改 0.0.0.0，删 web.lan_ip 依赖）：真机已验证——`listenaddress=0.0.0.0` 与 WSL localhost 转发共存（本机 `localhost:5173` + 局域网 `192.168.x:5173` 双 curl 通过）。`_ensure_portproxy` 的 listenaddress 从 config `web.lan_ip` 改为**硬编码 `0.0.0.0`**；**删除 `web.lan_ip` 字段**（config.json + 读取处 + runbook「填 lan_ip」步骤改掉）。WSL IP 每次 Start 自动解析 → **配置零 IP 字段、完全免手动**（LAN IP / WSL IP 怎么变都不用碰配置）。「netsh 失败/非管理员 → 提示手动命令、不阻塞 Start」语义不变；P40 §5.1 安全警告措辞 lan_ip 相关同步改 0.0.0.0 | launcher_server.py（`_ensure_portproxy` 硬编码 0.0.0.0、去 lan_ip 门——每次 Start 都重挂）+ config.json（删 lan_ip）+ O2_LAUNCHER.md §5.1 + 测试；测试改 5 处（start_success 消息含 LAN forward 注记、via_http 同、hangs_portproxy 改 0.0.0.0 无 lan_ip、删 `skips_portproxy_without_lan_ip`（不再有门）、命令测试 listenaddress 0.0.0.0）→ launcher 189 passed、app 74 passed、全量 **275 passed / 25 skipped**（净 -1 测试） |
 | 2026-08-15 | **P40** 完成（局域网 runbook 文档加固——reviewer P39 三条信息性，纯文档）：**①** P37 交叉引用——转发生效前提是 backend_cmd 已设 `export WEB_GUI_FRONTEND_ORIGIN=*`，否则 LAN 浏览器 WS 被 origin 白名单拒（页面能加载、波形/意图流不推）；`lan_ip` 与 `backend_cmd` 都**机器本地**，需**一起同步**。**②** 安全警告——`WEB_GUI_ALLOW_REAL_COMMANDS` **默认 true** + token **默认空** + lan_ip 转发 + origin 放开 ⇒ 任意 LAN 客户端可 POST `/api/system/start`、`/ws/teleop` 驱动真机；**untrusted LAN 建议设 `WEB_GUI_CONTROL_TOKEN`**（前端已支持自动获取——经 vite 代理走 loopback 源读 `/api/config/control_token`，M4-3 环回校验不拦，自动附带 Bearer/`?token=`）；trusted LAN 可空。**③** `hostname -I` 首段假设——多网卡/VM 桥接口序变化时转发指向错误 IP（Start 仍成功，提示消息误导）；注明真机验证 + 必要时改显式网卡 | 纯文档（O2_LAUNCHER.md §5.1）；无代码/测试改动；事实核实：allow_real 默认 `"true"`（command_runner.py:36）、token 默认空（main.py:59）、api.js 已支持 token 自动获取 → 全量 **276 passed / 25 skipped** 不变 |
 | 2026-08-15 | **P39** 完成（portproxy 自动重挂 + 局域网 runbook）：**①** config.json `web.lan_ip`（operator 手填自己的局域网 IP，如 `192.168.10.136`——比多网卡自动探测稳健；留空 = 关 LAN 转发）；**②** launcher `_resolve_wsl_ip()`——`wsl -d <distro> -e bash -lc "hostname -I"` 取首段（WSL 重启 IP 会变，每次 Start 现查不缓存）；**③** `_ensure_portproxy()` **幂等重挂**——`netsh interface portproxy delete`（旧，忽略错误）+ `add v4tov4 listenport=5173 listenaddress=<lan_ip> connectport=5173 connectaddress=<wsl_ip>`（**只转 5173**，后端 8010 loopback 不变），接入 start_system 在 web ready 后；**④** netsh 失败**不阻塞** Start——侧栏消息给确切手动命令（`netsh interface portproxy add v4tov4 listenport=5173 ...`）；WSL IP 解析空也仅警告；**⑤** 只动 5173、后端不外露；commands.py 三个纯构建器（`build_wsl_hostname_cmd` / `build_portproxy_delete_cmd` / `build_portproxy_add_cmd`）；O2_LAUNCHER.md 加 **§5.1 局域网访问 runbook**（手动 netsh + 自动重挂说明 + 防火墙放行入站 5173） | launcher_server.py + commands.py + config.json（机器本地非同步项——真机需手动同步 `lan_ip`）+ 文档；测试 +7（commands 3 构建器形状；system_chain 4：lan 配置→delete+add 顺序与参数（connectaddress=wsl_ip）、无 lan_ip→无 netsh、WSL IP 空→警告不阻塞、netsh 失败→手动命令提示不阻塞）→ launcher 190 passed、app 74 passed、全量 **276 passed / 25 skipped** |
 | 2026-08-15 | **P38** 完成（launcher web 幂等性——僵尸 vite 泄漏 + 端口漂移）：现象——Start System 失败不清理 spawn 的 web 进程，重试泄漏 vite；vite 5173 被占自动漂移 5174+...，launcher 探测写死 `localhost:5173` → 永远超时。**①** `start_system` 在 `_spawn_web_services` 前先跑 **WSL stop_cmd（pkill app.main + npm run dev）预清理**——抽 `_run_web_stop_cmd()` helper（restart_web 复用，替掉内联块），重试幂等、5173/8010 恒空闲。**②** `config.json` frontend_cmd 改 **`npm run dev -- --port 5173 --strictPort`**——5173 被占 vite 直接失败（可见），不再静默漂移。**③** `start_system`/`restart_web` 的 except 分支调 **`_clear_web_procs()`** 清理本次 spawn 的 web 进程——失败不泄漏；`stop_system` 复用该 helper（DRY） | launcher_server.py（`_run_web_stop_cmd` + `_clear_web_procs` + 三处接线）+ config.json（机器本地非同步项——真机需手动同步 frontend_cmd）+ 测试；测试 +4（start 预清理顺序：pkill 在 detect+sync 后、spawn 前、两处 pkill；start 失败清 web procs；restart_web 失败清 web procs；frontend_cmd 含 `--port 5173 --strictPort`）→ launcher 183 passed、app 74 passed、全量 **269 passed / 25 skipped**；真机验收：连点 Start System 多次不泄漏、vite 恒绑 5173、停止后 5173/8010 释放 |

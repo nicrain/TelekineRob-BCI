@@ -122,7 +122,8 @@ def test_start_system_via_http(base_url):
     status, body = _post(base_url, "/start-system", origin=base_url)
     assert status == 200
     assert body["ok"] is True
-    assert body["message"] == "System started and ready"
+    # P41: message carries the LAN-forward note (portproxy always re-hung)
+    assert "System started and ready" in body["message"]
 
 
 def test_connect_when_system_stopped_via_http(base_url):
