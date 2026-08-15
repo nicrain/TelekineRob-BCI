@@ -154,7 +154,7 @@ netsh interface portproxy add v4tov4 listenport=5173 listenaddress=0.0.0.0 conne
 ```
 转发失败**不阻塞** Start System（转发 ≠ 系统）；侧栏/日志会提示确切命令。`netsh portproxy show all` 可查当前规则。
 
-**安全警告（P40②）**：`WEB_GUI_ALLOW_REAL_COMMANDS` **默认 `true`** + 控制 token **默认空** + 0.0.0.0 转发 + origin 放开 ⇒ **任意 LAN 客户端可 POST `/api/system/start`、`/ws/teleop` 驱动真机**。**untrusted LAN 建议设 `WEB_GUI_CONTROL_TOKEN`**（前端已支持 token 自动获取——经 vite 代理走 loopback 源读 `/api/config/control_token`，M4-3 环回校验不拦，浏览器自动附带 Bearer/`?token=`）；**trusted LAN 可保持空**。
+**安全警告（P40②）**：`WEB_GUI_ALLOW_REAL_COMMANDS` **默认 `true`** + 控制 token **默认空** + 0.0.0.0 转发 + origin 放开 ⇒ **任意 LAN 客户端可 POST `/api/system/start`、`/ws/teleop` 驱动真机**。**untrusted LAN 建议设 `WEB_GUI_CONTROL_TOKEN`**（前端已支持 token 自动获取——经 vite 代理走 loopback 源读 `/api/config/control_token`，M4-3 环回校验不拦，浏览器自动附带 Bearer/`?token=`）；**trusted LAN 可保持空**。**⚠️（I3）0.0.0.0 监听暴露的是所有网卡（WiFi / VPN / 其它虚拟接口都在内），不只实验室局域网**——"trusted LAN" 措辞偏窄，实为"受信**网络**"。非受信环境（开放 WiFi、公司/校园网、共享 VPN）建议**关闭转发或做网络隔离**，勿只凭"局域网可信"；且 token 经 vite 代理可被 LAN 客户端自行取到，**强度有限**，真正的防护靠受信网络 / 不暴露。
 
 **防火墙**：Windows 防火墙需放行**入站 5173**，否则 LAN 浏览器连不上：
 ```
