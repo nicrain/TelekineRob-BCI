@@ -38,6 +38,7 @@ class FakeExecutor:
         bridge_alive: bool = True,
         usbipd_ok: bool = True,
         lsl_state: str = "alive",
+        wsl_ip: str = "172.27.0.2",
     ) -> None:
         self.run_calls: list[list[str]] = []
         self.spawn_calls: list[list[str]] = []
@@ -52,10 +53,13 @@ class FakeExecutor:
         self.bridge_alive = bridge_alive
         self.usbipd_ok = usbipd_ok
         self.lsl_state = lsl_state
+        self.wsl_ip = wsl_ip
 
     def run(self, cmd, *, timeout, cwd=None) -> CompletedCommand:
         self.run_calls.append(cmd)
         head, tail = cmd[:1], cmd[-1]
+        if head == ["wsl"] and "hostname -I" in tail:
+            return CompletedCommand(0, self.wsl_ip, "")
         if head == ["wsl"] and "is-system-running" in tail:
             if self.hang_probes > 0:
                 # O32: model a probe that hangs/times out.

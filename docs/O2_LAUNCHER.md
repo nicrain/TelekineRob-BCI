@@ -134,6 +134,30 @@ TelekineRob-BCI/
 
 ---
 
+## 5.1 局域网访问（NAT + portproxy）runbook（P39）
+
+**定案**：LAN 访问 = **NAT + `netsh interface portproxy`**，**只转 5173（前端）**，后端 8010 保持 loopback 不外露（后端经 vite 代理可达，无需直连）。
+
+**config.json**：`web.lan_ip` 填**你自己的局域网 IP**（如 `192.168.10.136`；手填比多网卡自动探测稳健）。留空 = 关闭 LAN 转发。
+
+**自动重挂（推荐）**：每次 Start System、WSL ready 后，launcher 自动：
+1. `wsl -d <distro> -e bash -lc "hostname -I"` 解析当前 WSL IP（172.27.x 首段——WSL 重启会变）；
+2. `netsh interface portproxy delete`（旧）+ `add v4tov4 listenport=5173 listenaddress=<LAN-IP> connectport=5173 connectaddress=<WSL-IP>` 幂等重挂，覆盖 WSL IP 变化。
+
+**手动执行（netsh 失败时）**——需**管理员** CMD：
+```
+netsh interface portproxy delete v4tov4 listenport=5173 listenaddress=<LAN-IP>
+netsh interface portproxy add v4tov4 listenport=5173 listenaddress=<LAN-IP> connectport=5173 connectaddress=<WSL-IP>
+```
+转发失败**不阻塞** Start System（转发 ≠ 系统）；侧栏/日志会提示确切命令。`netsh portproxy show all` 可查当前规则。
+
+**防火墙**：Windows 防火墙需放行**入站 5173**，否则 LAN 浏览器连不上：
+```
+netsh advfirewall firewall add rule name="O2-vite" dir=in action=allow protocol=TCP localport=5173
+```
+
+---
+
 ## 6. 迭代记录
 
 > 测试中发现的需求变化/设计调整记这里，programmer/reviewer/CTO 同步更新。
@@ -165,6 +189,7 @@ TelekineRob-BCI/
 
 | 2026-08-11 | 真机 headband 稳定性收官验证通过：**P12 看门狗**（宽限期/选活 outlet/见过数据才判停）无 churn；**P13 样本时效**（launcher + 桥探针 freshness 3s）断电正确变灰、重开自动变绿；open_in_ide 120s 宽限连接不闪红 | headband 全链路（连接/断电检测/自动恢复）真机通过；🟡 残留：stop_system 不清 _stalled（P11 复审）、P13 信息性连接线程计数 edge——均非阻塞，下批可选 |
 | 2026-08-11 | 真机 UX/健壮性 **P10 完成**：① 状态实时——前端 pollStatus 顺序 bug（renderOps 重建抹掉 disabled）→ disabled 移创建处 + 轮询 renderOps 先行；`_reconcile_system_health`（running 但 web 不可达 → error，节流 `web.health_interval_sec` 10s）。② Thymio 幂等——`_reconcile_usbipd`（ttyACM0 对齐真实 attach，停机不探测）+ `_connect_usbipd` 幂等。③ Start/Restart——`opControl` 纯函数（running→"Restart System" POST /restart-system）+ 服务端 stop→start。④ gpype 桥重连——`DataWatchdog`+`LslWatchdogProbe`+`BridgeController`（停滞→teardown+重建+backoff） | +19 launcher 测试 → 114；config 加 health_interval_sec + thymio.reconcile_sec |
+| 2026-08-15 | **P39** 完成（portproxy 自动重挂 + 局域网 runbook）：**①** config.json `web.lan_ip`（operator 手填自己的局域网 IP，如 `192.168.10.136`——比多网卡自动探测稳健；留空 = 关 LAN 转发）；**②** launcher `_resolve_wsl_ip()`——`wsl -d <distro> -e bash -lc "hostname -I"` 取首段（WSL 重启 IP 会变，每次 Start 现查不缓存）；**③** `_ensure_portproxy()` **幂等重挂**——`netsh interface portproxy delete`（旧，忽略错误）+ `add v4tov4 listenport=5173 listenaddress=<lan_ip> connectport=5173 connectaddress=<wsl_ip>`（**只转 5173**，后端 8010 loopback 不变），接入 start_system 在 web ready 后；**④** netsh 失败**不阻塞** Start——侧栏消息给确切手动命令（`netsh interface portproxy add v4tov4 listenport=5173 ...`）；WSL IP 解析空也仅警告；**⑤** 只动 5173、后端不外露；commands.py 三个纯构建器（`build_wsl_hostname_cmd` / `build_portproxy_delete_cmd` / `build_portproxy_add_cmd`）；O2_LAUNCHER.md 加 **§5.1 局域网访问 runbook**（手动 netsh + 自动重挂说明 + 防火墙放行入站 5173） | launcher_server.py + commands.py + config.json（机器本地非同步项——真机需手动同步 `lan_ip`）+ 文档；测试 +7（commands 3 构建器形状；system_chain 4：lan 配置→delete+add 顺序与参数（connectaddress=wsl_ip）、无 lan_ip→无 netsh、WSL IP 空→警告不阻塞、netsh 失败→手动命令提示不阻塞）→ launcher 190 passed、app 74 passed、全量 **276 passed / 25 skipped** |
 | 2026-08-15 | **P38** 完成（launcher web 幂等性——僵尸 vite 泄漏 + 端口漂移）：现象——Start System 失败不清理 spawn 的 web 进程，重试泄漏 vite；vite 5173 被占自动漂移 5174+...，launcher 探测写死 `localhost:5173` → 永远超时。**①** `start_system` 在 `_spawn_web_services` 前先跑 **WSL stop_cmd（pkill app.main + npm run dev）预清理**——抽 `_run_web_stop_cmd()` helper（restart_web 复用，替掉内联块），重试幂等、5173/8010 恒空闲。**②** `config.json` frontend_cmd 改 **`npm run dev -- --port 5173 --strictPort`**——5173 被占 vite 直接失败（可见），不再静默漂移。**③** `start_system`/`restart_web` 的 except 分支调 **`_clear_web_procs()`** 清理本次 spawn 的 web 进程——失败不泄漏；`stop_system` 复用该 helper（DRY） | launcher_server.py（`_run_web_stop_cmd` + `_clear_web_procs` + 三处接线）+ config.json（机器本地非同步项——真机需手动同步 frontend_cmd）+ 测试；测试 +4（start 预清理顺序：pkill 在 detect+sync 后、spawn 前、两处 pkill；start 失败清 web procs；restart_web 失败清 web procs；frontend_cmd 含 `--port 5173 --strictPort`）→ launcher 183 passed、app 74 passed、全量 **269 passed / 25 skipped**；真机验收：连点 Start System 多次不泄漏、vite 恒绑 5173、停止后 5173/8010 释放 |
 | 2026-08-15 | **P37** 完成（局域网访问，2 个文件纯配置）：**①** `web_gui/frontend/vite.config.js` 代理 IPv6 加固——`/api` target `http://localhost:8010` → **`http://127.0.0.1:8010`**、`/ws` target `ws://localhost:8010` → **`ws://127.0.0.1:8010`**（根因：后端 uvicorn 只绑 IPv4 `127.0.0.1:8010`，WSL2 内 `localhost` 可能解析到 `::1` → 代理 ECONNREFUSED；显式 IPv4 消除歧义，零行为风险）。**②** `windows_launcher/config.json` web.backend_cmd 头部加 **`export WEB_GUI_FRONTEND_ORIGIN=*`**（CTO 确认改 export 头部形式：派单字面 `VAR=* cd ...` 实测 bash 只作用于 cd、python 拿不到，`export ... &&` 才持久；作用：LAN 浏览器 WS 握手 Origin 不被后端白名单拒——`*` 走既有 `_wildcard_origin` 路径 `_validate_origin` 恒真；安全边界不变：后端仍 127.0.0.1 loopback、控制面 token `_ws_authorized` 照旧，仅放开 Origin 校验，系 F3/文档既定的 research-convenience 路径） | 纯配置，无行为/测试影响（config.json 两测试用子串断言，前置 export 不破坏；无测试读 vite.config/8010）；⚠️ config.json 是**机器本地配置非同步项**——真机需用户侧手动同步 backend_cmd；前端 vite 需重建 → launcher 179 passed、app 74 passed、全量 **265 passed / 25 skipped** |
 | 2026-08-15 | **O36** 修复（P36 `559a4ce` 复核 FAIL）：reviewer 发现——`subjectDefaults` 的 `subject: meta.subject || singleSubjectDefault(cfg)` 按 `roles[0]` 角色取默认，但 dual 目标表 / 双输入占位是 **slot 基准**（静态 `e.g. A`/`e.g. B`）；App.jsx role1 select 可自由设 steering（无 slot-role 绑定）→ **dual + 设备 A=steering** 留空 Configure → `subjectDefaults({}, {device_mode:'dual', roles:['steering','speed']})` 返回 `{subject:'B', subject_b:'B'}`（**B/B 撞名**），与目标表 'A' 矛盾、目录名变 `B_B_s1_...`——违反 P36「dual unchanged (A/B by slot)」且是 P35 回归（原 `dual ? 'A' : 'S01'` 是 slot 基准，正确）。**修复一行**：`subject: meta.subject || (dual ? 'A' : singleSubjectDefault(cfg))`——**dual 始终 slot 基准 'A'，单设备才走角色感知**（subjectLabel 本就 slot 基准，无需改） | 纯前端 ExperimentPanel.jsx；前端需用户侧 vite build 确认；测试补 Node 3 例（dual roles:['steering','speed'] 留空 → {A,B} 不撞名；subjectLabel slot0→'A'、slot1→'B'）→ launcher 179 passed、app 74 passed、全量 **265 passed / 25 skipped** |

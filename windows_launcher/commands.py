@@ -73,6 +73,32 @@ def build_wsl_cd_cmd(distro: str, repo_path: str, inner: str) -> List[str]:
     return ["wsl", "-d", distro, "-e", "bash", "-lc", f"cd {shlex_quote(repo_path)} && {inner}"]
 
 
+def build_wsl_hostname_cmd(distro: str) -> List[str]:
+    """P39②: current WSL IP — ``hostname -I`` prints space-separated addrs;
+    the FIRST segment is the WSL NAT IP (172.27.x), which changes on every
+    WSL restart."""
+    return ["wsl", "-d", distro, "-e", "bash", "-lc", "hostname -I"]
+
+
+def build_portproxy_delete_cmd(listen_address: str, port: int = 5173) -> List[str]:
+    """P39③: drop the OLD forwarding rule so the re-hang is idempotent
+    (``delete`` on a missing rule errors — the caller ignores it)."""
+    return [
+        "netsh", "interface", "portproxy", "delete", "v4tov4",
+        f"listenport={port}", f"listenaddress={listen_address}",
+    ]
+
+
+def build_portproxy_add_cmd(listen_address: str, port: int, connect_address: str) -> List[str]:
+    """P39③: LAN → WSL forwarding for the FRONTEND port only (5173); the
+    backend stays loopback (backend_url 8010 is not forwarded)."""
+    return [
+        "netsh", "interface", "portproxy", "add", "v4tov4",
+        f"listenport={port}", f"listenaddress={listen_address}",
+        f"connectport={port}", f"connectaddress={connect_address}",
+    ]
+
+
 def build_sync_cmd(
     tool: str,
     src: str,

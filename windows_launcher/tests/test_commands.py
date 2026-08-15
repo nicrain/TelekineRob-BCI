@@ -3,11 +3,39 @@ from commands import (
     CompletedCommand,
     Executor,
     build_bridge_command,
+    build_portproxy_add_cmd,
+    build_portproxy_delete_cmd,
     build_start_web_cmds,
     build_sync_cmd,
     build_usbipd_attach_cmd,
+    build_wsl_hostname_cmd,
     build_wsl_system_running_cmd,
 )
+
+
+def test_wsl_hostname_cmd_shape():
+    """P39②: WSL IP probe — hostname -I first segment (the NAT IP changes on
+    every WSL restart, so it is resolved at Start time, not stored)."""
+    assert build_wsl_hostname_cmd("Ubuntu") == [
+        "wsl", "-d", "Ubuntu", "-e", "bash", "-lc", "hostname -I",
+    ]
+
+
+def test_portproxy_delete_cmd_shape():
+    """P39③: drop the OLD rule before re-adding (idempotent re-hang)."""
+    assert build_portproxy_delete_cmd("192.168.10.136") == [
+        "netsh", "interface", "portproxy", "delete", "v4tov4",
+        "listenport=5173", "listenaddress=192.168.10.136",
+    ]
+
+
+def test_portproxy_add_cmd_shape():
+    """P39③: LAN listen 5173 → current WSL IP 5173 (frontend only)."""
+    assert build_portproxy_add_cmd("192.168.10.136", 5173, "172.27.42.5") == [
+        "netsh", "interface", "portproxy", "add", "v4tov4",
+        "listenport=5173", "listenaddress=192.168.10.136",
+        "connectport=5173", "connectaddress=172.27.42.5",
+    ]
 
 
 def test_wsl_system_running_cmd_shape():

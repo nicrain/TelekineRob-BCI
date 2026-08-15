@@ -183,6 +183,62 @@ def test_frontend_cmd_pins_5173_strict():
     assert "--strictPort" in cmd
 
 
+# --- P39: LAN portproxy auto re-hang --------------------------------------
+
+def test_start_system_hangs_portproxy_when_lan_configured():
+    """P39③: with web.lan_ip set, start_system resolves the CURRENT WSL IP
+    and idempotently re-hangs the 5173 portproxy — delete the old rule then
+    add listen=lan_ip → connect=wsl_ip (frontend only)."""
+    app, ex = _make_app(wsl_ip="172.27.42.5")
+    app.config["web"]["lan_ip"] = "192.168.10.136"
+    result = app.start_system()
+    assert result["ok"] is True
+    assert "LAN forward" in result["message"]
+    assert "http://192.168.10.136:5173" in result["message"]
+    netsh = [c for c in ex.run_calls if c[0] == "netsh"]
+    assert len(netsh) == 2
+    assert netsh[0][3] == "delete" and "listenaddress=192.168.10.136" in netsh[0][-1]
+    assert netsh[1][3] == "add"
+    assert "connectaddress=172.27.42.5" in netsh[1][-1]
+
+
+def test_start_system_skips_portproxy_without_lan_ip():
+    """P39①: lan_ip empty (default) → no netsh at all — LAN forwarding off."""
+    app, ex = _make_app()
+    assert app.start_system()["ok"] is True
+    assert not any(c[0] == "netsh" for c in ex.run_calls)
+
+
+def test_start_system_wsl_ip_empty_warns_not_blocks():
+    """P39②/④: if hostname -I returns nothing, Start still succeeds with a
+    warning — forwarding is not the system."""
+    app, ex = _make_app(wsl_ip="")
+    app.config["web"]["lan_ip"] = "192.168.10.136"
+    result = app.start_system()
+    assert result["ok"] is True
+    assert "could not resolve the WSL IP" in result["message"]
+    assert not any(c[0] == "netsh" for c in ex.run_calls)
+
+
+def test_start_system_portproxy_failure_does_not_block():
+    """P39④: netsh failure (e.g. needs admin) surfaces the exact manual
+    command but Start System still succeeds."""
+    app, ex = _make_app()
+    app.config["web"]["lan_ip"] = "192.168.10.136"
+    real_run = ex.run
+
+    def failing_run(cmd, *, timeout, cwd=None):
+        if cmd[0] == "netsh":
+            raise RuntimeError("access denied — run as admin")
+        return real_run(cmd, timeout=timeout, cwd=cwd)
+
+    ex.run = failing_run
+    result = app.start_system()
+    assert result["ok"] is True
+    assert "run manually as admin" in result["message"]
+    assert "netsh interface portproxy add v4tov4 listenport=5173" in result["message"]
+
+
 def test_start_system_accepts_degraded_systemd():
     """O31: real systemd reports degraded with exit code 1 — the OUTPUT is
     authoritative, so degraded@exit1 must still mean "booted and ready"."""

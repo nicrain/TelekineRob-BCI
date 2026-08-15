@@ -30,12 +30,15 @@ from commands import (
     Executor,
     build_bridge_command,
     build_ide_open_cmd,
+    build_portproxy_add_cmd,
+    build_portproxy_delete_cmd,
     build_python_script_cmd,
     build_start_web_cmds,
     build_sync_cmd,
     build_usbipd_attach_cmd,
     build_usbipd_detach_cmd,
     build_wsl_cd_cmd,
+    build_wsl_hostname_cmd,
     build_wsl_system_running_cmd,
 )
 from config import load_config
@@ -355,8 +358,15 @@ class LauncherApp:
                 float(self.config["web"].get("ready_timeout_sec", 60)),
             ):
                 raise RuntimeError("web service not ready (timeout) — check the frontend")
+            # P39: (re)hang the LAN portproxy once WSL + web are up. A
+            # forwarding failure only surfaces as a message — it must never
+            # block the system start.
+            lan_note = self._ensure_portproxy()
             self.state.set_system(SYSTEM_RUNNING, "System ready")
-            return {"ok": True, "message": "System started and ready"}
+            msg = "System started and ready"
+            if lan_note:
+                msg += f" — {lan_note}"
+            return {"ok": True, "message": msg}
         except Exception as exc:
             self._clear_web_procs()   # P38③: no leak on failure
             self.state.set_system(SYSTEM_ERROR, friendly_error(exc, "Start System"))
@@ -441,6 +451,47 @@ class LauncherApp:
         for proc in self._web_procs:
             self._terminate_proc(proc)
         self._web_procs.clear()
+
+    def _resolve_wsl_ip(self) -> str:
+        """P39②: the CURRENT WSL IP — ``hostname -I`` first segment (the
+        WSL NAT 172.27.x address changes on every WSL restart)."""
+        result = self.executor.run(
+            build_wsl_hostname_cmd(self.config["wsl"]["distro"]),
+            timeout=15,
+        )
+        fields = (result.stdout or "").split()
+        return fields[0] if fields else ""
+
+    def _ensure_portproxy(self) -> str:
+        """P39: (re)hang the LAN portproxy for the FRONTEND port (5173) only —
+        the backend stays loopback. Idempotent: delete the old rule (ignore
+        errors) then add with the CURRENT WSL IP, so a WSL IP change is
+        covered on every Start. Returns a status/warning string; a forwarding
+        failure NEVER blocks Start System (forwarding ≠ system)."""
+        lan_ip = self.config["web"].get("lan_ip") or ""
+        if not lan_ip:
+            return ""
+        try:
+            wsl_ip = self._resolve_wsl_ip()
+            if not wsl_ip:
+                return "LAN forward: could not resolve the WSL IP (hostname -I empty)"
+            try:
+                self.executor.run(
+                    build_portproxy_delete_cmd(lan_ip), timeout=20
+                )
+            except Exception:
+                pass  # delete on a missing rule errors — that's fine
+            self.executor.run(
+                build_portproxy_add_cmd(lan_ip, 5173, wsl_ip), timeout=20
+            )
+            return f"LAN forward: http://{lan_ip}:5173 → {wsl_ip}:5173"
+        except Exception as exc:
+            return (
+                f"LAN forward failed (run manually as admin): "
+                f"netsh interface portproxy add v4tov4 listenport=5173 "
+                f"listenaddress={lan_ip} connectport=5173 "
+                f"connectaddress=<wsl-ip> — {exc}"
+            )
 
     def _spawn_web_services(self) -> None:
         for cmd in build_start_web_cmds(self.config):
