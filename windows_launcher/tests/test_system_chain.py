@@ -317,6 +317,8 @@ def test_portproxy_ps1_written_with_bom():
     text = raw.decode("utf-8-sig")
     assert "connectaddress=172.27.42.5" in text
     assert "Set-Content -Path" in text and str(marker) in text
+    # P42 real-device fix: netsh stderr is silenced so nothing flashes red
+    assert text.count("2>$null | Out-Null") == 2    # delete + add
 
 
 def test_start_system_accepts_degraded_systemd():

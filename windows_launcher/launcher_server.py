@@ -521,11 +521,14 @@ class LauncherApp:
         # ANSI, so a non-ASCII (e.g. Chinese) temp/marker path would mojibake
         # and the done-marker would never appear (fix would wait the full
         # timeout). With the BOM, PS reads it as UTF-8 correctly.
+        # P42-fix2: netsh stderr is silenced (2>$null | Out-Null) so even a
+        # failed rule (e.g. the delete of a missing rule) never flashes red.
         ps1.write_text(
             "$ErrorActionPreference = 'Continue'\n"
-            "netsh interface portproxy delete v4tov4 listenport=5173 listenaddress=0.0.0.0\n"
+            "netsh interface portproxy delete v4tov4 listenport=5173 "
+            "listenaddress=0.0.0.0 2>$null | Out-Null\n"
             f"netsh interface portproxy add v4tov4 listenport=5173 listenaddress=0.0.0.0 "
-            f"connectport=5173 connectaddress={wsl_ip}\n"
+            f"connectport=5173 connectaddress={wsl_ip} 2>$null | Out-Null\n"
             f"Set-Content -Path '{marker}' -Value done\n",
             encoding="utf-8-sig",
         )

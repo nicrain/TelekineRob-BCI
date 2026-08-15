@@ -118,12 +118,19 @@ def parse_portproxy_5173_connectaddress(show_output: str) -> Optional[str]:
 
 
 def build_uac_fix_cmd(ps1_path: str) -> List[str]:
-    """P42③: raise the standard UAC prompt to run the fix script ELEVATED —
-    ``Start-Process powershell -Verb runas -ArgumentList '-File', '<ps1>'``.
-    Quoting stays clean because the .ps1 holds the netsh commands verbatim."""
+    """P42③: raise the standard UAC prompt to run the fix script ELEVATED.
+
+    The inner powershell gets ``-ExecutionPolicy Bypass`` (the .ps1 would be
+    refused under the default Restricted policy — the real-device red-flash
+    root cause where netsh never ran), ``-NoProfile``, and ``-WindowStyle
+    Hidden`` so a non-IT operator never sees a flashing console. The .ps1
+    path is embedded double-quoted so spaces in the path survive the
+    Start-Process -ArgumentList join."""
     return [
         "powershell", "-NoProfile", "-Command",
-        f"Start-Process powershell -Verb runas -ArgumentList '-File', '{ps1_path}'",
+        "Start-Process powershell -Verb runas "
+        "-ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-WindowStyle','Hidden',"
+        f"'-File','\"{ps1_path}\"'",
     ]
 
 

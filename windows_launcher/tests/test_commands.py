@@ -67,11 +67,18 @@ def test_parse_portproxy_5173_connectaddress():
 
 
 def test_build_uac_fix_cmd_shape():
-    """P42③: raise the standard UAC prompt to run the fix script elevated."""
-    assert build_uac_fix_cmd("C:\\tmp\\o2-lan-fix.ps1") == [
-        "powershell", "-NoProfile", "-Command",
-        "Start-Process powershell -Verb runas -ArgumentList '-File', 'C:\\tmp\\o2-lan-fix.ps1'",
-    ]
+    """P42③ (+ real-device fix): the elevation runs the .ps1 with
+    -ExecutionPolicy Bypass (the default Restricted policy would refuse it —
+    the red-flash root cause), -NoProfile and -WindowStyle Hidden (no flashing
+    console for a non-IT operator); the .ps1 path is embedded double-quoted so
+    spaces survive the -ArgumentList join."""
+    cmd = build_uac_fix_cmd("C:\\tmp\\o2-lan-fix.ps1")
+    assert cmd[:3] == ["powershell", "-NoProfile", "-Command"]
+    outer = cmd[3]
+    assert "Start-Process powershell -Verb runas" in outer
+    assert "'-NoProfile','-ExecutionPolicy','Bypass'" in outer
+    assert "'-WindowStyle','Hidden'" in outer
+    assert "'-File','\"C:\\tmp\\o2-lan-fix.ps1\"'" in outer
 
 
 def test_wsl_system_running_cmd_shape():
