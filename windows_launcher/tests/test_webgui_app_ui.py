@@ -101,9 +101,9 @@ def test_experiment_target_role_mapped_rows():
     # no hardcoded A:/B: target lines remain
     assert "A: {STATE_LABEL" not in panel
     assert "B: {STATE_LABEL" not in panel
-    # subject name per row — via subjectLabel (P33⑥ defaults: S01 / A / B)
-    assert "subjectLabel(meta, i, devices.length > 1)" in panel
-    assert "devices.length > 1" in panel and "|| 'S01'" in panel
+    # subject name per row — via subjectLabel (P36: role-aware A/B, dual A / B)
+    assert "subjectLabel(meta, i, cfg)" in panel
+    assert "singleSubjectDefault(cfg)" in panel
 
 
 # --- P29: target table + smooth countdown + style tweaks -------------------
@@ -203,8 +203,8 @@ def test_experiment_protocol_generator_markers():
     assert "PREVIEW_MAX" in panel
     assert "genProto.trials.slice(0, PREVIEW_MAX)" in panel
     assert "+{genProto.trials.length - PREVIEW_MAX} more" in panel
-    # subject defaults (single S01 / dual A, B)
-    assert "|| 'S01'" in panel and "|| 'A'" in panel and "|| 'B'" in panel
+    # subject defaults (P36: single role-aware A/B; dual A, B)
+    assert "singleSubjectDefault(cfg)" in panel and "|| 'A'" in panel and "|| 'B'" in panel
     assert 'placeholder="e.g. A"' in panel and 'placeholder="e.g. B"' in panel
 
 
@@ -239,10 +239,10 @@ def test_experiment_protocol_generator_node():
     import subprocess
     panel = (APPJSX.parent / "ExperimentPanel.jsx").read_text(encoding="utf-8")
     src = "\n\n".join(_extract_function(panel, n) for n in
-                      ("mulberry32", "shuffleTrials", "templateFor", "subjectLabel",
-                       "subjectDefaults", "forwardStopTrials",
-                       "steeringDirectionTrials", "collaborativeTrials",
-                       "buildProtocol"))
+                      ("mulberry32", "shuffleTrials", "templateFor",
+                       "singleSubjectDefault", "subjectLabel", "subjectDefaults",
+                       "forwardStopTrials", "steeringDirectionTrials",
+                       "collaborativeTrials", "buildProtocol"))
     script = src + """
 function eq(name, got, want) {
   if (JSON.stringify(got) !== JSON.stringify(want)) {
@@ -297,17 +297,19 @@ eq("collab_odd.n", p.n_trials, 9);
 eq("collab_odd.a", count(p.trials, (t) => t.a_state === "attention"), 5);
 eq("collab_odd.b", count(p.trials, (t) => t.b_state === "attention"), 5);
 eq("collab_odd.left", count(p.trials, (t) => t.b_direction === "left"), 5);
-// subjectLabel defaults (single S01 / dual A, B)
-eq("subj.single_empty", subjectLabel({}, 0, false), 'S01');
-eq("subj.single_set", subjectLabel({ subject: 'X' }, 0, false), 'X');
-eq("subj.dual_a_empty", subjectLabel({}, 0, true), 'A');
-eq("subj.dual_b_empty", subjectLabel({}, 1, true), 'B');
-eq("subj.dual_set", subjectLabel({ subject: 'X', subject_b: 'Y' }, 1, true), 'Y');
-// subjectDefaults by mode (P35): single keeps subject_b EMPTY (no device B)
-eq("defs.single_empty", subjectDefaults({}, { device_mode: 'single' }), { subject: 'S01', subject_b: '' });
-eq("defs.single_filled", subjectDefaults({ subject: 'X', subject_b: 'Y' }, { device_mode: 'single' }), { subject: 'X', subject_b: '' });
-eq("defs.dual_empty", subjectDefaults({}, { device_mode: 'dual' }), { subject: 'A', subject_b: 'B' });
-eq("defs.dual_filled", subjectDefaults({ subject: 'X', subject_b: 'Y' }, { device_mode: 'dual' }), { subject: 'X', subject_b: 'Y' });
+// subjectLabel defaults (P36: single role-aware A/B, dual A / B)
+eq("subj.single_speed_empty", subjectLabel({}, 0, speedCfg), 'A');
+eq("subj.single_speed_set", subjectLabel({ subject: 'X' }, 0, speedCfg), 'X');
+eq("subj.single_steer_empty", subjectLabel({}, 0, steerCfg), 'B');
+eq("subj.dual_a_empty", subjectLabel({}, 0, dualCfg), 'A');
+eq("subj.dual_b_empty", subjectLabel({}, 1, dualCfg), 'B');
+eq("subj.dual_set", subjectLabel({ subject: 'X', subject_b: 'Y' }, 1, dualCfg), 'Y');
+// subjectDefaults (P35: single keeps subject_b EMPTY; P36: role-aware A/B)
+eq("defs.single_speed_empty", subjectDefaults({}, speedCfg), { subject: 'A', subject_b: '' });
+eq("defs.single_steer_empty", subjectDefaults({}, steerCfg), { subject: 'B', subject_b: '' });
+eq("defs.single_filled", subjectDefaults({ subject: 'X', subject_b: 'Y' }, speedCfg), { subject: 'X', subject_b: '' });
+eq("defs.dual_empty", subjectDefaults({}, dualCfg), { subject: 'A', subject_b: 'B' });
+eq("defs.dual_filled", subjectDefaults({ subject: 'X', subject_b: 'Y' }, dualCfg), { subject: 'X', subject_b: 'Y' });
 // random is seeded-deterministic
 const r1 = buildProtocol(dualCfg, { trials: 8, shuffle: 'random', seed: 7 }).trials;
 const r2 = buildProtocol(dualCfg, { trials: 8, shuffle: 'random', seed: 7 }).trials;
@@ -344,7 +346,7 @@ def test_experiment_panel_metadata_autoconfig():
     assert 'value="dry"' in panel and 'value="wet"' in panel
     # hand-filled: subject + session only
     assert "fieldLabelStyle" in panel
-    assert 'placeholder="e.g. S01"' in panel
+    assert 'placeholder={`e.g. ${singleSubjectDefault(cfg)}`}' in panel  # P36 role-aware
     # NO hand-filled metric / device_mode selects remain
     assert "METRIC_OPTIONS" not in panel
     assert "Single device" not in panel
@@ -445,7 +447,7 @@ def test_experiment_panel_dual_layout_markers():
     assert "rowValueStyle" in panel                     # per-row height spacing
     assert "METRIC_LABEL[d.metric]" in panel            # per-device metric row
     assert "ROLE_LABEL[d.role]" in panel                # per-device role row
-    assert 'placeholder="e.g. S01"' in panel            # single-mode branch kept
+    assert 'placeholder={`e.g. ${singleSubjectDefault(cfg)}`}' in panel  # single-mode branch kept
 
 
 def test_experiment_panel_exit_and_reconfigure():

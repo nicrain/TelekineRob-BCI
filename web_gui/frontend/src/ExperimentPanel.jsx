@@ -68,20 +68,28 @@ function templateFor(cfg) {
   return role === 'steering' ? 'steering_direction' : 'forward_stop';
 }
 
-// P33⑥: default subject names when left empty — single → S01, dual → A / B —
-// so the target display always has a name.
-function subjectLabel(meta, index, isDual) {
-  if (!isDual) return (meta && meta.subject) || 'S01';
+// P36: single-device subject default is ROLE-aware — speed → A (the
+// forward/stop operator), steering → B (the turn/blink operator); dual keeps
+// A / B by slot.
+function singleSubjectDefault(cfg) {
+  return (cfg?.roles || [])[0] === 'steering' ? 'B' : 'A';
+}
+
+// P36: default subject names when left empty so the target display always has
+// a name — single: role-aware A/B (P36), dual: A / B by slot.
+function subjectLabel(meta, index, cfg) {
+  const dual = cfg?.device_mode === 'dual';
+  if (!dual) return (meta && meta.subject) || singleSubjectDefault(cfg);
   return index === 0 ? ((meta && meta.subject) || 'A') : ((meta && meta.subject_b) || 'B');
 }
 
-// P35: subject defaults BY MODE — single: subject → S01, subject_b → "" (a
-// single device has no device-B operator, so subject_b is always cleared);
-// dual: subject → A, subject_b → B.
+// P35/P36: subject defaults — single: subject role-aware (A/B), subject_b ""
+// (a single device has no device-B operator, always cleared); dual: subject →
+// A, subject_b → B.
 function subjectDefaults(meta, cfg) {
   const dual = cfg?.device_mode === 'dual';
   return {
-    subject: meta.subject || (dual ? 'A' : 'S01'),
+    subject: meta.subject || singleSubjectDefault(cfg),
     subject_b: dual ? (meta.subject_b || 'B') : '',
   };
 }
@@ -275,9 +283,9 @@ export default function ExperimentPanel({ config }) {
       const proto = buildProtocol(cfg, {
         trials: trials, duration_sec: duration, rest_sec: restSec, shuffle: shuffleMode,
       });
-      // P35: subject defaults by mode — single: S01 + empty subject_b (no
-      // device B), dual: A / B. So the dir name never gains a bogus "B"
-      // segment in single mode.
+      // P35/P36: subject defaults — single: role-aware A/B (speed → A,
+      // steering → B) + empty subject_b (no device B); dual: A / B. So the
+      // dir name never gains a bogus "B" segment in single mode.
       const metaPayload = {
         ...meta,
         ...subjectDefaults(meta, cfg),
@@ -400,7 +408,7 @@ export default function ExperimentPanel({ config }) {
               <div style={{ display: 'flex', gap: 12 }}>
                 <label style={fieldLabelStyle}>
                   Subject
-                  <input style={inputStyle} placeholder="e.g. S01" value={meta.subject}
+                  <input style={inputStyle} placeholder={`e.g. ${singleSubjectDefault(cfg)}`} value={meta.subject}
                     onChange={(e) => setMetaField('subject', e.target.value)} />
                 </label>
                 <label style={fieldLabelStyle}>
@@ -577,8 +585,9 @@ export default function ExperimentPanel({ config }) {
                     const isSpeed = d.role === 'speed';
                     const state = isSpeed ? target.a_state : target.b_state;
                     const isFocus = state === 'attention';
-                    // P33⑥: default subject name when empty — single S01, dual A/B.
-                    const subject = subjectLabel(meta, i, devices.length > 1);
+                    // P36: default subject name when empty — role-aware A/B
+                    // for single, dual A/B by slot.
+                    const subject = subjectLabel(meta, i, cfg);
                     return (
                       <tr key={i}>
                         <td style={{ textAlign: 'right', width: 120, color: 'var(--f-text-primary)', fontFamily: 'var(--font-display)', padding: '3px 10px 3px 0' }}>
