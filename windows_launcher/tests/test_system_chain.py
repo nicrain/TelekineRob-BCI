@@ -289,6 +289,36 @@ def test_fix_lan_forward_stale_when_uac_denied():
     assert app.state.lan_forward == "stale"
 
 
+def test_start_system_lan_io_failure_does_not_block():
+    """O42-1: a WSL-probe / netsh-show exception inside detection must NOT
+    fail Start System — lan_forward becomes 'unresolved' (P42④)."""
+    app, ex = _make_app()
+
+    def boom():
+        raise RuntimeError("wsl probe jitter")
+
+    app._resolve_wsl_ip = boom
+    result = app.start_system()
+    assert result["ok"] is True
+    assert result["message"] == "System started and ready"
+    assert app.state.lan_forward == "unresolved"
+
+
+def test_portproxy_ps1_written_with_bom():
+    """O42-2: the temp .ps1 is utf-8-sig (UTF-8 BOM) so PowerShell 5.1 reads
+    it as UTF-8 — a non-ASCII marker path must not mojibake into a never-
+    appearing done-marker."""
+    import tempfile
+    app, _ = _make_app()
+    app._ps1_dir = Path(tempfile.mkdtemp())
+    ps1, marker = app._write_portproxy_ps1("172.27.42.5")
+    raw = ps1.read_bytes()
+    assert raw.startswith(b"\xef\xbb\xbf")          # UTF-8 BOM
+    text = raw.decode("utf-8-sig")
+    assert "connectaddress=172.27.42.5" in text
+    assert "Set-Content -Path" in text and str(marker) in text
+
+
 def test_start_system_accepts_degraded_systemd():
     """O31: real systemd reports degraded with exit code 1 — the OUTPUT is
     authoritative, so degraded@exit1 must still mean "booted and ready"."""

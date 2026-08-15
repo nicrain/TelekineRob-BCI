@@ -491,16 +491,24 @@ class LauncherApp:
         """P42①: READ the current portproxy rules (read needs NO admin) and
         compare the 5173 rule's connectaddress to the CURRENT WSL IP. Sets
         ``state.lan_forward``: 'ok' | 'stale' (rule missing or connectaddress
-        differs) | 'unresolved' (WSL IP not resolvable)."""
-        wsl_ip = self._resolve_wsl_ip()
-        if not wsl_ip:
+        differs) | 'unresolved' (WSL IP not resolvable / IO failed). The IO
+        is guarded (O42-1) so a probe jitter NEVER fails the system start —
+        forwarding state ≠ system state (P42④)."""
+        try:
+            wsl_ip = self._resolve_wsl_ip()
+            if not wsl_ip:
+                self.state.lan_forward = "unresolved"
+                return "unresolved"
+            result = self.executor.run(build_portproxy_show_cmd(), timeout=20)
+            current = parse_portproxy_5173_connectaddress(result.stdout or "")
+            state = "ok" if (current is not None and current == wsl_ip) else "stale"
+            self.state.lan_forward = state
+            return state
+        except Exception:
+            # O42-1: a WSL / netsh probe hiccup must not take the system down
+            # with it — treat as unresolved (no fix prompt shown).
             self.state.lan_forward = "unresolved"
             return "unresolved"
-        result = self.executor.run(build_portproxy_show_cmd(), timeout=20)
-        current = parse_portproxy_5173_connectaddress(result.stdout or "")
-        state = "ok" if (current is not None and current == wsl_ip) else "stale"
-        self.state.lan_forward = state
-        return state
 
     def _write_portproxy_ps1(self, wsl_ip: str):
         """P42③: temp .ps1 with the fixed netsh delete+add (connectaddress =
@@ -509,13 +517,17 @@ class LauncherApp:
         tag = str(int(time.time() * 1000))
         ps1 = self._ps1_dir / f"o2-lan-forward-{tag}.ps1"
         marker = self._ps1_dir / f"o2-lan-forward-{tag}.done"
+        # O42-2: utf-8-sig (BOM) — PowerShell 5.1 otherwise reads the script as
+        # ANSI, so a non-ASCII (e.g. Chinese) temp/marker path would mojibake
+        # and the done-marker would never appear (fix would wait the full
+        # timeout). With the BOM, PS reads it as UTF-8 correctly.
         ps1.write_text(
             "$ErrorActionPreference = 'Continue'\n"
             "netsh interface portproxy delete v4tov4 listenport=5173 listenaddress=0.0.0.0\n"
             f"netsh interface portproxy add v4tov4 listenport=5173 listenaddress=0.0.0.0 "
             f"connectport=5173 connectaddress={wsl_ip}\n"
             f"Set-Content -Path '{marker}' -Value done\n",
-            encoding="utf-8",
+            encoding="utf-8-sig",
         )
         return ps1, marker
 
