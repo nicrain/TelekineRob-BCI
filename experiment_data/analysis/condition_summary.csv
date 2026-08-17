@@ -1,0 +1,5 @@
+session_id,channel,n_attention,n_rest,hit_rate,fa_rate,d_prime,auc,mean_score_attention,mean_score_rest,mean_latency_attention,mean_latency_rest,blink_hit_rate,blink_fa_rate
+B_s1_alpha_single_2026-08-17_1786953015,steering,0,0,,,,,,,,,,
+S01_s1_tbr_single_2026-08-15_1786787939,speed,0,0,,,,,,,,,,
+W_s1_alpha_single_2026-08-17_1786953968,steering,0,0,,,,,,,,,,
+W_s1_alpha_single_2026-08-17_1786954074,steering,32,27,0.8125,0.407407,1.121367,0.638889,0.525558,0.51927,0.78765,0.79367,1.0,1.0
