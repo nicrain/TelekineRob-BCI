@@ -61,27 +61,28 @@ def test_experiment_panel_markers():
         "/api/experiment/reset",
     ):
         assert endpoint in panel, f"ExperimentPanel lost {endpoint}"
-    # E3: target + countdown + rest-prompt UX markers
+    # E3: target + countdown + prompt UX markers
     assert "STATE_LABEL" in panel
     assert "DIR_LABEL" in panel
     assert "remaining" in panel
     assert "Get ready" in panel
-    assert "Break — next trial" in panel  # P28: between-trials rest is Break
 
 
 # --- P28: experiment target-display UX -------------------------------------
 
 def test_experiment_target_style_markers():
-    """P28①②: the three target states are visually distinct and English only —
-    Focus = blue (--f-info), Relax = green (--f-ok), Break = neutral gray +
-    timer icon + 'next trial in Xs' countdown. No warning red, no Chinese."""
+    """P28①②: the per-row target states are visually distinct and English —
+    Focus = blue (--f-info), Relax = green (--f-ok); the between-trials rest
+    is gone (P43: the configurable prompt is the only inter-trial countdown).
+    No warning red, no Chinese."""
     panel = (APPJSX.parent / "ExperimentPanel.jsx").read_text(encoding="utf-8")
     # Focus / Relax label the per-row target STATE (replaces ATTENTION/REST)
     assert "STATE_LABEL = { attention: 'Focus', rest: 'Relax' }" in panel
     # color keyed by the STATE — Focus blue, Relax green
     assert "isFocus ? 'var(--f-info)' : 'var(--f-ok)'" in panel
-    # Break: between-trials rest — timer icon + countdown, neutral gray
-    assert "⏱ Break — next trial in {remaining}s" in panel
+    # P43: no Break / rest display remains
+    assert "⏱ Break" not in panel
+    assert "phase === 'rest'" not in panel
     # the old warning-red target color is gone; no Chinese labels anywhere
     assert "'var(--f-red)'" not in panel
     for zh in ("注意", "放松", "休息", "方向"):
@@ -175,17 +176,20 @@ def test_experiment_target_table_header_and_direction():
 # --- P30/P32/P33: protocol generator --------------------------------------
 
 def test_experiment_protocol_generator_markers():
-    """P33+P34: the generator has a TOTAL-trials field ("trials") and an
-    "inter-trial (sec)" break — no prompt config and no Template shown
-    (auto-follows 01, internal only). P34: Configure ALWAYS builds the
-    protocol from the CURRENT field values (no Preview gate — fill it and it
-    runs); Preview only computes/displays and lists the FULL trial list, with
-    a "+N more" line only when capped. Empty subjects default to S01 / A / B."""
+    """P43+P34: the generator has a TOTAL-trials field ("trials") and a
+    configurable "prompt" (s) field — the ONLY inter-trial countdown (no
+    inter-trial/rest field, no fixed prompt); no Template shown (auto-follows
+    01, internal only). P34: Configure ALWAYS builds the protocol from the
+    CURRENT field values (no Preview gate — fill it and it runs); Preview only
+    computes/displays and lists the FULL trial list, with a "+N more" line
+    only when capped. Empty subjects default to S01 / A / B."""
     panel = (APPJSX.parent / "ExperimentPanel.jsx").read_text(encoding="utf-8")
-    # fields: "trials" (total) + "inter-trial (sec)"; no prompt config
+    # fields: "trials" (total) + "prompt" (configurable); NO inter-trial field
     assert "trials\n" in panel            # "trials" label (own line)
-    assert "inter-trial (sec)\n" in panel
-    assert "promptSec" not in panel       # no prompt field
+    assert "prompt\n" in panel            # "prompt" label (own line)
+    assert "inter-trial" not in panel
+    assert "promptSec" in panel           # configurable prompt state
+    assert "restSec" not in panel         # inter-trial/rest state is gone
     assert "trials per state" not in panel
     # no Template dropdown / label in the config area (auto, internal only)
     assert "templateFor(cfg)" in panel
@@ -198,7 +202,7 @@ def test_experiment_protocol_generator_markers():
     assert "trials: proto.trials" in panel
     assert "genProto ? {" not in panel    # no preview-required fallback
     # info line reflects the current field values (what Configure runs)
-    assert "} trials · shuffle {shuffleMode} · 3s prompt" in panel
+    assert "} trials · shuffle {shuffleMode} · {promptSec}s prompt" in panel
     # P34②: preview lists the full list; truncation marked +N more
     assert "PREVIEW_MAX" in panel
     assert "genProto.trials.slice(0, PREVIEW_MAX)" in panel
@@ -266,14 +270,20 @@ function count(arr, fn) { return arr.filter(fn).length; }
 const speedCfg = { device_mode: 'single', roles: ['speed'] };
 const steerCfg = { device_mode: 'single', roles: ['steering'] };
 const dualCfg = { device_mode: 'dual', roles: ['speed', 'steering'] };
-// A Forward/Stop T=4: exactly 4 trials, a 2/2, b rest + dir left fixed
-let p = buildProtocol(speedCfg, { trials: 4, duration_sec: 20, rest_sec: 10, shuffle: 'none' });
+// A Forward/Stop T=4: exactly 4 trials, a 2/2, b rest + dir left fixed;
+// P43: prompt is configurable and trials carry no rest_sec (no break field)
+let p = buildProtocol(speedCfg, { trials: 4, duration_sec: 20, prompt_sec: 7, shuffle: 'none' });
 eq("forward.template", p.template, 'forward_stop');
 eq("forward.n", p.n_trials, 4);
+eq("forward.prompt", p.prompt_sec, 7);                       // configurable prompt
+eq("forward.no_rest", p.trials.every((t) => !("rest_sec" in t)), true);
 eq("forward.a", count(p.trials, (t) => t.a_state === "attention"), 2);
 eq("forward.a_rest", count(p.trials, (t) => t.a_state === "rest"), 2);
 eq("forward.b_fixed", p.trials.every((t) => t.b_state === "rest" && t.b_direction === "left"), true);
 eq("forward.dur", p.trials[0].duration_sec, 20);
+// default prompt is 5 s (P43)
+p = buildProtocol(speedCfg, { trials: 4, shuffle: 'none' });
+eq("forward.default_prompt", p.prompt_sec, 5);
 // A Forward/Stop T=5 (odd): 5 trials, a 3/2 (ceil rounds attention)
 p = buildProtocol(speedCfg, { trials: 5, shuffle: 'none' });
 eq("forward_odd.n", p.n_trials, 5);
@@ -417,8 +427,8 @@ def test_experiment_panel_electrode_labeled_after_session():
     assert 'value="dry"' in panel and 'value="wet"' in panel
     assert 'value=""' not in panel  # no empty placeholder option anywhere
     # single mode (6: Subject/Session/Electrode + Metric/Mode/Roles) +
-    # dual mode (6, P24) + protocol generator (4, P33: trials / inter-trial /
-    # duration / shuffle; no prompt, no Template label) = 16 labeled fields
+    # dual mode (6, P24) + protocol generator (4, P43: trials / prompt /
+    # duration / shuffle; no Template label) = 16 labeled fields
     assert panel.count("style={fieldLabelStyle}") == 16
 
 

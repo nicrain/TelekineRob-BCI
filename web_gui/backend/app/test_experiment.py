@@ -359,22 +359,18 @@ def test_session_runs_protocol_with_recording(tmp_path):
     sess.on_frame(_frame(2, cmd_vel_ts=clock.t - 0.01))
     assert len(sess._samples) == 3
 
-    # trial 0 ends → rest
-    clock.advance(2.5)  # now 5.5 = phase_until → rest
-    assert sess.state()["phase"] == "rest"
-    assert sess.state()["end_ts_ms"] == 7500  # P29②: rest ends at t=7.5
-
-    # rest ends → next trial prompt → its trial
-    clock.advance(2.5)  # now 8.0 = rest end → prompt for trial 1
+    # trial 0 ends → P43: STRAIGHT to trial 1's prompt (no rest phase)
+    clock.advance(2.5)  # now 5.5 = trial 0 end → prompt for trial 1
     st = sess.state()
     assert st["phase"] == "prompt" and st["trial_idx"] == 1
-    clock.advance(1.0)
+    assert st["end_ts_ms"] == 6500  # P43: prompt_sec=1 → trial-1 prompt ends at t=6.5
+
+    # prompt ends → its trial
+    clock.advance(2.5)  # now 8.0 = prompt end → trial 1
     assert sess.state()["phase"] == "trial"  # trial 1 recording
 
     # finish the protocol → done
     clock.advance(4.0)
-    assert sess.state()["phase"] == "rest"
-    clock.advance(2.0)
     assert sess.state()["phase"] == "done"
     assert sess.state()["n_trials"] == 2
     assert sess.state()["end_ts_ms"] == 0  # P29②: no active phase → 0
@@ -416,6 +412,34 @@ def test_session_runs_protocol_with_recording(tmp_path):
     assert labels[1]["b_direction"] == "right"
 
 
+def test_p43_no_rest_transition_and_configurable_prompt(tmp_path):
+    """P43: a trial ends STRAIGHT into the next trial's prompt (no separate
+    rest/inter-trial phase), and the prompt length comes from the configured
+    prompt_sec (7 here — not the hardcoded 3)."""
+    clock = _Clock(0.0)
+    sess = ExperimentSession(data_dir=tmp_path, clock=clock)
+    sess.configure(
+        SessionMeta(subject="s", session_no=1, metric="tbr", device_mode="single"),
+        [
+            TrialSpec(a_state="attention", b_state="rest", b_direction="left", duration_sec=4, rest_sec=2),
+            TrialSpec(a_state="rest", b_state="rest", b_direction="left", duration_sec=4, rest_sec=2),
+        ],
+        shuffle="none", prompt_sec=7,
+    )
+    assert sess.start() is True
+
+    clock.advance(7.0)   # prompt 0 (configurable 7 s) ends → trial 0
+    assert sess.state()["phase"] == "trial"
+
+    clock.advance(4.0)   # trial 0 ends → trial 1 prompt (NO rest phase)
+    st = sess.state()
+    assert st["phase"] == "prompt" and st["trial_idx"] == 1
+    assert st["end_ts_ms"] == int((clock.t + 7) * 1000)   # next prompt = 7 s
+
+    clock.advance(7.0)
+    assert sess.state()["phase"] == "trial"               # trial 1
+
+
 def test_no_recording_outside_trial_phase(tmp_path):
     clock = _Clock(0.0)
     sess = ExperimentSession(data_dir=tmp_path, clock=clock)
@@ -426,23 +450,21 @@ def test_no_recording_outside_trial_phase(tmp_path):
     sess.on_frame(_frame(0))
     assert sess._samples == []
 
-    # rest phase — ignored (after trial 0 ends)
+    # P43: after trial 0 ends it goes STRAIGHT to trial 1's prompt (no rest
+    # phase) — frames are still ignored outside the trial phase
     clock.advance(1.5)  # enter trial 0
     assert sess.state()["phase"] == "trial"
-    clock.advance(4.0)  # trial 0 ends → rest
-    assert sess.state()["phase"] == "rest"
+    clock.advance(4.0)  # trial 0 ends → trial 1 prompt
+    assert sess.state()["phase"] == "prompt"
+    assert sess.state()["trial_idx"] == 1
     sess.on_frame(_frame(1))
     assert sess._samples == []
 
     # walk the rest of the protocol to done (each state() advances one due
     # phase) — a frame in the done phase is ignored too
-    clock.advance(2.0)
-    assert sess.state()["phase"] == "prompt"  # trial 1 prompt
-    clock.advance(1.0)
+    clock.advance(1.0)  # trial 1 prompt ends → its trial
     assert sess.state()["phase"] == "trial"
-    clock.advance(4.0)
-    assert sess.state()["phase"] == "rest"
-    clock.advance(2.0)
+    clock.advance(4.0)  # trial 1 ends → done
     assert sess.state()["phase"] == "done"
     sess.on_frame(_frame(2))
     assert sess._samples == []

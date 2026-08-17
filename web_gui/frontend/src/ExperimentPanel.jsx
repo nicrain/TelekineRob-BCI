@@ -10,7 +10,7 @@ markers here are pinned by windows_launcher/tests/test_webgui_app_ui.py.
 import { useEffect, useState } from 'react';
 import { api } from './api';
 
-const PHASE_LABELS = { idle: 'Idle', prompt: 'Prompt', trial: 'Trial', rest: 'Break', paused: 'Paused', done: 'Done' };
+const PHASE_LABELS = { idle: 'Idle', prompt: 'Prompt', trial: 'Trial', paused: 'Paused', done: 'Done' };
 // P28②: the per-row target STATE reads Focus (attention, blue) / Relax (rest,
 // green); Break is the between-trials rest phase shown below the badge.
 const STATE_LABEL = { attention: 'Focus', rest: 'Relax' };
@@ -193,21 +193,22 @@ function collaborativeTrials(total, push) {
   }
 }
 
-// P33: generate the ACTIVE template's trials (auto-derived from cfg) then
+// P43: generate the ACTIVE template's trials (auto-derived from cfg) then
 // apply shuffle. Returns the FINAL protocol — the trials are already in run
 // order, so Configure posts them verbatim (the backend applies none) and the
-// preview equals the run. prompt_sec is a FIXED default (P33③); rest_sec is
-// the inter-trial break (P33②, JSON field unchanged).
+// preview equals the run. prompt_sec is the configurable Get-ready countdown
+// between trials (default 5 s) — it is the ONLY between-trial countdown (the
+// backend dropped the separate rest phase).
 function buildProtocol(cfg, opts) {
   const o = opts || {};
   const total = Math.max(1, Math.floor(o.trials || 1));
   const duration_sec = o.duration_sec != null ? o.duration_sec : 20;
-  const rest_sec = o.rest_sec != null ? o.rest_sec : 10;
+  const prompt_sec = o.prompt_sec != null ? o.prompt_sec : 5;
   const shuffle = o.shuffle || 'balanced';
   const seed = o.seed != null ? o.seed : null;
   const template = templateFor(cfg);
   const t = [];
-  const push = (a, b, d) => t.push({ a_state: a, b_state: b, b_direction: d, duration_sec, rest_sec });
+  const push = (a, b, d) => t.push({ a_state: a, b_state: b, b_direction: d, duration_sec });
   if (template === 'forward_stop') {
     forwardStopTrials(total, push);
   } else if (template === 'steering_direction') {
@@ -216,7 +217,7 @@ function buildProtocol(cfg, opts) {
     collaborativeTrials(total, push);
   }
   const trials = shuffleTrials(t, shuffle, seed);
-  return { trials, n_trials: trials.length, shuffle, seed, prompt_sec: 3, template };
+  return { trials, n_trials: trials.length, shuffle, seed, prompt_sec, template };
 }
 
 export default function ExperimentPanel({ config }) {
@@ -250,7 +251,7 @@ export default function ExperimentPanel({ config }) {
   // trials. No prompt field — fixed 3 s default (P33③).
   const [trials, setTrials] = useState(8);
   const [duration, setDuration] = useState(20);
-  const [restSec, setRestSec] = useState(10);
+  const [promptSec, setPromptSec] = useState(5);
   const [shuffleMode, setShuffleMode] = useState('balanced');
   const [genProto, setGenProto] = useState(null);
   // E6: one-click E5 analysis export (session view) — result shows the output
@@ -273,7 +274,7 @@ export default function ExperimentPanel({ config }) {
 
   function preview() {
     setGenProto(buildProtocol(cfg, {
-      trials: trials, duration_sec: duration, rest_sec: restSec, shuffle: shuffleMode,
+      trials: trials, duration_sec: duration, prompt_sec: promptSec, shuffle: shuffleMode,
     }));
   }
 
@@ -287,7 +288,7 @@ export default function ExperimentPanel({ config }) {
       // values (no Preview gate) — what you filled is what runs. The trials
       // are in final run order (buildProtocol applied shuffle).
       const proto = buildProtocol(cfg, {
-        trials: trials, duration_sec: duration, rest_sec: restSec, shuffle: shuffleMode,
+        trials: trials, duration_sec: duration, prompt_sec: promptSec, shuffle: shuffleMode,
       });
       // P35/P36: subject defaults — single: role-aware A/B (speed → A,
       // steering → B) + empty subject_b (no device B); dual: A / B. So the
@@ -467,12 +468,12 @@ export default function ExperimentPanel({ config }) {
               </div>
             </div>
           )}
-          {/* P33: protocol generator — the field "trials" is the TOTAL trial
+          {/* P43: protocol generator — the field "trials" is the TOTAL trial
               count T (every template produces exactly T, dimensions balanced
-              ≈ T/2); "inter-trial (sec)" is the break between trials (JSON
-              field rest_sec unchanged). No template shown (auto-follows 01,
-              P33⑦) and no prompt field (fixed 3 s default, P33③). Preview
-              only computes and displays; Configure is what actually hands the
+              ≈ T/2); "prompt" (s) is the configurable Get-ready countdown
+              between trials — the ONLY countdown between trials (no separate
+              break). No template shown (auto-follows 01, P33⑦). Preview only
+              computes and displays; Configure is what actually hands the
               protocol to the session (session.json only, never the repo json
               — P31). */}
           <div style={{ marginTop: 12, padding: 10, border: '1px solid var(--f-border-strong)', borderRadius: 2 }}>
@@ -484,9 +485,9 @@ export default function ExperimentPanel({ config }) {
                   onChange={(e) => setTrials(Number(e.target.value) || 1)} />
               </label>
               <label style={fieldLabelStyle}>
-                inter-trial (sec)
-                <input style={{ ...inputStyle, width: 56 }} type="number" min="0" value={restSec}
-                  onChange={(e) => setRestSec(Number(e.target.value) || 0)} />
+                prompt
+                <input style={{ ...inputStyle, width: 56 }} type="number" min="0" value={promptSec}
+                  onChange={(e) => setPromptSec(Number(e.target.value) || 0)} />
               </label>
               <label style={fieldLabelStyle}>
                 duration
@@ -530,7 +531,7 @@ export default function ExperimentPanel({ config }) {
                 the CURRENT field values (buildProtocol yields exactly the
                 trials field, so no extra computation needed). */}
             <span style={{ fontSize: 12, color: 'var(--f-text-secondary)' }}>
-              {trials} trials · shuffle {shuffleMode} · 3s prompt
+              {trials} trials · shuffle {shuffleMode} · {promptSec}s prompt
             </span>
             {configured && exp?.session_id && (
               <span style={{ fontSize: 12, color: 'var(--f-text-secondary)', fontFamily: 'var(--font-mono)' }}>
@@ -646,15 +647,9 @@ export default function ExperimentPanel({ config }) {
             </div>
           )}
 
-          {phase === 'rest' && (
-            <div style={{ textAlign: 'center', padding: '14px 0', color: 'var(--f-text-secondary)' }}>
-              {/* P28①: Break is the BETWEEN-trials rest — neutral gray + timer
-                  icon + 'next trial in Xs' countdown. It is NOT the per-row
-                  Relax target shown inside a trial (that is green, with the
-                  trial timer above) — the two never mix. */}
-              <div style={{ fontSize: 20 }}>⏱ Break — next trial in {remaining}s</div>
-            </div>
-          )}
+          {/* P43: there is no separate rest phase any more — the
+              configurable prompt IS the one between-trial countdown (shown in
+              the prompt block above), so nothing renders for a 'rest' phase. */}
 
           {phase === 'done' && (
             <div style={{ textAlign: 'center', padding: '14px 0', color: 'var(--f-ok)' }}>

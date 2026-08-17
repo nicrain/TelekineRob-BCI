@@ -43,7 +43,7 @@ PHASE_REST = "rest"
 PHASE_PAUSED = "paused"
 PHASE_DONE = "done"
 
-PROMPT_SEC = 3.0
+PROMPT_SEC = 5.0  # P43: default Get-ready prompt (now the ONLY between-trial countdown)
 REST_SEC = 10.0
 
 # Repo-root experiment_data/ (gitignored); EXPERIMENT_DATA_DIR overrides.
@@ -399,7 +399,7 @@ class ExperimentSession:
 
     def pause(self) -> None:
         with self._lock:
-            if self._phase not in (PHASE_PROMPT, PHASE_TRIAL, PHASE_REST):
+            if self._phase not in (PHASE_PROMPT, PHASE_TRIAL):
                 return
             # Remember BOTH the phase and the remaining seconds — the wall
             # clock keeps moving during the pause, so the deadline can't be
@@ -435,10 +435,17 @@ class ExperimentSession:
         self._phase_until = now + self._trials[idx].duration_sec
 
     def _end_trial_locked(self, now: float) -> None:
-        self._phase = PHASE_REST
+        """P43: a trial ends straight into the NEXT trial's Get-ready prompt —
+        there is no separate rest/inter-trial phase any more (one countdown
+        between trials, the configurable prompt). The last trial → done."""
         self._trial_end = now
-        self._write_trial_locked(now)
-        self._phase_until = now + self._trials[self._trial_idx].rest_sec
+        self._write_trial_locked(now)          # flush the finished trial
+        nxt = self._trial_idx + 1
+        if nxt >= len(self._trials):
+            self._phase = PHASE_DONE
+            return
+        self._trial_idx = nxt
+        self._begin_prompt_locked(nxt, now)
 
     def _advance(self, now: float) -> None:
         with self._lock:
@@ -451,14 +458,7 @@ class ExperimentSession:
                 if self._phase == PHASE_PROMPT and now >= self._phase_until:
                     self._begin_trial_locked(self._trial_idx, now)
                 elif self._phase == PHASE_TRIAL and now >= self._phase_until:
-                    self._end_trial_locked(now)
-                elif self._phase == PHASE_REST and now >= self._phase_until:
-                    nxt = self._trial_idx + 1
-                    if nxt >= len(self._trials):
-                        self._phase = PHASE_DONE
-                        return
-                    self._trial_idx = nxt
-                    self._begin_prompt_locked(nxt, now)
+                    self._end_trial_locked(now)   # → next prompt (or done)
                 else:
                     return
 
@@ -471,7 +471,7 @@ class ExperimentSession:
                 return {"configured": False, "phase": PHASE_IDLE, "session_id": "", "n_trials": 0}
             trial = self._trials[self._trial_idx] if self._trial_idx < len(self._trials) else None
             remaining = 0.0
-            if self._phase in (PHASE_PROMPT, PHASE_TRIAL, PHASE_REST):
+            if self._phase in (PHASE_PROMPT, PHASE_TRIAL):
                 remaining = max(0.0, self._phase_until - now)
             return {
                 "configured": True,
@@ -490,7 +490,7 @@ class ExperimentSession:
                 # jittering on the 500 ms state poll. Default clock is
                 # time.time (epoch s); *1000 aligns with browser Date.now().
                 "end_ts_ms": int(self._phase_until * 1000)
-                if self._phase in (PHASE_PROMPT, PHASE_TRIAL, PHASE_REST) else 0,
+                if self._phase in (PHASE_PROMPT, PHASE_TRIAL) else 0,
                 "trial_elapsed": round((now - self._trial_start), 2) if self._phase == PHASE_TRIAL else 0.0,
             }
 
