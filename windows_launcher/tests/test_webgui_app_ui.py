@@ -208,6 +208,19 @@ def test_experiment_protocol_generator_markers():
     assert 'placeholder="e.g. A"' in panel and 'placeholder="e.g. B"' in panel
 
 
+def test_experiment_export_analysis_markers():
+    """E6: the session view has an Export analysis button that calls
+    GET /api/experiment/export and shows the output dir / error."""
+    panel = (APPJSX.parent / "ExperimentPanel.jsx").read_text(encoding="utf-8")
+    assert "Export analysis" in panel
+    assert "api.get('/api/experiment/export')" in panel
+    assert "exportAnalysis" in panel
+    assert "exportResult" in panel
+    assert "output_dir" in panel
+    assert "condition_summary" in panel
+    assert "exportResult.ok" in panel       # ok → path, else error
+
+
 def test_experiment_prompt_vs_trial_visual_distinction():
     """P34③: the prompt phase is visually distinct from the trial phase — the
     prompt countdown is its own info-blue box ("Get ready" + blue countdown +

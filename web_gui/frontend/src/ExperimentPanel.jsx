@@ -253,6 +253,10 @@ export default function ExperimentPanel({ config }) {
   const [restSec, setRestSec] = useState(10);
   const [shuffleMode, setShuffleMode] = useState('balanced');
   const [genProto, setGenProto] = useState(null);
+  // E6: one-click E5 analysis export (session view) — result shows the output
+  // dir or the error message.
+  const [exportResult, setExportResult] = useState(null);
+  const [exportBusy, setExportBusy] = useState(false);
 
   function refresh() {
     api.get('/api/experiment/state').then((r) => setExp(r.data)).catch(() => {});
@@ -317,6 +321,18 @@ export default function ExperimentPanel({ config }) {
       window.alert(`${path} failed: ${e.message}`);
     }
     await refresh();
+  }
+
+  // E6: one-click E5 analysis export — run it and show the output dir / error.
+  async function exportAnalysis() {
+    setExportBusy(true);
+    try {
+      const r = await api.get('/api/experiment/export');
+      setExportResult(r.data);
+    } catch (e) {
+      setExportResult({ ok: false, message: e.message });
+    }
+    setExportBusy(false);
   }
 
   const phase = exp?.phase || 'idle';
@@ -545,7 +561,22 @@ export default function ExperimentPanel({ config }) {
             {/* P22②: exit the experiment session back to the form — the
                 session stays on disk; Configure can open a new one. */}
             <button className="btn btn-ghost" onClick={() => setFormOpen(true)}>Exit</button>
+            {/* E6: one-click E5 analysis export — run it over the experiment
+                data dir; the result line shows the output dir or the error. */}
+            <button className="btn btn-ghost" disabled={exportBusy} onClick={exportAnalysis}>
+              Export analysis
+            </button>
           </div>
+          {exportResult && (
+            <div style={{
+              fontSize: 12, fontFamily: 'var(--font-mono)', marginTop: 8,
+              color: exportResult.ok ? 'var(--f-ok)' : 'var(--f-warn)',
+            }}>
+              {exportResult.ok
+                ? `Exported → ${exportResult.output_dir} (${exportResult.master_trials} trials, ${exportResult.condition_summary} conditions)`
+                : `Export failed: ${exportResult.message}`}
+            </div>
+          )}
 
           {/* P34③: prompt phase is its OWN distinct block — info-blue tinted
               box + "Get ready" + blue countdown, clearly NOT the trial target

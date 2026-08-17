@@ -6,6 +6,7 @@ summary hit-rate / d' / AUC numbers.
 """
 import csv
 import json
+from pathlib import Path
 
 import pytest
 
@@ -214,6 +215,35 @@ def test_export_deterministic(tmp_path):
     for fn in ("master_trials.csv", "condition_summary.csv"):
         assert (tmp_path / "a1" / fn).read_text(encoding="utf-8") == \
                (tmp_path / "a2" / fn).read_text(encoding="utf-8")
+
+
+# ── E6: GET /api/experiment/export endpoint ───────────────────────────────
+
+def test_export_endpoint_success(monkeypatch):
+    """E6: the export endpoint returns {ok, output_dir, master_trials,
+    condition_summary} on success."""
+    import app.main as main
+    monkeypatch.setattr(main, "default_data_dir", lambda: Path("/fake"))
+    monkeypatch.setattr(main, "export_all", lambda data_dir, out_dir=None: {
+        "sessions": 2, "master_rows": 10, "summary_rows": 3,
+        "out_dir": "/fake/analysis"})
+    result = main.exp_export()
+    assert result == {"ok": True, "output_dir": "/fake/analysis",
+                      "master_trials": 10, "condition_summary": 3}
+
+
+def test_export_endpoint_failure(monkeypatch):
+    """E6: a failed export returns {ok:false, message} — never a 500."""
+    import app.main as main
+    monkeypatch.setattr(main, "default_data_dir", lambda: Path("/fake"))
+
+    def boom(data_dir, out_dir=None):
+        raise RuntimeError("corrupt session")
+
+    monkeypatch.setattr(main, "export_all", boom)
+    result = main.exp_export()
+    assert result["ok"] is False
+    assert "corrupt session" in result["message"]
 
 
 # ── pure stats helpers ────────────────────────────────────────────────────

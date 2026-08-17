@@ -24,6 +24,7 @@ from .experiment import (
     session_meta_from_request,
     trial_dict,
 )
+from .experiment_export import default_data_dir, export_all
 from .logs import RingBufferHandler, tail_files
 from .models import (
     CommandRequest,
@@ -408,6 +409,23 @@ def exp_resume() -> dict[str, Any]:
 def exp_reset() -> dict[str, Any]:
     _experiment.reset()
     return {"state": _experiment.state()}
+
+
+@app.get("/api/experiment/export")
+def exp_export() -> dict[str, Any]:
+    """E6: run the E5 analysis export over the experiment data dir (default
+    <data_dir>/analysis). A failed export returns {ok:false, message} — never
+    a 500."""
+    try:
+        result = export_all(default_data_dir())
+    except Exception as exc:
+        return {"ok": False, "message": f"Export analysis failed: {exc}"}
+    return {
+        "ok": True,
+        "output_dir": result["out_dir"],
+        "master_trials": result["master_rows"],
+        "condition_summary": result["summary_rows"],
+    }
 
 
 if __name__ == "__main__":
