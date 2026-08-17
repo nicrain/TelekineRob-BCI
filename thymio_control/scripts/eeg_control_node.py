@@ -22,6 +22,7 @@ except ImportError:
 
 # --- Modular architecture ---
 from thymio_control.pipeline import POLICIES, build_adapter
+from thymio_control.processors.blink_metric import MetricBlinkDetector
 from thymio_control.processors.enrich import clip01, enrich_features
 from thymio_control.watchdog import decide_watchdog_action
 
@@ -193,18 +194,22 @@ class EegControlNode(Node):
         self.last_twist = Twist()
         self._steer_role = str(self.get_parameter("role").value) == "steering"
         self.steer_direction = 1   # 1 = right, -1 = left (blink toggles)
-        self._blink_holdoff = 0
-        self._blink_holdoff_frames = int(self.get_parameter("blink_holdoff_frames").value)
 
-        # Metric-based blink confirmation: raw-signal blink candidates must
-        # also show a corresponding spike/drop in the policy metric.
-        # Uses calibration p5 / p50 (median) as the normal-range reference.
-        # EI is inverted (blink → denominator up → EI below p5);
-        # TBR/Alpha spike upward (blink → theta/alpha above p50_ref).
+        # P44③: TRANSIENT metric-blink detection — a spike/drop vs the recent
+        # short-window baseline (rolling median), NOT an absolute level, so a
+        # sustained rest drift (high alpha/tbr, low ei) never triggers a
+        # false-blink loop. EI is inverted (blink → EI drops); TBR/Alpha
+        # spike upward. The raw-signal blink candidate mentioned in older
+        # comments is NOT wired; the confirm counter + median baseline reject
+        # single-frame artifacts.
         self._metric_key = self._CALIB_METRIC.get(policy_name, "")
-        self._metric_inverse = (policy_name == "ei")
         self._blink_confirm_frames = int(self.get_parameter("blink_confirm_frames").value)
-        self._metric_blink_counter = 0
+        self._blink_holdoff_frames = int(self.get_parameter("blink_holdoff_frames").value)
+        self._blink_detector = MetricBlinkDetector(
+            mode="down" if policy_name == "ei" else "up",
+            confirm_frames=self._blink_confirm_frames,
+            holdoff_frames=self._blink_holdoff_frames,
+        )
         self._last_clean_features: dict = {}
 
         hz = float(self.get_parameter("publish_hz").value)
@@ -216,42 +221,6 @@ class EegControlNode(Node):
                 f"topic={self.get_parameter('cmd_topic').value} analysis_topic={self.get_parameter('analysis_topic').value}"
             )
         )
-
-    def _confirm_blink_metric(self, features: dict) -> bool:
-        """Check that the policy metric exceeds its calibrated normal range.
-
-        Calibration stores offset=p5 and scale=p50−p5, so ``offset + scale``
-        is the p50 (median) reference — not p95. The naming reflects that.
-
-        TBR / Alpha: blink EOG inflates theta or alpha → metric spikes
-        above the median reference.  Check: ``metric > p50_ref × 2``.
-
-        EI: blink inflates alpha + theta (denominator) → EI drops below
-        p5.  Check: ``metric < p5 / 2``.
-        """
-        val = features.get(self._metric_key, None)
-        if val is None:
-            return False
-        val = float(val)
-
-        offset = float(self.get_parameter("calib_offset").value)
-        scale  = float(self.get_parameter("calib_scale").value)
-        p5      = offset
-        p50_ref = offset + scale
-
-        if self._metric_inverse:
-            confirmed = val < p5 / 2.0
-            ref = f"p5={p5:.3f} p5/2={p5 / 2:.3f}"
-        else:
-            confirmed = val > p50_ref * 2.0
-            ref = f"p50_ref={p50_ref:.3f} p50_ref*2={p50_ref * 2:.3f}"
-
-        if confirmed:
-            self.get_logger().info(
-                f"Blink metric confirmed: {self._metric_key}={val:.3f} "
-                f"({ref})"
-            )
-        return confirmed
 
     def _finish_calibration(self) -> None:
         """Compute p5/p50 from collected samples and update the parameter file."""
@@ -359,41 +328,33 @@ class EegControlNode(Node):
                 if time.time() >= self._calib_deadline:
                     self._finish_calibration()
 
-            # Metric-based blink detection — requires metric to stay outside
-            # the calibrated normal range for N consecutive frames.
-            # Single-frame spikes (noise/artifact) are rejected by the counter.
-            # Skipped while calibrating: the pre-calibration thresholds are
-            # meaningless and would spuriously toggle steer direction.
-            if (
-                self._steer_role
-                and has_band_features
-                and not self._calibrate
-                and self._blink_holdoff == 0
-            ):
-                if self._confirm_blink_metric(features):
-                    self._metric_blink_counter += 1
-                    if self._metric_blink_counter >= self._blink_confirm_frames:
-                        self.steer_direction *= -1  # toggle left ↔ right
-                        self._blink_holdoff = self._blink_holdoff_frames
-                        self._metric_blink_counter = 0
-                        self.get_logger().info(
-                            f"Blink detected — steer: {'RIGHT' if self.steer_direction > 0 else 'LEFT'}"
-                        )
-                else:
-                    self._metric_blink_counter = 0
+            # P44③: TRANSIENT metric-blink detection — the detector keeps its
+            # own recent-baseline median and confirm/holdoff state. A blink is
+            # confirmed only when the metric spikes/drops vs the recent
+            # baseline (sustained rest drift raises the baseline and stops
+            # triggering); a single artifact frame is rejected by the counter.
+            if self._steer_role and has_band_features and not self._calibrate:
+                val = features.get(self._metric_key, None)
+                if val is not None and self._blink_detector.update(float(val)):
+                    self.steer_direction *= -1  # toggle left ↔ right
+                    self.get_logger().info(
+                        f"Blink detected — steer: {'RIGHT' if self.steer_direction > 0 else 'LEFT'}"
+                    )
 
-            # Skip policy during hold-off AND while blink counter is
-            # accumulating — EOG already contaminates the Welch window
-            # before the metric reaches the 2-frame threshold.
-            in_blink = self._blink_holdoff > 0 or self._metric_blink_counter > 0
+            # Skip policy while a blink is being confirmed / held off — EOG
+            # already contaminates the Welch window before the metric reaches
+            # the confirm threshold. P44③b: do NOT freeze the stale steer
+            # value during this window — clamp it to neutral (straight) so the
+            # car never keeps turning at an old magnitude.
+            in_blink = self._blink_detector.in_progress
 
-            if self._blink_holdoff > 0:
-                self._blink_holdoff -= 1
-            elif has_band_features and not in_blink:
+            if has_band_features and not in_blink:
                 self.last_intents = self.policy.compute_intents(features)
                 self._last_clean_features = features
-            elif not has_band_features:
-                self.last_intents = {"speed_intent": 0.5, "steer_intent": 0.5}
+            else:
+                self.last_intents["steer_intent"] = 0.5
+                if not has_band_features:
+                    self.last_intents["speed_intent"] = 0.5
 
             self.last_msg_ts = time.time()
             self._adapter_connected = True
@@ -404,7 +365,7 @@ class EegControlNode(Node):
             # Use clean features during hold-off to avoid showing EOG-
             # contaminated spikes in the web GUI charts.
             show_features = features
-            if self._blink_holdoff > 0 and self._last_clean_features:
+            if self._blink_detector.in_progress and self._last_clean_features:
                 show_features = self._last_clean_features
 
             analysis = {

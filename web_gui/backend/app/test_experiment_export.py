@@ -133,23 +133,30 @@ def test_export_condition_summary_speed(tmp_path):
     assert float(r["mean_score_rest"]) == pytest.approx(0.15)
     assert float(r["mean_latency_attention"]) == pytest.approx(11.0)
     assert float(r["mean_latency_rest"]) == pytest.approx(21.0)
-    assert r["blink_hit_rate"] == ""      # speed channel: no blink metrics
+    assert r["dir_hit_rate"] == ""      # speed channel: no direction metrics
 
 
-def test_export_condition_summary_steering_blink(tmp_path):
-    """Steering channel: b_state=attention steer 0.7/0.8 → hit 2/2; rest 0.2/0.1
-    → FA 0/2; blink fired in 1 of 2 attention trials and 0 of 2 rest → blink
-    hit 0.5, blink FA 0.0."""
+def test_export_condition_summary_steering_direction(tmp_path):
+    """P44②: steering channel direction-switch metrics — b_state=attention
+    steer 0.7/0.8 → hit 2/2, rest 0.2/0.1 → FA 0/2. dir_hit = the output
+    direction matches the target when it CHANGED (trial 3: left→right,
+    output right → 1/1); dir_fa = the output changed while the target was
+    steady (trial 2 changed output under a steady left target → 1/2). Rest
+    trials are excluded from the direction metrics."""
     _write_session(tmp_path, "s2", roles=("steering",), trials=[
         {"trial_idx": "0", "a_state": "rest", "b_state": "attention", "b_direction": "left", "n_samples": "1"},
-        {"trial_idx": "1", "a_state": "rest", "b_state": "attention", "b_direction": "right", "n_samples": "1"},
-        {"trial_idx": "2", "a_state": "rest", "b_state": "rest", "b_direction": "left", "n_samples": "1"},
-        {"trial_idx": "3", "a_state": "rest", "b_state": "rest", "b_direction": "left", "n_samples": "1"},
+        {"trial_idx": "1", "a_state": "rest", "b_state": "attention", "b_direction": "left", "n_samples": "1"},
+        {"trial_idx": "2", "a_state": "rest", "b_state": "attention", "b_direction": "left", "n_samples": "1"},
+        {"trial_idx": "3", "a_state": "rest", "b_state": "attention", "b_direction": "right", "n_samples": "1"},
+        {"trial_idx": "4", "a_state": "rest", "b_state": "rest", "b_direction": "left", "n_samples": "1"},
+        {"trial_idx": "5", "a_state": "rest", "b_state": "rest", "b_direction": "left", "n_samples": "1"},
     ], frames={
-        0: [_frame(0, "rest", "attention", "left", 0.0, 0.7, "left", 9.0, blink=True)],
-        1: [_frame(1, "rest", "attention", "right", 0.0, 0.8, "right", 11.0)],
-        2: [_frame(2, "rest", "rest", "left", 0.0, 0.2, "", 30.0)],
-        3: [_frame(3, "rest", "rest", "left", 0.0, 0.1, "", 31.0)],
+        0: [_frame(0, "rest", "attention", "left", 0.0, 0.7, "left", 9.0)],
+        1: [_frame(1, "rest", "attention", "left", 0.0, 0.7, "left", 10.0)],
+        2: [_frame(2, "rest", "attention", "left", 0.0, 0.8, "right", 11.0)],   # false switch (target steady left)
+        3: [_frame(3, "rest", "attention", "right", 0.0, 0.8, "right", 12.0)],  # target changed, matched
+        4: [_frame(4, "rest", "rest", "left", 0.0, 0.2, "", 30.0)],
+        5: [_frame(5, "rest", "rest", "left", 0.0, 0.1, "", 31.0)],
     })
     export_all(tmp_path, tmp_path / "out")
     rows = _read(tmp_path / "out" / "condition_summary.csv")
@@ -159,8 +166,46 @@ def test_export_condition_summary_steering_blink(tmp_path):
     assert float(r["hit_rate"]) == pytest.approx(1.0)
     assert float(r["fa_rate"]) == pytest.approx(0.0)
     assert float(r["auc"]) == pytest.approx(1.0)
-    assert float(r["blink_hit_rate"]) == pytest.approx(0.5)
-    assert float(r["blink_fa_rate"]) == pytest.approx(0.0)
+    # attention trials 0(left),1(left),2(left),3(right): target left→right
+    # once (trial 3, matched) → dir_hit 1/1; steady left at trials 1,2 → the
+    # output changed at trial 2 (right) → dir_fa 1/2.
+    assert float(r["dir_hit_rate"]) == pytest.approx(1.0)
+    assert float(r["dir_fa_rate"]) == pytest.approx(0.5)
+
+
+def test_export_runs_analyzed_separately(tmp_path):
+    """P44①: two runs in one session produce separate master rows (run column)
+    and one summary row per run — runs are never mixed."""
+    d = tmp_path / "sess"
+    d.mkdir(parents=True)
+    json.dump({"session_id": "sess",
+               "meta": {"subject": "S01", "subject_b": "", "date": "2026-08-15"},
+               "system": {"metric": "tbr", "device_mode": "single", "roles": ["speed"]}},
+              open(d / "session.json", "w"))
+    with open(d / "trials.csv", "w", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=TRIALS_CSV_COLUMNS)
+        w.writeheader()
+        for run in (1, 2):
+            row = dict.fromkeys(TRIALS_CSV_COLUMNS, "")
+            row.update({"run": run, "trial_idx": "0", "a_state": "attention",
+                        "b_state": "rest", "b_direction": "left", "n_samples": "1"})
+            w.writerow(row)
+    for run in (1, 2):
+        with open(d / f"run_{run:02d}_trial_000.csv", "w", newline="") as fh:
+            w = csv.DictWriter(fh, fieldnames=TRIAL_CSV_COLUMNS)
+            w.writeheader()
+            row = dict.fromkeys(TRIAL_CSV_COLUMNS, "")
+            row.update({"trial_idx": "0", "speed_intent": "0.8" if run == 1 else "0.2"})
+            w.writerow(row)
+    export_all(tmp_path, tmp_path / "out")
+    master = _read(tmp_path / "out" / "master_trials.csv")
+    assert [r["run"] for r in master] == ["1", "2"]
+    assert float(master[0]["speed_intent"]) == pytest.approx(0.8)
+    assert float(master[1]["speed_intent"]) == pytest.approx(0.2)
+    summary = _read(tmp_path / "out" / "condition_summary.csv")
+    assert [r["run"] for r in summary] == ["1", "2"]
+    assert float(summary[0]["mean_score_attention"]) == pytest.approx(0.8)
+    assert float(summary[1]["mean_score_attention"]) == pytest.approx(0.2)
 
 
 def test_export_dual_two_channels(tmp_path):

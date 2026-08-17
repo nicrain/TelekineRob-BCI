@@ -631,7 +631,10 @@ export default function ExperimentPanel({ config }) {
                           {STATE_LABEL[state]}
                         </td>
                         <td style={{ fontSize: 12, color: 'var(--f-text-secondary)', fontFamily: 'var(--font-mono)', padding: '3px 0 3px 18px' }}>
-                          {isSpeed ? '—' : DIR_LABEL[target.b_direction]}
+                          {/* P44②: a direction is only meaningful on an
+                              attention (blink/direction) trial — a rest
+                              trial shows the em dash. */}
+                          {isSpeed || target.b_state !== 'attention' ? '—' : DIR_LABEL[target.b_direction]}
                         </td>
                       </tr>
                     );

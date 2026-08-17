@@ -60,10 +60,12 @@ TRIAL_CSV_COLUMNS = [
     "cmd_lin", "cmd_ang", "is_blink", "latency_ms",
 ]
 
-LABELS_CSV_COLUMNS = ["trial_idx", "phase", "wall_ts", "a_state", "b_state", "b_direction"]
+LABELS_CSV_COLUMNS = ["run", "trial_idx", "phase", "wall_ts", "a_state", "b_state", "b_direction"]
 
+# P44①: every Start is a NEW run — each row carries the run_id so repeated
+# Start/Reset within one session directory never mix runs.
 TRIALS_CSV_COLUMNS = [
-    "trial_idx", "a_state", "b_state", "b_direction",
+    "run", "trial_idx", "a_state", "b_state", "b_direction",
     "prompt_ts", "start_ts", "end_ts", "duration_sec",
     "n_samples", "mean_alpha", "mean_tbr", "mean_ei", "blink_count",
 ]
@@ -274,6 +276,7 @@ class ExperimentSession:
 
         self._phase = PHASE_IDLE
         self._trial_idx = 0
+        self._run_id = 0   # P44①: incremented on every Start — new run
         self._phase_until = 0.0
         self._paused_from = PHASE_IDLE
         self._paused_remaining = 0.0
@@ -319,6 +322,7 @@ class ExperimentSession:
 
             self._phase = PHASE_IDLE
             self._trial_idx = 0
+            self._run_id = 0   # P44①: fresh session dir → runs restart at 1
             self._samples = []
             self._prev_steer = {}
             return self._session_id
@@ -392,6 +396,9 @@ class ExperimentSession:
         with self._lock:
             if not self._trials or self._phase not in (PHASE_IDLE, PHASE_DONE):
                 return False
+            # P44①: every Start = a NEW run (re-running after Reset/Done
+            # appends a fresh run instead of mixing into the old one).
+            self._run_id += 1
             self._trial_idx = 0
             now = self._clock()
             self._begin_prompt_locked(0, now)
@@ -559,6 +566,7 @@ class ExperimentSession:
         trial = self._trials[idx]
         self._prompt_ts = now
         self._labels_writer.writerow({
+            "run": self._run_id,   # P44①: labels are per-run too
             "trial_idx": idx,
             "phase": PHASE_PROMPT,
             "wall_ts": round(now, 6),
@@ -578,7 +586,9 @@ class ExperimentSession:
         for row in self._samples:
             row["trial_end_ts"] = trial_end
 
-        path = self._session_dir / f"trial_{self._trial_idx:03d}.csv"
+        # P44①: per-run isolation — run_<R>_trial_<NNN>.csv (re-running the
+        # protocol appends a new run instead of overwriting the old files).
+        path = self._session_dir / f"run_{self._run_id:02d}_trial_{self._trial_idx:03d}.csv"
         with path.open("w", newline="", encoding="utf-8") as fh:
             writer = csv.DictWriter(fh, fieldnames=TRIAL_CSV_COLUMNS)
             writer.writeheader()
@@ -587,6 +597,7 @@ class ExperimentSession:
         if self._trials_writer is not None:
             n = len(self._samples)
             self._trials_writer.writerow({
+                "run": self._run_id,
                 "trial_idx": self._trial_idx,
                 "a_state": trial.a_state,
                 "b_state": trial.b_state,

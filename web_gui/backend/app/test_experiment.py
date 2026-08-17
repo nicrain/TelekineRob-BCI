@@ -380,10 +380,11 @@ def test_session_runs_protocol_with_recording(tmp_path):
     assert (sdir / "session.json").exists()
     assert (sdir / "labels.csv").exists()
     assert (sdir / "trials.csv").exists()
-    assert (sdir / "trial_000.csv").exists()
+    # P44①: trial files are per-run — run_<R>_trial_<NNN>.csv
+    assert (sdir / "run_01_trial_000.csv").exists()
 
     # trial CSV: schema + truth + timing columns per §2
-    rows = list(csv.DictReader((sdir / "trial_000.csv").open(encoding="utf-8")))
+    rows = list(csv.DictReader((sdir / "run_01_trial_000.csv").open(encoding="utf-8")))
     assert rows[0].keys() == set(TRIAL_CSV_COLUMNS)
     assert len(rows) == 3
     for r in rows:
@@ -395,9 +396,10 @@ def test_session_runs_protocol_with_recording(tmp_path):
         assert r["role"] == "speed"
         assert float(r["latency_ms"]) == pytest.approx(10.0, abs=0.1)  # row_ts - cmd_vel_ts
 
-    # summary: n_samples + means
+    # summary: n_samples + means (P44①: rows carry the run id)
     sums = list(csv.DictReader((sdir / "trials.csv").open(encoding="utf-8")))
     assert len(sums) == 2
+    assert sums[0]["run"] == "1"
     assert sums[0]["trial_idx"] == "0"
     assert sums[0]["n_samples"] == "3"
     assert float(sums[0]["mean_alpha"]) == pytest.approx(2.0)  # mean of 1.0,2.0,3.0
@@ -405,7 +407,7 @@ def test_session_runs_protocol_with_recording(tmp_path):
     # ── E4: labels.csv — one truth row per trial at prompt entry ──
     labels = list(csv.DictReader((sdir / "labels.csv").open(encoding="utf-8")))
     assert len(labels) == 2
-    assert labels[0] == {"trial_idx": "0", "phase": "prompt", "wall_ts": "0.0",
+    assert labels[0] == {"run": "1", "trial_idx": "0", "phase": "prompt", "wall_ts": "0.0",
                          "a_state": "attention", "b_state": "rest", "b_direction": "left"}
     assert labels[1]["trial_idx"] == "1"
     assert labels[1]["a_state"] == "rest"
@@ -438,6 +440,39 @@ def test_p43_no_rest_transition_and_configurable_prompt(tmp_path):
 
     clock.advance(7.0)
     assert sess.state()["phase"] == "trial"               # trial 1
+
+
+def test_p44_runs_are_isolated(tmp_path):
+    """P44①: Start → Reset → Start again = two RUNS — trials.csv rows carry
+    run 1 and 2, and the per-run trial files are separate (no mixing / no
+    overwrite)."""
+    clock = _Clock(0.0)
+    sess = ExperimentSession(data_dir=tmp_path, clock=clock)
+    trials = [TrialSpec(a_state="attention", b_state="rest", b_direction="left",
+                        duration_sec=2, rest_sec=1)]
+    sid = sess.configure(
+        SessionMeta(subject="s", session_no=1, metric="tbr", device_mode="single"),
+        trials, shuffle="none", prompt_sec=1,
+    )
+    sdir = tmp_path / sid
+
+    def _run_one():
+        sess.start()
+        clock.advance(1.0)   # prompt
+        assert sess.state()["phase"] == "trial"
+        clock.advance(2.0)   # trial
+        assert sess.state()["phase"] == "done"
+
+    _run_one()
+    sess.reset()
+    _run_one()
+
+    sums = list(csv.DictReader((sdir / "trials.csv").open(encoding="utf-8")))
+    assert [r["run"] for r in sums] == ["1", "2"]           # two runs, tagged
+    assert (sdir / "run_01_trial_000.csv").exists()         # per-run files,
+    assert (sdir / "run_02_trial_000.csv").exists()         # not overwritten
+    labels = list(csv.DictReader((sdir / "labels.csv").open(encoding="utf-8")))
+    assert [r["run"] for r in labels] == ["1", "2"]
 
 
 def test_no_recording_outside_trial_phase(tmp_path):

@@ -41,22 +41,28 @@ from .experiment import TRIAL_CSV_COLUMNS, TRIALS_CSV_COLUMNS
 SPEED_HIT_THRESHOLD = 0.5   # mean speed_intent > this → attention hit
 STEER_HIT_THRESHOLD = 0.5   # mean steer_intent > this → attention hit
 
-# master_trials.csv columns: session fields + the target trio + the per-trial
-# outputs (names aligned with the frame / trial-summary CSVs) + metric means +
-# the blink event count.
+# master_trials.csv columns: session fields + the run id + the target trio +
+# the per-trial outputs (names aligned with the frame / trial-summary CSVs) +
+# metric means + the blink event count.
 MASTER_COLUMNS = (
     ["session_id", "date", "subject", "subject_b", "device_mode", "metric", "electrode", "roles"]
-    + TRIALS_CSV_COLUMNS[:4]        # trial_idx, a_state, b_state, b_direction
+    + TRIALS_CSV_COLUMNS[:5]        # run, trial_idx, a_state, b_state, b_direction
     + ["speed_intent", "steer_intent", "steer_direction", "is_blink", "latency_ms"]
     + TRIALS_CSV_COLUMNS[-4:]       # mean_alpha, mean_tbr, mean_ei, blink_count
 )
 
+# P44②: the steering blink metrics are redefined as direction-switch
+# correctness — rest natural blinks are NOT false triggers. dir_hit_rate =
+# among steering trials where the target direction CHANGED, the fraction whose
+# actual output direction matched the new target; dir_fa_rate = among steering
+# trials where the target direction was steady, the fraction whose output
+# direction changed anyway. Rest trials are excluded from both.
 SUMMARY_COLUMNS = [
-    "session_id", "channel", "n_attention", "n_rest",
+    "session_id", "run", "channel", "n_attention", "n_rest",
     "hit_rate", "fa_rate", "d_prime", "auc",
     "mean_score_attention", "mean_score_rest",
     "mean_latency_attention", "mean_latency_rest",
-    "blink_hit_rate", "blink_fa_rate",
+    "dir_hit_rate", "dir_fa_rate",
 ]
 
 
@@ -207,10 +213,25 @@ def load_session(session_dir: Path) -> Optional[dict]:
     return {"dir": session_dir, "meta": meta, "trials": trials}
 
 
-def read_trial_frames(session_dir: Path, trial_idx: int) -> list[dict]:
-    """The frame rows of ``trial_<NNN>.csv`` (TRIAL_CSV_COLUMNS); missing →
-    [] (the trial's output aggregates then fall back to '')."""
-    return _read_csv(session_dir / f"trial_{trial_idx:03d}.csv")
+def read_trial_frames(session_dir: Path, trial_idx: int, run: Any = "") -> list[dict]:
+    """The frame rows of the trial's CSV — ``run_<R>_trial_<NNN>.csv`` for a
+    P44① run, or the legacy ``trial_<NNN>.csv`` when no run is tagged; missing
+    → [] (the trial's output aggregates then fall back to '')."""
+    if run:
+        path = session_dir / f"run_{int(run):02d}_trial_{trial_idx:03d}.csv"
+    else:
+        path = session_dir / f"trial_{trial_idx:03d}.csv"
+    return _read_csv(path)
+
+
+def session_runs(trials_rows: list[dict]) -> dict:
+    """Group trials.csv rows by run ('' = a legacy pre-P44 session). A session
+    whose protocol was run multiple times (Start → Reset → Start) has several
+    runs and they must NEVER be mixed."""
+    runs: dict = {}
+    for row in trials_rows:
+        runs.setdefault(str(row.get("run", "")), []).append(row)
+    return runs
 
 
 def aggregate_frames(frames: list[dict]) -> dict:
@@ -239,81 +260,119 @@ def session_master_rows(session: dict) -> list[dict]:
     sys = meta.get("system", {})
     roles = sys.get("roles") or []
     rows = []
-    for t in session["trials"]:
-        try:
-            idx = int(t.get("trial_idx", 0))
-        except (ValueError, TypeError):
-            idx = 0
-        agg = aggregate_frames(read_trial_frames(session["dir"], idx))
-        rows.append({
-            "session_id": meta.get("session_id", ""),
-            "date": m.get("date", ""),
-            "subject": m.get("subject", ""),
-            "subject_b": m.get("subject_b", ""),
-            "device_mode": sys.get("device_mode", ""),
-            "metric": sys.get("metric", ""),
-            "electrode": m.get("electrode", ""),
-            "roles": "/".join(roles),
-            "trial_idx": idx,
-            "a_state": t.get("a_state", ""),
-            "b_state": t.get("b_state", ""),
-            "b_direction": t.get("b_direction", ""),
-            "speed_intent": agg["speed_intent"],
-            "steer_intent": agg["steer_intent"],
-            "steer_direction": agg["steer_direction"],
-            "is_blink": agg["is_blink"],
-            "mean_alpha": _f(t.get("mean_alpha")) if _f(t.get("mean_alpha")) is not None else "",
-            "mean_tbr": _f(t.get("mean_tbr")) if _f(t.get("mean_tbr")) is not None else "",
-            "mean_ei": _f(t.get("mean_ei")) if _f(t.get("mean_ei")) is not None else "",
-            "latency_ms": agg["latency_ms"],
-            "blink_count": _f(t.get("blink_count")) if _f(t.get("blink_count")) is not None else "",
-        })
+    # P44①: iterate per RUN — a session re-run several times must never mix.
+    for run, run_rows in session_runs(session["trials"]).items():
+        for t in run_rows:
+            try:
+                idx = int(t.get("trial_idx", 0))
+            except (ValueError, TypeError):
+                idx = 0
+            agg = aggregate_frames(read_trial_frames(session["dir"], idx, run))
+            rows.append({
+                "session_id": meta.get("session_id", ""),
+                "run": run,
+                "date": m.get("date", ""),
+                "subject": m.get("subject", ""),
+                "subject_b": m.get("subject_b", ""),
+                "device_mode": sys.get("device_mode", ""),
+                "metric": sys.get("metric", ""),
+                "electrode": m.get("electrode", ""),
+                "roles": "/".join(roles),
+                "trial_idx": idx,
+                "a_state": t.get("a_state", ""),
+                "b_state": t.get("b_state", ""),
+                "b_direction": t.get("b_direction", ""),
+                "speed_intent": agg["speed_intent"],
+                "steer_intent": agg["steer_intent"],
+                "steer_direction": agg["steer_direction"],
+                "is_blink": agg["is_blink"],
+                "mean_alpha": _f(t.get("mean_alpha")) if _f(t.get("mean_alpha")) is not None else "",
+                "mean_tbr": _f(t.get("mean_tbr")) if _f(t.get("mean_tbr")) is not None else "",
+                "mean_ei": _f(t.get("mean_ei")) if _f(t.get("mean_ei")) is not None else "",
+                "latency_ms": agg["latency_ms"],
+                "blink_count": _f(t.get("blink_count")) if _f(t.get("blink_count")) is not None else "",
+            })
     return rows
 
 
 # ── condition summary ─────────────────────────────────────────────────────
 
 def session_summary_rows(session: dict) -> list[dict]:
-    """One row per (session, channel): the channel's attention-vs-rest
+    """One row per (session, run, channel): the channel's attention-vs-rest
     discrimination (hit rate / FA rate / d' / rank AUC), mean score + latency
-    per state, and — for the steering channel only — blink hit / FA rates."""
+    per state, and — for the steering channel only — the direction-switch
+    correctness metrics (P44②)."""
     sys = session["meta"].get("system", {})
     roles = sys.get("roles") or []
     sid = session["meta"].get("session_id", "")
-    # per-trial aggregates, one pass over the frames
-    trials = []
-    for t in session["trials"]:
-        try:
-            idx = int(t.get("trial_idx", 0))
-        except (ValueError, TypeError):
-            idx = 0
-        agg = aggregate_frames(read_trial_frames(session["dir"], idx))
-        trials.append({
-            "a_state": t.get("a_state", ""),
-            "b_state": t.get("b_state", ""),
-            "score_a": agg["speed_intent"],
-            "score_b": agg["steer_intent"],
-            "is_blink": agg["is_blink"],
-            "latency_ms": agg["latency_ms"],
-        })
     rows = []
-    for role in roles:
-        if role == "speed":
-            rows.append(_channel_summary_row(sid, "speed", trials,
-                                             state_key="a_state", score_key="score_a",
-                                             threshold=SPEED_HIT_THRESHOLD, blink=False))
-        elif role == "steering":
-            rows.append(_channel_summary_row(sid, "steering", trials,
-                                             state_key="b_state", score_key="score_b",
-                                             threshold=STEER_HIT_THRESHOLD, blink=True))
+    for run, run_rows in session_runs(session["trials"]).items():
+        trials = []
+        for t in run_rows:
+            try:
+                idx = int(t.get("trial_idx", 0))
+            except (ValueError, TypeError):
+                idx = 0
+            agg = aggregate_frames(read_trial_frames(session["dir"], idx, run))
+            trials.append({
+                "a_state": t.get("a_state", ""),
+                "b_state": t.get("b_state", ""),
+                "b_direction": t.get("b_direction", ""),
+                "score_a": agg["speed_intent"],
+                "score_b": agg["steer_intent"],
+                "steer_direction": agg["steer_direction"],
+                "latency_ms": agg["latency_ms"],
+            })
+        for role in roles:
+            if role == "speed":
+                rows.append(_channel_summary_row(sid, run, "speed", trials,
+                                                 state_key="a_state", score_key="score_a",
+                                                 threshold=SPEED_HIT_THRESHOLD, blink=False))
+            elif role == "steering":
+                rows.append(_channel_summary_row(sid, run, "steering", trials,
+                                                 state_key="b_state", score_key="score_b",
+                                                 threshold=STEER_HIT_THRESHOLD, blink=True))
     return rows
 
 
-def _channel_summary_row(session_id: str, channel: str, trials: list[dict],
+def _direction_switch_metrics(trials: list[dict]) -> tuple:
+    """P44②: steering direction-switch correctness. Only ATTENTION (blink /
+    direction) trials count — dir_hit = the output direction matches the
+    target when the target CHANGED; dir_fa = the output direction changed
+    while the target was steady. Rest trials are EXCLUDED (a rest natural
+    blink is NOT a false trigger — relax is free action). Actual direction =
+    the trial's dominant steer_direction."""
+    seq = [t for t in trials
+           if t.get("b_state") == "attention" and str(t.get("steer_direction", "")).strip()]
+    if len(seq) < 2:
+        return "", ""
+    switched = switched_ok = steady = steady_fa = 0
+    for i in range(1, len(seq)):
+        prev_t = str(seq[i - 1].get("b_direction", ""))
+        target = str(seq[i].get("b_direction", ""))
+        prev_a = str(seq[i - 1].get("steer_direction", ""))
+        actual = str(seq[i].get("steer_direction", ""))
+        if not target:
+            continue
+        if target != prev_t:
+            switched += 1
+            if actual == target:
+                switched_ok += 1
+        elif actual and actual != prev_a:
+            steady += 1
+            steady_fa += 1
+        else:
+            steady += 1
+    dh = round(switched_ok / switched, 6) if switched else ""
+    df = round(steady_fa / steady, 6) if steady else ""
+    return dh, df
+
+
+def _channel_summary_row(session_id: str, run: Any, channel: str, trials: list[dict],
                          state_key: str, score_key: str, threshold: float,
                          blink: bool) -> dict:
-    """Discrimination stats for one channel. Only trials with a readable
-    score are counted (a trial with no frames has no output to judge)."""
+    """Discrimination stats for one (channel × run). Only trials with a
+    readable score are counted (a trial with no frames has no output to judge)."""
     att = [t for t in trials if t[state_key] == "attention" and _f(t[score_key]) is not None]
     rst = [t for t in trials if t[state_key] == "rest" and _f(t[score_key]) is not None]
     n1, n2 = len(att), len(rst)
@@ -332,6 +391,7 @@ def _channel_summary_row(session_id: str, channel: str, trials: list[dict],
 
     row = {
         "session_id": session_id,
+        "run": run,
         "channel": channel,
         "n_attention": n1,
         "n_rest": n2,
@@ -343,14 +403,11 @@ def _channel_summary_row(session_id: str, channel: str, trials: list[dict],
         "mean_score_rest": _mean(rst_score),
         "mean_latency_attention": _ml(att),
         "mean_latency_rest": _ml(rst),
-        "blink_hit_rate": "",
-        "blink_fa_rate": "",
+        "dir_hit_rate": "",
+        "dir_fa_rate": "",
     }
-    if blink and n1 and n2:
-        # 眨眼命中 = blink fired on an attention (blink-target) trial; 误触发
-        # = blink fired on a rest trial — both per the channel's target state.
-        row["blink_hit_rate"] = round(sum(1 for t in att if t["is_blink"]) / n1, 6)
-        row["blink_fa_rate"] = round(sum(1 for t in rst if t["is_blink"]) / n2, 6)
+    if blink:
+        row["dir_hit_rate"], row["dir_fa_rate"] = _direction_switch_metrics(trials)
     return row
 
 

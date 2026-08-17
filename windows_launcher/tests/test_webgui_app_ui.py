@@ -165,9 +165,11 @@ def test_experiment_target_table_header_and_direction():
     assert "<tbody>" in panel
     assert "<tr key={i}>" in panel
     assert "devices.map((d, i)" in panel
-    # Direction column: small muted mono, steering only
+    # Direction column: small muted mono, steering + attention only
     assert "fontSize: 12, color: 'var(--f-text-secondary)', fontFamily: 'var(--font-mono)'" in panel
-    assert "isSpeed ? '—' : DIR_LABEL[target.b_direction]" in panel
+    # P44②: a direction shows only on an attention (blink/direction) trial —
+    # rest trials render the em dash.
+    assert "isSpeed || target.b_state !== 'attention' ? '—' : DIR_LABEL[target.b_direction]" in panel
     # Subjects column right-aligned fixed width (colon alignment across rows)
     assert "{subject}:" in panel
     assert "textAlign: 'right', width: 120" in panel
