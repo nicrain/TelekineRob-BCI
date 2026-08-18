@@ -173,6 +173,40 @@ def test_export_condition_summary_steering_direction(tmp_path):
     assert float(r["dir_fa_rate"]) == pytest.approx(0.5)
 
 
+def test_export_steering_dir_metric_normalizes_numeric_steer(tmp_path):
+    """P45①: the node's NUMERIC steer_direction (1 = right, -1 = left) is
+    normalized against the protocol's 'left'/'right' targets — the old code
+    compared a number to a string and dir_hit was constant 0.0."""
+    _write_session(tmp_path, "s4", roles=("steering",), trials=[
+        {"trial_idx": "0", "a_state": "rest", "b_state": "attention", "b_direction": "left", "n_samples": "1"},
+        {"trial_idx": "1", "a_state": "rest", "b_state": "attention", "b_direction": "left", "n_samples": "1"},
+        {"trial_idx": "2", "a_state": "rest", "b_state": "attention", "b_direction": "right", "n_samples": "1"},
+    ], frames={
+        0: [_frame(0, "rest", "attention", "left", 0.0, 0.7, "-1", 9.0)],   # -1 = left
+        1: [_frame(1, "rest", "attention", "left", 0.0, 0.7, "-1", 10.0)],  # steady left, output stayed
+        2: [_frame(2, "rest", "attention", "right", 0.0, 0.8, "1", 11.0)],  # 1 = right, target changed
+    })
+    export_all(tmp_path, tmp_path / "out")
+    rows = _read(tmp_path / "out" / "condition_summary.csv")
+    r = rows[0]
+    assert r["channel"] == "steering"
+    assert float(r["dir_hit_rate"]) == pytest.approx(1.0)   # switched left→right, output matched
+    assert float(r["dir_fa_rate"]) == pytest.approx(0.0)    # steady left, output stayed
+
+
+def test_export_steering_dir_metric_empty_without_attention(tmp_path):
+    """P45③: a session with no attention direction trials → dir_hit/dir_fa
+    are empty strings, never a crash."""
+    _write_session(tmp_path, "s5", roles=("steering",), trials=[
+        {"trial_idx": "0", "a_state": "rest", "b_state": "rest", "b_direction": "left", "n_samples": "1"},
+    ], frames={
+        0: [_frame(0, "rest", "rest", "left", 0.0, 0.2, "", 30.0)],
+    })
+    export_all(tmp_path, tmp_path / "out")
+    r = _read(tmp_path / "out" / "condition_summary.csv")[0]
+    assert r["dir_hit_rate"] == "" and r["dir_fa_rate"] == ""
+
+
 def test_export_runs_analyzed_separately(tmp_path):
     """P44①: two runs in one session produce separate master rows (run column)
     and one summary row per run — runs are never mixed."""

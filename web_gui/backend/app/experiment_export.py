@@ -89,6 +89,21 @@ def _mode(vals: Iterable[str]) -> str:
     return c.most_common(1)[0][0] if c else ""
 
 
+def _dir_code(value: Any) -> Optional[str]:
+    """Normalize a direction to 'right' / 'left' (or None). Accepts BOTH the
+    protocol string ('left' / 'right') AND the node's numeric steer_direction
+    (the documented convention 1 = right, -1 = left) — the P45 type mismatch
+    that made dir_hit compare a number to a string and always fail."""
+    if value is None:
+        return None
+    s = str(value).strip().lower()
+    if s in ("right", "1", "1.0"):
+        return "right"
+    if s in ("left", "-1", "-1.0"):
+        return "left"
+    return None
+
+
 def _read_csv(path: Path) -> list[dict]:
     """Tolerant CSV read — missing / empty / corrupt file yields []."""
     if not path.exists():
@@ -247,6 +262,10 @@ def aggregate_frames(frames: list[dict]) -> dict:
         "speed_intent": _mean(speed),
         "steer_intent": _mean(steer),
         "steer_direction": _mode(dirs),
+        # P45: the trial's FINAL output direction (a blink toggles the node's
+        # steer_direction; the end state best reflects whether the switch
+        # actually happened by the end of the trial).
+        "steer_direction_last": dirs[-1] if dirs else "",
         "is_blink": 1 if blink else 0,
         "latency_ms": _mean(lat),
     }
@@ -320,7 +339,7 @@ def session_summary_rows(session: dict) -> list[dict]:
                 "b_direction": t.get("b_direction", ""),
                 "score_a": agg["speed_intent"],
                 "score_b": agg["steer_intent"],
-                "steer_direction": agg["steer_direction"],
+                "steer_direction": agg["steer_direction_last"],   # P45: final state
                 "latency_ms": agg["latency_ms"],
             })
         for role in roles:
@@ -341,19 +360,25 @@ def _direction_switch_metrics(trials: list[dict]) -> tuple:
     target when the target CHANGED; dir_fa = the output direction changed
     while the target was steady. Rest trials are EXCLUDED (a rest natural
     blink is NOT a false trigger — relax is free action). Actual direction =
-    the trial's dominant steer_direction."""
+    the trial's FINAL steer_direction (a blink toggles the node's direction;
+    the end state shows whether the switch happened). NOTE: dir_fa needs
+    steady-target ATTENTION trials — the pre-P45 generator strictly
+    alternated directions, so legacy protocols leave dir_fa empty by design
+    (the P45 8-cycle produces pairs and measures it)."""
     seq = [t for t in trials
-           if t.get("b_state") == "attention" and str(t.get("steer_direction", "")).strip()]
+           if t.get("b_state") == "attention"
+           and _dir_code(t.get("steer_direction")) is not None
+           and _dir_code(t.get("b_direction")) is not None]
     if len(seq) < 2:
         return "", ""
     switched = switched_ok = steady = steady_fa = 0
     for i in range(1, len(seq)):
-        prev_t = str(seq[i - 1].get("b_direction", ""))
-        target = str(seq[i].get("b_direction", ""))
-        prev_a = str(seq[i - 1].get("steer_direction", ""))
-        actual = str(seq[i].get("steer_direction", ""))
-        if not target:
-            continue
+        # P45: BOTH sides are normalized to 'left'/'right' — the protocol
+        # string AND the node's numeric steer_direction (1 = right, -1 = left).
+        prev_t = _dir_code(seq[i - 1].get("b_direction"))
+        target = _dir_code(seq[i].get("b_direction"))
+        prev_a = _dir_code(seq[i - 1].get("steer_direction"))
+        actual = _dir_code(seq[i].get("steer_direction"))
         if target != prev_t:
             switched += 1
             if actual == target:

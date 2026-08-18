@@ -300,6 +300,11 @@ eq("steering.b_rest", count(p.trials, (t) => t.b_state === "rest"), 4);
 eq("steering.left", count(p.trials, (t) => t.b_direction === "left"), 4);
 eq("steering.right", count(p.trials, (t) => t.b_direction === "right"), 4);
 eq("steering.a_rest", p.trials.every((t) => t.a_state === "rest"), true);
+// P45②: attention directions come in pairs (left,left,right,right) so the
+// E5 dir_fa metric has steady-target attention trials to measure
+eq("steering.att_dir_pairs",
+   p.trials.filter((t) => t.b_state === "attention").map((t) => t.b_direction).join(','),
+   'left,left,right,right');
 // B Steering + Direction T=7 (odd): 7 trials, b_state 4/3 and dir 3/4
 p = buildProtocol(steerCfg, { trials: 7, shuffle: 'none' });
 eq("steering_odd.n", p.n_trials, 7);

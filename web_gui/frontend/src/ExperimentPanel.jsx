@@ -164,15 +164,20 @@ function forwardStopTrials(total, push) {
 
 // B Steering + Direction (single + steering): a_state rest throughout;
 // b_state ≈ T/2 attention + ≈ T/2 rest AND b_direction ≈ T/2 left + ≈ T/2
-// right — round-robin the 4 (b_state × direction) combos so every dimension
-// stays balanced within one trial of T/2.
+// right. P45②: the 8-cycle carries attention directions in PAIRS (left, left,
+// right, right) so consecutive attention trials sometimes keep the SAME
+// target — giving the E5 dir_fa (false direction-switch) metric real
+// steady-target trials to measure (a strict alternation would leave dir_fa
+// empty by design). Balance is unchanged.
 function steeringDirectionTrials(total, push) {
   const combos = [
     ['attention', 'left'], ['rest', 'right'],
+    ['attention', 'left'], ['rest', 'right'],
+    ['attention', 'right'], ['rest', 'left'],
     ['attention', 'right'], ['rest', 'left'],
   ];
   for (let i = 0; i < total; i++) {
-    const [b, d] = combos[i % 4];
+    const [b, d] = combos[i % 8];
     push('rest', b, d);
   }
 }
