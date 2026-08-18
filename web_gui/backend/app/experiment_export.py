@@ -6,6 +6,14 @@ Reads every session under the experiment data dir (respects
   master_trials.csv       — one row per trial, ALL sessions (long table)
   condition_summary.csv   — one row per (session, channel) discrimination stats
 
+P46 adds the steering direction-control quality metric: ``clean_switch`` per
+trial (master table) and ``clean_switch_rate`` / ``avg_toggles_per_switch`` per
+(session, run, channel) (summary). A trial's output direction trajectory is
+scored by how many times it flips (``toggles``) vs. how many flips the target
+requires from the trial's starting direction (``needed``); ``clean`` = they
+match. The rate is aggregated over the 'needs switch' trials only (attention
+trials whose target changed from the previous attention trial).
+
 Pure Python stdlib (the backend venv stays minimal — no pandas), deterministic
 (same input → same output), and tolerant (missing/corrupt files → skip or
 fall back to ``''``, never crash).
@@ -43,11 +51,11 @@ STEER_HIT_THRESHOLD = 0.5   # mean steer_intent > this → attention hit
 
 # master_trials.csv columns: session fields + the run id + the target trio +
 # the per-trial outputs (names aligned with the frame / trial-summary CSVs) +
-# metric means + the blink event count.
+# the clean-switch flag (P46) + metric means + the blink event count.
 MASTER_COLUMNS = (
     ["session_id", "date", "subject", "subject_b", "device_mode", "metric", "electrode", "roles"]
     + TRIALS_CSV_COLUMNS[:5]        # run, trial_idx, a_state, b_state, b_direction
-    + ["speed_intent", "steer_intent", "steer_direction", "is_blink", "latency_ms"]
+    + ["speed_intent", "steer_intent", "steer_direction", "clean_switch", "is_blink", "latency_ms"]
     + TRIALS_CSV_COLUMNS[-4:]       # mean_alpha, mean_tbr, mean_ei, blink_count
 )
 
@@ -57,12 +65,19 @@ MASTER_COLUMNS = (
 # actual output direction matched the new target; dir_fa_rate = among steering
 # trials where the target direction was steady, the fraction whose output
 # direction changed anyway. Rest trials are excluded from both.
+# P46: clean_switch_rate = among the 'needs switch' trials (target changed),
+# the fraction whose output flipped EXACTLY the necessary number of times
+# (toggles == needed, i.e. no overshoot / jitter / blink-carried-away) ≈
+# 1 − false-trigger rate while switching; avg_toggles_per_switch = the mean
+# flip count across those trials. Trials with no direction output are not
+# judged (data gap, not a failure) and are excluded from both.
 SUMMARY_COLUMNS = [
     "session_id", "run", "channel", "n_attention", "n_rest",
     "hit_rate", "fa_rate", "d_prime", "auc",
     "mean_score_attention", "mean_score_rest",
     "mean_latency_attention", "mean_latency_rest",
     "dir_hit_rate", "dir_fa_rate",
+    "clean_switch_rate", "avg_toggles_per_switch",
 ]
 
 
@@ -102,6 +117,47 @@ def _dir_code(value: Any) -> Optional[str]:
     if s in ("left", "-1", "-1.0"):
         return "left"
     return None
+
+
+def direction_sequence(frames: list[dict]) -> list[str]:
+    """P46: the trial's OUTPUT direction trajectory — the ordered non-empty
+    steer_direction per frame, normalized to 'left'/'right' via ``_dir_code``
+    (empty / missing frames carry no directional information and are dropped,
+    so they never create a spurious toggle)."""
+    seq = []
+    for r in frames:
+        d = _dir_code(r.get("steer_direction"))
+        if d is not None:
+            seq.append(d)
+    return seq
+
+
+def _switch_annotation(b_state: Any, b_direction: Any, prev_target: Optional[str],
+                       toggles: Optional[int], start: Optional[str]) -> dict:
+    """P46: per-trial clean-switch annotation.
+    - ``target``: the normalized target direction (None for rest / unreadable).
+    - ``needs_switch``: an ATTENTION trial whose target changed vs the previous
+      attention trial — the 'needs a direction switch' set (rest trials don't
+      set a direction requirement, so they don't break the sequence).
+    - ``needed``: 0 when the trial's STARTING output already equals the target
+      (no flip required), 1 otherwise — the direction is binary, so exactly
+      one flip lands on target.
+    - ``clean``: toggles == needed — the output flipped exactly the necessary
+      number of times (parity makes 'ends on target' redundant: a 3-flip
+      trajectory that ends on target still overshot twice). Computed for every
+      attention trial with a target + direction output, so the master table
+      can deep-dive steady-target trials too; the summary aggregates only the
+      needs-switch subset.
+    Computable values are None when the trial has no direction output / target
+    (rest trial) — clean is then not judgeable."""
+    target = _dir_code(b_direction) if b_state == "attention" else None
+    needs_switch = bool(target and prev_target and target != prev_target)
+    needed = clean = None
+    if toggles is not None and target is not None:
+        needed = 0 if start == target else 1
+        clean = (toggles == needed)
+    return {"target": target, "needs_switch": needs_switch,
+            "needed": needed, "clean": clean}
 
 
 def _read_csv(path: Path) -> list[dict]:
@@ -258,6 +314,11 @@ def aggregate_frames(frames: list[dict]) -> dict:
     dirs = [str(r.get("steer_direction", "")).strip() for r in frames
             if str(r.get("steer_direction", "")).strip()]
     blink = any(str(r.get("is_blink", "")).strip() not in ("", "0", "False", "false") for r in frames)
+    # P46: the direction trajectory — 'toggles' = frame-by-frame flips of the
+    # OUTPUT direction (None when the trial has no direction output);
+    # 'start_direction' = the first output direction (None likewise).
+    seq = direction_sequence(frames)
+    toggles = None if not seq else sum(1 for a, b in zip(seq, seq[1:]) if a != b)
     return {
         "speed_intent": _mean(speed),
         "steer_intent": _mean(steer),
@@ -266,6 +327,8 @@ def aggregate_frames(frames: list[dict]) -> dict:
         # steer_direction; the end state best reflects whether the switch
         # actually happened by the end of the trial).
         "steer_direction_last": dirs[-1] if dirs else "",
+        "toggles": toggles,
+        "start_direction": seq[0] if seq else None,
         "is_blink": 1 if blink else 0,
         "latency_ms": _mean(lat),
     }
@@ -281,12 +344,20 @@ def session_master_rows(session: dict) -> list[dict]:
     rows = []
     # P44①: iterate per RUN — a session re-run several times must never mix.
     for run, run_rows in session_runs(session["trials"]).items():
+        # P46: track the previous attention trial's target so each trial knows
+        # whether it 'needs a switch' (target changed).
+        prev_target = None
         for t in run_rows:
             try:
                 idx = int(t.get("trial_idx", 0))
             except (ValueError, TypeError):
                 idx = 0
             agg = aggregate_frames(read_trial_frames(session["dir"], idx, run))
+            ann = _switch_annotation(t.get("b_state"), t.get("b_direction"), prev_target,
+                                     agg["toggles"], agg["start_direction"])
+            if ann["target"] is not None:
+                prev_target = ann["target"]
+            clean = ann["clean"]
             rows.append({
                 "session_id": meta.get("session_id", ""),
                 "run": run,
@@ -304,6 +375,10 @@ def session_master_rows(session: dict) -> list[dict]:
                 "speed_intent": agg["speed_intent"],
                 "steer_intent": agg["steer_intent"],
                 "steer_direction": agg["steer_direction"],
+                # P46: 1 = the output flipped exactly the necessary number of
+                # times; 0 = it overshot / jittered / was carried away; '' =
+                # not judgeable (rest trial, no target, or no direction output).
+                "clean_switch": "1" if clean is True else "0" if clean is False else "",
                 "is_blink": agg["is_blink"],
                 "mean_alpha": _f(t.get("mean_alpha")) if _f(t.get("mean_alpha")) is not None else "",
                 "mean_tbr": _f(t.get("mean_tbr")) if _f(t.get("mean_tbr")) is not None else "",
@@ -320,19 +395,24 @@ def session_summary_rows(session: dict) -> list[dict]:
     """One row per (session, run, channel): the channel's attention-vs-rest
     discrimination (hit rate / FA rate / d' / rank AUC), mean score + latency
     per state, and — for the steering channel only — the direction-switch
-    correctness metrics (P44②)."""
+    correctness metrics (P44②) + the clean-switch quality metrics (P46)."""
     sys = session["meta"].get("system", {})
     roles = sys.get("roles") or []
     sid = session["meta"].get("session_id", "")
     rows = []
     for run, run_rows in session_runs(session["trials"]).items():
         trials = []
+        prev_target = None          # P46: previous attention trial's target
         for t in run_rows:
             try:
                 idx = int(t.get("trial_idx", 0))
             except (ValueError, TypeError):
                 idx = 0
             agg = aggregate_frames(read_trial_frames(session["dir"], idx, run))
+            ann = _switch_annotation(t.get("b_state"), t.get("b_direction"), prev_target,
+                                     agg["toggles"], agg["start_direction"])
+            if ann["target"] is not None:
+                prev_target = ann["target"]
             trials.append({
                 "a_state": t.get("a_state", ""),
                 "b_state": t.get("b_state", ""),
@@ -340,6 +420,9 @@ def session_summary_rows(session: dict) -> list[dict]:
                 "score_a": agg["speed_intent"],
                 "score_b": agg["steer_intent"],
                 "steer_direction": agg["steer_direction_last"],   # P45: final state
+                "toggles": agg["toggles"],                        # P46
+                "needs_switch": ann["needs_switch"],              # P46
+                "clean": ann["clean"],                            # P46
                 "latency_ms": agg["latency_ms"],
             })
         for role in roles:
@@ -364,13 +447,25 @@ def _direction_switch_metrics(trials: list[dict]) -> tuple:
     the end state shows whether the switch happened). NOTE: dir_fa needs
     steady-target ATTENTION trials — the pre-P45 generator strictly
     alternated directions, so legacy protocols leave dir_fa empty by design
-    (the P45 8-cycle produces pairs and measures it)."""
+    (the P45 8-cycle produces pairs and measures it).
+
+    P46: clean_switch_rate / avg_toggles_per_switch — direction control
+    QUALITY, not just the end state. dir_hit/dir_fa judge only the final frame,
+    so a subject who flips 3 times and lands on target counts as a 'hit'.
+    clean-switch instead counts, among the 'needs switch' trials (attention
+    trials whose target changed from the previous attention trial, precomputed
+    per trial), the fraction whose output flipped EXACTLY the necessary number
+    of times (toggles == needed) — a 3-flip trajectory is NOT clean even when
+    it ends on target (2 flips were spurious: natural blinks / noise treated
+    as active switches). avg_toggles_per_switch = the mean flip count across
+    the same trials (1.0 ideal). Needs-switch trials with no direction output
+    are excluded (a data gap, not a failure)."""
     seq = [t for t in trials
            if t.get("b_state") == "attention"
            and _dir_code(t.get("steer_direction")) is not None
            and _dir_code(t.get("b_direction")) is not None]
     if len(seq) < 2:
-        return "", ""
+        return "", "", "", ""
     switched = switched_ok = steady = steady_fa = 0
     for i in range(1, len(seq)):
         # P45: BOTH sides are normalized to 'left'/'right' — the protocol
@@ -390,7 +485,14 @@ def _direction_switch_metrics(trials: list[dict]) -> tuple:
             steady += 1
     dh = round(switched_ok / switched, 6) if switched else ""
     df = round(steady_fa / steady, 6) if steady else ""
-    return dh, df
+    # P46: clean-switch quality over the needs-switch trials.
+    sw = [t for t in trials if t.get("needs_switch") and t.get("toggles") is not None]
+    if not sw:
+        return dh, df, "", ""
+    n_clean = sum(1 for t in sw if t.get("clean"))
+    csr = round(n_clean / len(sw), 6)
+    avg = round(sum(int(t["toggles"]) for t in sw) / len(sw), 6)
+    return dh, df, csr, avg
 
 
 def _channel_summary_row(session_id: str, run: Any, channel: str, trials: list[dict],
@@ -430,9 +532,13 @@ def _channel_summary_row(session_id: str, run: Any, channel: str, trials: list[d
         "mean_latency_rest": _ml(rst),
         "dir_hit_rate": "",
         "dir_fa_rate": "",
+        "clean_switch_rate": "",
+        "avg_toggles_per_switch": "",
     }
     if blink:
-        row["dir_hit_rate"], row["dir_fa_rate"] = _direction_switch_metrics(trials)
+        (row["dir_hit_rate"], row["dir_fa_rate"],
+         row["clean_switch_rate"], row["avg_toggles_per_switch"]) = \
+            _direction_switch_metrics(trials)
     return row
 
 

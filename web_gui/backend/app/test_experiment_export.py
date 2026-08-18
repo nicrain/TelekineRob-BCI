@@ -13,7 +13,9 @@ import pytest
 from app.experiment import TRIAL_CSV_COLUMNS, TRIALS_CSV_COLUMNS
 from app.experiment_export import (
     MASTER_COLUMNS,
+    _switch_annotation,
     auc_rank,
+    direction_sequence,
     export_all,
     zscore,
 )
@@ -196,7 +198,7 @@ def test_export_steering_dir_metric_normalizes_numeric_steer(tmp_path):
 
 def test_export_steering_dir_metric_empty_without_attention(tmp_path):
     """P45③: a session with no attention direction trials → dir_hit/dir_fa
-    are empty strings, never a crash."""
+    are empty strings, never a crash. P46: clean-switch metrics are empty too."""
     _write_session(tmp_path, "s5", roles=("steering",), trials=[
         {"trial_idx": "0", "a_state": "rest", "b_state": "rest", "b_direction": "left", "n_samples": "1"},
     ], frames={
@@ -205,6 +207,149 @@ def test_export_steering_dir_metric_empty_without_attention(tmp_path):
     export_all(tmp_path, tmp_path / "out")
     r = _read(tmp_path / "out" / "condition_summary.csv")[0]
     assert r["dir_hit_rate"] == "" and r["dir_fa_rate"] == ""
+    assert r["clean_switch_rate"] == "" and r["avg_toggles_per_switch"] == ""
+    # P46: the rest trial carries no clean_switch in the master table either.
+    m = _read(tmp_path / "out" / "master_trials.csv")[0]
+    assert m["clean_switch"] == ""
+
+
+def test_export_clean_switch_trajectories(tmp_path):
+    """P46: direction-control QUALITY — the per-trial clean flag and the
+    clean_switch_rate / avg_toggles_per_switch aggregates over the 'needs
+    switch' trials (attention trials whose target changed). The 5 synthetic
+    trajectories: already aligned / single hit are CLEAN; 2 overshoots,
+    3 jitters-to-target and a natural blink carried away are NOT — even the
+    3-jitter trial ends ON target, which dir_hit would have scored as a hit."""
+    _write_session(tmp_path, "s6", roles=("steering",), trials=[
+        {"trial_idx": "0", "a_state": "rest", "b_state": "attention", "b_direction": "left", "n_samples": "1"},
+        {"trial_idx": "1", "a_state": "rest", "b_state": "attention", "b_direction": "right", "n_samples": "1"},
+        {"trial_idx": "2", "a_state": "rest", "b_state": "attention", "b_direction": "left", "n_samples": "1"},
+        {"trial_idx": "3", "a_state": "rest", "b_state": "attention", "b_direction": "right", "n_samples": "1"},
+        {"trial_idx": "4", "a_state": "rest", "b_state": "attention", "b_direction": "left", "n_samples": "1"},
+        {"trial_idx": "5", "a_state": "rest", "b_state": "attention", "b_direction": "right", "n_samples": "1"},
+        {"trial_idx": "6", "a_state": "rest", "b_state": "rest", "b_direction": "left", "n_samples": "1"},
+    ], frames={
+        # trial 0: baseline, output already on the left target.
+        0: [_frame(0, "rest", "attention", "left", 0.0, 0.7, "left", 9.0)],
+        # trial 1: target changed left→right BUT the output is already right
+        # (起点已对) → toggles 0 == needed 0 → clean.
+        1: [_frame(1, "rest", "attention", "right", 0.0, 0.7, "right", 10.0)],
+        # trial 2: single hit — one flip right→left lands on the new target.
+        2: [_frame(2, "rest", "attention", "left", 0.0, 0.7, "right", 10.0),
+            _frame(2, "rest", "attention", "left", 0.0, 0.7, "left", 10.5)],
+        # trial 3: two overshoots — right→left→right, ends OFF target.
+        3: [_frame(3, "rest", "attention", "right", 0.0, 0.7, "left", 10.0),
+            _frame(3, "rest", "attention", "right", 0.0, 0.7, "right", 10.5),
+            _frame(3, "rest", "attention", "right", 0.0, 0.7, "left", 11.0)],
+        # trial 4: three jitters that still END on the left target — dir_hit
+        # would call this a hit, clean-switch correctly flags 2 spurious flips.
+        4: [_frame(4, "rest", "attention", "left", 0.0, 0.7, "right", 10.0),
+            _frame(4, "rest", "attention", "left", 0.0, 0.7, "left", 10.5),
+            _frame(4, "rest", "attention", "left", 0.0, 0.7, "right", 11.0),
+            _frame(4, "rest", "attention", "left", 0.0, 0.7, "left", 11.5)],
+        # trial 5: natural blink carried the direction away — right→left→right,
+        # ends OFF the right target.
+        5: [_frame(5, "rest", "attention", "right", 0.0, 0.7, "left", 10.0),
+            _frame(5, "rest", "attention", "right", 0.0, 0.7, "right", 10.5),
+            _frame(5, "rest", "attention", "right", 0.0, 0.7, "left", 11.0)],
+        # trial 6: rest trial — no direction output, excluded from everything.
+        6: [_frame(6, "rest", "rest", "left", 0.0, 0.2, "", 30.0)],
+    })
+    export_all(tmp_path, tmp_path / "out")
+
+    master = _read(tmp_path / "out" / "master_trials.csv")
+    assert [r["clean_switch"] for r in master] == ["1", "1", "1", "0", "0", "0", ""]
+    assert [r["b_state"] for r in master] == ["attention"] * 6 + ["rest"]
+
+    rows = _read(tmp_path / "out" / "condition_summary.csv")
+    assert len(rows) == 1
+    r = rows[0]
+    # all 6 attention trials are judged (mean steer 0.7 > 0.5 threshold).
+    assert r["n_attention"] == "6" and float(r["hit_rate"]) == pytest.approx(1.0)
+    # needs-switch trials = 1..5 (target alternates every trial). Clean =
+    # trials 1,2 (toggles 0/1 == needed 0/1) → 2/5.
+    assert float(r["clean_switch_rate"]) == pytest.approx(0.4)
+    assert float(r["avg_toggles_per_switch"]) == pytest.approx(1.6)   # (0+1+2+3+2)/5
+    # dir_hit cross-check: only 3/5 switched trials END on target (t1,t2,t4).
+    assert float(r["dir_hit_rate"]) == pytest.approx(0.6)
+
+
+def test_export_clean_switch_empty_without_target_change(tmp_path):
+    """P46: attention trials with a STEADY target → no 'needs switch' trial →
+    clean_switch_rate / avg_toggles_per_switch are empty strings, never a
+    crash (master clean_switch still recorded per attention trial)."""
+    _write_session(tmp_path, "s7", roles=("steering",), trials=[
+        {"trial_idx": "0", "a_state": "rest", "b_state": "attention", "b_direction": "left", "n_samples": "1"},
+        {"trial_idx": "1", "a_state": "rest", "b_state": "attention", "b_direction": "left", "n_samples": "1"},
+    ], frames={
+        0: [_frame(0, "rest", "attention", "left", 0.0, 0.7, "left", 9.0)],
+        # jitter on a steady target: left→right→left, ends on target but
+        # flipped twice → per-trial clean False.
+        1: [_frame(1, "rest", "attention", "left", 0.0, 0.7, "left", 10.0),
+            _frame(1, "rest", "attention", "left", 0.0, 0.7, "right", 10.5),
+            _frame(1, "rest", "attention", "left", 0.0, 0.7, "left", 11.0)],
+    })
+    export_all(tmp_path, tmp_path / "out")
+    r = _read(tmp_path / "out" / "condition_summary.csv")[0]
+    assert r["clean_switch_rate"] == "" and r["avg_toggles_per_switch"] == ""
+    # master still annotates the per-trial clean for the attention trials:
+    # trial 0 stayed put (clean), trial 1 jittered twice (not clean).
+    m = _read(tmp_path / "out" / "master_trials.csv")
+    assert [row["clean_switch"] for row in m] == ["1", "0"]
+
+
+def test_export_clean_switch_normalizes_numeric_steer(tmp_path):
+    """P46: toggles count frame-by-frame flips of the NODE's numeric
+    steer_direction (1 = right, -1 = left) — the trajectory -1,1,-1 flips
+    twice even though the target (left) never required a flip."""
+    _write_session(tmp_path, "s8", roles=("steering",), trials=[
+        {"trial_idx": "0", "a_state": "rest", "b_state": "attention", "b_direction": "right", "n_samples": "1"},
+        {"trial_idx": "1", "a_state": "rest", "b_state": "attention", "b_direction": "left", "n_samples": "1"},
+    ], frames={
+        0: [_frame(0, "rest", "attention", "right", 0.0, 0.7, "1", 9.0)],
+        1: [_frame(1, "rest", "attention", "left", 0.0, 0.7, "-1", 10.0),
+            _frame(1, "rest", "attention", "left", 0.0, 0.7, "1", 10.5),
+            _frame(1, "rest", "attention", "left", 0.0, 0.7, "-1", 11.0)],
+    })
+    export_all(tmp_path, tmp_path / "out")
+    r = _read(tmp_path / "out" / "condition_summary.csv")[0]
+    # trial 1: target changed right→left (needs switch), start -1=left ALREADY
+    # equals the target → needed 0, but toggles 2 → NOT clean.
+    assert float(r["clean_switch_rate"]) == pytest.approx(0.0)
+    assert float(r["avg_toggles_per_switch"]) == pytest.approx(2.0)
+    m = _read(tmp_path / "out" / "master_trials.csv")
+    assert [row["clean_switch"] for row in m] == ["1", "0"]
+
+
+# ── P46 pure helpers ───────────────────────────────────────────────────────
+
+def test_direction_sequence_and_switch_annotation():
+    """P46: the pure helpers — empty/missing frames drop out of the trajectory
+    (they never create a spurious toggle); the annotation computes needed/clean
+    and the needs-switch membership from the previous attention target."""
+    frames = [
+        {"steer_direction": "left"},
+        {"steer_direction": ""},          # empty frame: carries no direction
+        {"steer_direction": "-1"},        # numeric left = left (P45 normalization)
+        {"steer_direction": "1"},         # numeric right
+    ]
+    assert direction_sequence(frames) == ["left", "left", "right"]
+    assert direction_sequence([]) == []
+
+    # attention trial, target changed right→left, output already on target →
+    # needed 0, no flips → clean; needs_switch True.
+    ann = _switch_annotation("attention", "left", "right", toggles=0, start="left")
+    assert ann == {"target": "left", "needs_switch": True, "needed": 0, "clean": True}
+    # rest trial: no target → nothing judgeable, never needs_switch.
+    ann = _switch_annotation("rest", "left", "right", toggles=0, start="left")
+    assert ann == {"target": None, "needs_switch": False, "needed": None, "clean": None}
+    # steady target: not a needs-switch trial, but clean is still computed
+    # for the master deep-dive column.
+    ann = _switch_annotation("attention", "left", "left", toggles=1, start="left")
+    assert ann["needs_switch"] is False and ann["clean"] is False
+    # no direction output → toggles None → clean not judgeable.
+    ann = _switch_annotation("attention", "left", "right", toggles=None, start=None)
+    assert ann["needed"] is None and ann["clean"] is None
 
 
 def test_export_runs_analyzed_separately(tmp_path):

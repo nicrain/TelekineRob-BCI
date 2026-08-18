@@ -55,6 +55,7 @@
 **③ 眨眼方向开关验证（B：左/右）**
 - 提示"切换到 左转/右转"→ 期望一次（或几次）眨眼完成切换
 - 记**方向切换正确性**（P44②）：目标方向改变时输出是否切到新目标（dir_hit）、目标稳定时输出是否仍切换（dir_fa）；**rest 自然眨眼 ≠ 误触发**（relax 是自由动作，不计入）
+- 记**方向控制质量**（P46）：切换是否"干净"——clean_switch_rate = 需换向试次中输出**恰好翻转必要次数**（toggles == needed，无过头/抖动/被眨眼带飞）的比例 ≈ 1 − 换向时的误触发率；avg_toggles_per_switch = 需换向试次的平均翻转次数（理想 1.0）。dir_hit/dir_fa 只判末帧，3 次抖动落到目标也算 hit，clean 指标才暴露中间过度切换
 - **眨眼检测为瞬态判据**（P44③）：相对近期基线判尖峰，持续 rest 漂移不触发；眨眼确认/保持期间转向钳中性 0.5，不冻结旧转向值
 
 **④ 联合任务（旗舰，双人协同）**
@@ -121,7 +122,7 @@
 | E2 | **原始 EEG 落盘** | 记录 LSL 原始流（建议 XDF，LabRecorder 或系统内接） | ⬜ 待定 |
 | E3 | **实验提示/协议界面** | web GUI 加实验模式：显示当前 trial 目标（A 注意/休息、B 方向）、计时、trial 间 prompt 提示（P43：唯一倒计时） | ✅ P16（2026-08-13，ExperimentPanel.jsx，待真机 vite build 验证） |
 | E4 | **标签注入** | 提示目标状态时把真值写入日志流 | ✅ P16（2026-08-13，labels.csv 随 E1/E3，wall_ts 与样本 row_ts 同钟对齐） |
-| E5 | **导出脚本** | 记录数据整理成分析表（被试×通道×条件×指标）：`app.experiment_export` → master_trials.csv（长表）+ condition_summary.csv（命中率/d′/AUC/眨眼） | ✅ E5（2026-08-15）+ E6（2026-08-17，面板一键导出） |
+| E5 | **导出脚本** | 记录数据整理成分析表（被试×通道×条件×指标）：`app.experiment_export` → master_trials.csv（长表）+ condition_summary.csv（命中率/d′/AUC/眨眼/方向切换） | ✅ E5（2026-08-15）+ E6（2026-08-17，面板一键导出）+ P46（2026-08-18，加 clean_switch_rate/avg_toggles_per_switch） |
 
 > 状态流转：⬜ 待做 → 🔵 进行中 → ✅ 完成 → 🟢 已验证。
 
