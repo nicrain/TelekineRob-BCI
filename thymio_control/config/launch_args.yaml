@@ -1,6 +1,9 @@
-use_sim: true
+use_sim: false
 use_gui: false
-run_eeg: false
+run_eeg: true
 run_rviz: false
 use_teleop: true
 eeg_config_file: eeg_control_node.params.yaml
+run_eeg2: false
+device: ser:device=/dev/ttyACM0
+eeg2: null
