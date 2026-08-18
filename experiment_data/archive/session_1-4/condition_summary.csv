@@ -1,0 +1,5 @@
+session_id,run,channel,n_attention,n_rest,hit_rate,fa_rate,d_prime,auc,mean_score_attention,mean_score_rest,mean_latency_attention,mean_latency_rest,dir_hit_rate,dir_fa_rate
+W_s1_alpha_single_2026-08-17_1786963963,1,steering,10,10,1.0,0.3,5.277825,1.0,0.577843,0.500558,0.874726,0.906685,0.0,
+W_s2_tbr_single_2026-08-17_1786978657,1,steering,10,10,0.9,0.4,1.534899,0.84,0.520783,0.502358,0.789757,0.79487,0.0,
+W_s3_ei_single_2026-08-17_1786981123,1,steering,10,10,1.0,0.9,3.471873,0.82,0.588367,0.540797,0.807122,0.807188,0.0,
+W_s4_alpha_single_2026-08-17_1786983342,1,speed,10,10,0.3,0.0,4.229024,1.0,0.399646,0.001368,0.860678,0.904646,,
