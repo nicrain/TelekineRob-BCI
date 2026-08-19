@@ -205,10 +205,15 @@ class EegControlNode(Node):
         self._metric_key = self._CALIB_METRIC.get(policy_name, "")
         self._blink_confirm_frames = int(self.get_parameter("blink_confirm_frames").value)
         self._blink_holdoff_frames = int(self.get_parameter("blink_holdoff_frames").value)
+        # P47 (minimal): clamp the up-metric blink baseline to the calibration
+        # p50 (the rest level) — the detector applies it only in 'up' mode
+        # (alpha/tbr); ei is untouched. p50 = offset + scale, recovered from
+        # the values stored at calibration.
         self._blink_detector = MetricBlinkDetector(
             mode="down" if policy_name == "ei" else "up",
             confirm_frames=self._blink_confirm_frames,
             holdoff_frames=self._blink_holdoff_frames,
+            clamp_ref=calib_offset + calib_scale,
         )
         self._last_clean_features: dict = {}
 

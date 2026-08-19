@@ -97,3 +97,60 @@ def test_reset_clears_state():
     det.reset()
     assert det.in_progress is False
     assert det.update(1.0) is False           # needs re-priming
+
+
+# ── P47 (minimal): up-metric baseline floor = calibration p50 ──────────────
+
+def _primed_floor(mode="up", ref=None, level=None):
+    """A detector primed at the FOCUSED level — the state where the rolling
+    median has collapsed and a small passive blink would wrongly cross."""
+    det = MetricBlinkDetector(mode=mode, min_samples=15, clamp_ref=ref)
+    lvl = level or (1.0 if mode == "up" else 10.0)
+    for _ in range(30):
+        det.update(lvl)
+    return det
+
+
+def test_up_floor_small_passive_bump_does_not_trigger():
+    """P47: an UP metric (alpha/tbr) while FOCUSED (metric low) — the baseline
+    is clamped UP to the calibration p50, so a small passive bump no longer
+    crosses k×the collapsed median. Without the floor it WOULD confirm."""
+    det = _primed_floor("up", ref=1.0, level=0.2)     # focused low, floor p50=1.0
+    assert det.update(0.5) is False                   # small passive bump
+    assert det.update(0.5) is False                   # 0.5 < max(0.2,1.0)×2 = 2.0
+    assert det.in_progress is False
+    unc = _primed_floor("up", ref=None, level=0.2)    # no floor → old behavior
+    assert unc.update(0.5) is False                   # confirm frame 1
+    assert unc.update(0.5) is True                    # wrongly confirmed (the bug)
+
+
+def test_up_floor_large_active_spike_still_triggers():
+    """P47: a real ACTIVE blink (big up-spike) still crosses the floored
+    threshold — the floor must not lose true blinks."""
+    det = _primed_floor("up", ref=1.0, level=0.2)
+    assert det.update(3.0) is False                   # 3.0 > 2.0 → confirm 1
+    assert det.update(3.0) is True                    # confirmed
+
+
+def test_up_floor_preserves_sustained_rest_drift_no_loop():
+    """P47: the floor must not regress P44 — a sustained rest drift still
+    fills the median and stops triggering."""
+    det = _primed_floor("up", ref=1.0, level=1.0)     # rest level
+    for _ in range(100):
+        det.update(3.0)                               # sustained rest drift
+    blinks = 0
+    for _ in range(60):
+        if det.update(3.0):
+            blinks += 1
+    assert blinks == 0
+
+
+def test_down_metric_ignores_floor():
+    """P47 scope: the floor is an UPPER-side bound (up metrics only) — the
+    down/ei case is untouched, so passing clamp_ref to a 'down' detector
+    changes nothing."""
+    clamped = _primed_floor("down", ref=0.3, level=0.8)
+    plain = _primed_floor("down", ref=None, level=0.8)
+    for v in (0.3, 0.3):                              # a dip that confirms on both
+        assert clamped.update(v) == plain.update(v)
+    assert clamped._clamp_ref == 0.3                  # stored but unused

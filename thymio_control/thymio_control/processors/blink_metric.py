@@ -36,6 +36,7 @@ class MetricBlinkDetector:
         confirm_frames: int = 2,
         holdoff_frames: int = 4,
         min_samples: int = 15,
+        clamp_ref: float | None = None,
     ) -> None:
         self._mode = mode
         self._window = max(1, window)
@@ -44,6 +45,15 @@ class MetricBlinkDetector:
         self._confirm_frames = max(1, confirm_frames)
         self._holdoff_frames = max(0, holdoff_frames)
         self._min_samples = max(1, min_samples)
+        # P47 (minimal): for UP metrics the rolling-median baseline is clamped
+        # UP to the calibration p50 (the rest level) — `baseline = max(median,
+        # ref)`. While the subject concentrates, alpha/tbr sit far below their
+        # rest level, so the median collapses and the k× threshold lets small
+        # passive blinks cross; the floor keeps the threshold from collapsing.
+        # Only the up direction is clamped (a floor is an upper-side bound —
+        # the down/ei case is out of scope). ref = the calibration p50 value;
+        # None / ≤0 → no clamp (pre-P47 behavior).
+        self._clamp_ref = clamp_ref
         self._hist: deque[float] = deque(maxlen=self._window)
         self._confirm = 0
         self._holdoff = 0
@@ -71,6 +81,10 @@ class MetricBlinkDetector:
         baseline = median(self._hist)
         if baseline <= 1e-9:
             baseline = 1e-9
+        # P47: up-metric baseline floor = calibration p50 (down metrics are
+        # untouched — out of scope).
+        if self._mode == "up" and self._clamp_ref is not None and self._clamp_ref > 0:
+            baseline = max(baseline, self._clamp_ref)
         if self._mode == "down":
             triggered = value < baseline * self._k_down
         else:
