@@ -39,6 +39,8 @@ Thumbs.db
 **/test.urdf
 CLAUDE.md
 AGENTS.md
+TASKS.md
+docs/REVIEW_FINDINGS.md
 
 # O2 launcher runtime artifacts (service log, per-device bridge logs, URL)
 windows_launcher/last_url.txt
