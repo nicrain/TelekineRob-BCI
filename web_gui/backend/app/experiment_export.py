@@ -14,6 +14,14 @@ requires from the trial's starting direction (``needed``); ``clean`` = they
 match. The rate is aggregated over the 'needs switch' trials only (attention
 trials whose target changed from the previous attention trial).
 
+P# redefines the SPEED channel hit/FA: it is judged from the ACTUAL forward
+command, not the speed_intent classifier — a frame counts as moving when
+``cmd_lin > SPEED_CMD_THRESHOLD``, a trial as successful when at least
+``MOVING_RATIO_THRESHOLD`` of its speed-role frames are moving. The master
+table gains ``mean_cmd_lin`` / ``moving_time_ratio`` / ``speed_active``; the
+speed summary hit/FA use ``speed_active`` and its AUC uses the continuous
+``mean_cmd_lin``. Steering metrics are untouched.
+
 Pure Python stdlib (the backend venv stays minimal — no pandas), deterministic
 (same input → same output), and tolerant (missing/corrupt files → skip or
 fall back to ``''``, never crash).
@@ -46,16 +54,27 @@ from .experiment import TRIAL_CSV_COLUMNS, TRIALS_CSV_COLUMNS
 # ── analysis assumptions (documented; these are analysis choices, tune per
 # ── experiment — an attention hit is defined as the channel's mean output
 # ── exceeding the threshold) ──────────────────────────────────────────────
-SPEED_HIT_THRESHOLD = 0.5   # mean speed_intent > this → attention hit
-STEER_HIT_THRESHOLD = 0.5   # mean steer_intent > this → attention hit
+# P#: the SPEED channel's hit/FA is judged from the ACTUAL forward command
+# (cmd_lin), NOT the speed_intent classifier output — a non-zero speed_intent
+# can sit under the old 0.5 threshold while the car is genuinely moving (or
+# vice versa). These are real-device verified analysis assumptions:
+SPEED_CMD_THRESHOLD = 0.02    # a frame counts as MOVING when cmd_lin > this
+                              # (0.02 m/s: verified as the slowest Thymio
+                              # observable displacement).
+MOVING_RATIO_THRESHOLD = 0.10 # a trial counts as SUCCESSFUL (speed_active)
+                              # when at least this fraction of its speed-role
+                              # frames are moving (0.10 ≈ 2 s of a 20 s trial).
+STEER_HIT_THRESHOLD = 0.5     # mean steer_intent > this → steering attention hit
 
 # master_trials.csv columns: session fields + the run id + the target trio +
 # the per-trial outputs (names aligned with the frame / trial-summary CSVs) +
-# the clean-switch flag (P46) + metric means + the blink event count.
+# the clean-switch flag (P46) + the speed movement stats (P#, judged from the
+# ACTUAL cmd_lin of the speed-role frames) + metric means + blink events.
 MASTER_COLUMNS = (
     ["session_id", "date", "subject", "subject_b", "device_mode", "metric", "electrode", "roles"]
     + TRIALS_CSV_COLUMNS[:5]        # run, trial_idx, a_state, b_state, b_direction
     + ["speed_intent", "steer_intent", "steer_direction", "clean_switch", "is_blink", "latency_ms"]
+    + ["mean_cmd_lin", "moving_time_ratio", "speed_active"]
     + TRIALS_CSV_COLUMNS[-4:]       # mean_alpha, mean_tbr, mean_ei, blink_count
 )
 
@@ -158,6 +177,25 @@ def _switch_annotation(b_state: Any, b_direction: Any, prev_target: Optional[str
         clean = (toggles == needed)
     return {"target": target, "needs_switch": needs_switch,
             "needed": needed, "clean": clean}
+
+
+def _speed_movement(frames: list[dict]) -> Optional[tuple]:
+    """P#: the trial's ACTUAL forward movement, judged from the speed-role
+    frames only — dual-device logs mix speed + steering frames in one trial
+    file, and only the speed node's cmd_lin drives the car forward. Returns
+    ``(mean_cmd_lin, moving_time_ratio, speed_active)`` or None when the trial
+    has no speed-role frame with a readable cmd_lin (a steering-only session,
+    or a data gap) — the caller then falls back to ``''`` / excludes the trial
+    from the speed hit/FA, never a crash. ``speed_active`` = 1 when
+    moving_time_ratio >= MOVING_RATIO_THRESHOLD (the trial count as
+    successful)."""
+    cms = [_f(r.get("cmd_lin")) for r in frames
+           if str(r.get("role", "")).strip() == "speed" and _f(r.get("cmd_lin")) is not None]
+    if not cms:
+        return None
+    moving = sum(1 for c in cms if c > SPEED_CMD_THRESHOLD)
+    ratio = moving / len(cms)
+    return (_mean(cms), round(ratio, 6), 1 if ratio >= MOVING_RATIO_THRESHOLD else 0)
 
 
 def _read_csv(path: Path) -> list[dict]:
@@ -352,7 +390,9 @@ def session_master_rows(session: dict) -> list[dict]:
                 idx = int(t.get("trial_idx", 0))
             except (ValueError, TypeError):
                 idx = 0
-            agg = aggregate_frames(read_trial_frames(session["dir"], idx, run))
+            frames = read_trial_frames(session["dir"], idx, run)
+            agg = aggregate_frames(frames)
+            mov = _speed_movement(frames)          # P#: ACTUAL forward movement
             ann = _switch_annotation(t.get("b_state"), t.get("b_direction"), prev_target,
                                      agg["toggles"], agg["start_direction"])
             if ann["target"] is not None:
@@ -380,6 +420,12 @@ def session_master_rows(session: dict) -> list[dict]:
                 # not judgeable (rest trial, no target, or no direction output).
                 "clean_switch": "1" if clean is True else "0" if clean is False else "",
                 "is_blink": agg["is_blink"],
+                # P#: speed movement stats judged from the ACTUAL cmd_lin of
+                # the speed-role frames ('' when the trial has no such frames —
+                # a steering-only session / data gap).
+                "mean_cmd_lin": mov[0] if mov else "",
+                "moving_time_ratio": mov[1] if mov else "",
+                "speed_active": mov[2] if mov else "",
                 "mean_alpha": _f(t.get("mean_alpha")) if _f(t.get("mean_alpha")) is not None else "",
                 "mean_tbr": _f(t.get("mean_tbr")) if _f(t.get("mean_tbr")) is not None else "",
                 "mean_ei": _f(t.get("mean_ei")) if _f(t.get("mean_ei")) is not None else "",
@@ -408,7 +454,9 @@ def session_summary_rows(session: dict) -> list[dict]:
                 idx = int(t.get("trial_idx", 0))
             except (ValueError, TypeError):
                 idx = 0
-            agg = aggregate_frames(read_trial_frames(session["dir"], idx, run))
+            frames = read_trial_frames(session["dir"], idx, run)
+            agg = aggregate_frames(frames)
+            mov = _speed_movement(frames)          # P#: ACTUAL forward movement
             ann = _switch_annotation(t.get("b_state"), t.get("b_direction"), prev_target,
                                      agg["toggles"], agg["start_direction"])
             if ann["target"] is not None:
@@ -423,13 +471,18 @@ def session_summary_rows(session: dict) -> list[dict]:
                 "toggles": agg["toggles"],                        # P46
                 "needs_switch": ann["needs_switch"],              # P46
                 "clean": ann["clean"],                            # P46
+                # P#: speed hit/FA + AUC are judged from the ACTUAL cmd_lin of
+                # the speed-role frames (None when the trial has no such frames
+                # — excluded from the speed stats, never a crash).
+                "mean_cmd_lin": mov[0] if mov else None,
+                "speed_active": mov[2] if mov else None,
                 "latency_ms": agg["latency_ms"],
             })
         for role in roles:
             if role == "speed":
                 rows.append(_channel_summary_row(sid, run, "speed", trials,
                                                  state_key="a_state", score_key="score_a",
-                                                 threshold=SPEED_HIT_THRESHOLD, blink=False))
+                                                 threshold=None, blink=False))
             elif role == "steering":
                 rows.append(_channel_summary_row(sid, run, "steering", trials,
                                                  state_key="b_state", score_key="score_b",
@@ -496,18 +549,34 @@ def _direction_switch_metrics(trials: list[dict]) -> tuple:
 
 
 def _channel_summary_row(session_id: str, run: Any, channel: str, trials: list[dict],
-                         state_key: str, score_key: str, threshold: float,
+                         state_key: str, score_key: str, threshold: float | None,
                          blink: bool) -> dict:
     """Discrimination stats for one (channel × run). Only trials with a
-    readable score are counted (a trial with no frames has no output to judge)."""
-    att = [t for t in trials if t[state_key] == "attention" and _f(t[score_key]) is not None]
-    rst = [t for t in trials if t[state_key] == "rest" and _f(t[score_key]) is not None]
-    n1, n2 = len(att), len(rst)
-    att_score = [_f(t[score_key]) for t in att]
-    rst_score = [_f(t[score_key]) for t in rst]
+    readable score are counted (a trial with no frames has no output to judge).
 
-    hit = sum(1 for s in att_score if s > threshold) if n1 else 0
-    fa = sum(1 for s in rst_score if s > threshold) if n2 else 0
+    P#: the SPEED channel is judged from the ACTUAL forward command — a trial
+    is a hit / false alarm when it was moving (speed_active = moving_time_ratio
+    >= MOVING_RATIO_THRESHOLD over its speed-role frames' cmd_lin >
+    SPEED_CMD_THRESHOLD), NOT from the speed_intent classifier. AUC + the mean
+    scores use the continuous mean_cmd_lin (all primary speed metrics are
+    based on the actual command). Trials with no speed-role frames are not
+    judged (a data gap, not a failure). The steering path is unchanged."""
+    if channel == "speed":
+        att = [t for t in trials if t[state_key] == "attention" and t.get("speed_active") is not None]
+        rst = [t for t in trials if t[state_key] == "rest" and t.get("speed_active") is not None]
+        n1, n2 = len(att), len(rst)
+        hit = sum(1 for t in att if t["speed_active"]) if n1 else 0
+        fa = sum(1 for t in rst if t["speed_active"]) if n2 else 0
+        att_score = [t["mean_cmd_lin"] for t in att]
+        rst_score = [t["mean_cmd_lin"] for t in rst]
+    else:
+        att = [t for t in trials if t[state_key] == "attention" and _f(t[score_key]) is not None]
+        rst = [t for t in trials if t[state_key] == "rest" and _f(t[score_key]) is not None]
+        n1, n2 = len(att), len(rst)
+        att_score = [_f(t[score_key]) for t in att]
+        rst_score = [_f(t[score_key]) for t in rst]
+        hit = sum(1 for s in att_score if s > threshold) if n1 else 0
+        fa = sum(1 for s in rst_score if s > threshold) if n2 else 0
     hit_rate = round(hit / n1, 6) if n1 else ""
     fa_rate = round(fa / n2, 6) if n2 else ""
     auc = auc_rank(att_score, rst_score)

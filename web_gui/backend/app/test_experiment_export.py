@@ -22,15 +22,23 @@ from app.experiment_export import (
 
 
 def _frame(idx, a_state, b_state, b_direction, speed, steer, steer_dir,
-           latency, blink=False):
+           latency, blink=False, role="speed", cmd_lin=0.0):
     row = dict.fromkeys(TRIAL_CSV_COLUMNS, "")
     row.update({
         "trial_idx": idx, "a_state": a_state, "b_state": b_state,
         "b_direction": b_direction, "speed_intent": speed, "steer_intent": steer,
         "steer_direction": steer_dir, "is_blink": 1 if blink else 0,
-        "latency_ms": latency,
+        "latency_ms": latency, "role": role, "cmd_lin": cmd_lin,
     })
     return row
+
+
+def _speed_trial(idx, a_state, cmd_vals, n_frames=None):
+    """A list of speed-role frames for one trial — ``cmd_vals`` = the cmd_lin
+    per frame (all of them when ``n_frames`` given, tiled)."""
+    vals = cmd_vals if n_frames is None else [cmd_vals] * n_frames
+    return [_frame(idx, a_state, "rest", "left", 0.5, 0.0, "", 10.0, role="speed", cmd_lin=v)
+            for v in vals]
 
 
 def _write_session(tmp, name, roles=("speed",), subject="S01", subject_b="",
@@ -108,18 +116,19 @@ def test_export_master_rows_and_columns(tmp_path):
 # ── condition summary ─────────────────────────────────────────────────────
 
 def test_export_condition_summary_speed(tmp_path):
-    """Speed channel: attention mean speed 0.8/0.9 (>0.5 threshold) → hit 2/2;
-    rest 0.1/0.2 → FA 0/2 → hit_rate 1.0, fa_rate 0.0, rank AUC 1.0."""
+    """P#: speed hit/FA judged from the ACTUAL cmd_lin — attention trials whose
+    speed-role frames are mostly MOVING (> SPEED_CMD_THRESHOLD) → hit; rest
+    trials stationary → no FA. AUC from the continuous mean_cmd_lin."""
     _write_session(tmp_path, "s1", roles=("speed",), trials=[
         {"trial_idx": "0", "a_state": "attention", "b_state": "rest", "b_direction": "left", "n_samples": "1"},
         {"trial_idx": "1", "a_state": "attention", "b_state": "rest", "b_direction": "left", "n_samples": "1"},
         {"trial_idx": "2", "a_state": "rest", "b_state": "rest", "b_direction": "left", "n_samples": "1"},
         {"trial_idx": "3", "a_state": "rest", "b_state": "rest", "b_direction": "left", "n_samples": "1"},
     ], frames={
-        0: [_frame(0, "attention", "rest", "left", 0.8, 0.0, "", 10.0)],
-        1: [_frame(1, "attention", "rest", "left", 0.9, 0.0, "", 12.0)],
-        2: [_frame(2, "rest", "rest", "left", 0.1, 0.0, "", 20.0)],
-        3: [_frame(3, "rest", "rest", "left", 0.2, 0.0, "", 22.0)],
+        0: _speed_trial(0, "attention", 0.15, n_frames=10),   # moving → hit
+        1: _speed_trial(1, "attention", 0.15, n_frames=10),   # moving → hit
+        2: _speed_trial(2, "rest", 0.0, n_frames=10),         # stationary → no FA
+        3: _speed_trial(3, "rest", 0.0, n_frames=10),         # stationary → no FA
     })
     export_all(tmp_path, tmp_path / "out")
     rows = _read(tmp_path / "out" / "condition_summary.csv")
@@ -129,13 +138,49 @@ def test_export_condition_summary_speed(tmp_path):
     assert r["n_attention"] == "2" and r["n_rest"] == "2"
     assert float(r["hit_rate"]) == pytest.approx(1.0)
     assert float(r["fa_rate"]) == pytest.approx(0.0)
-    assert float(r["auc"]) == pytest.approx(1.0)
+    assert float(r["auc"]) == pytest.approx(1.0)       # att 0.15 vs rest 0.0
     assert float(r["d_prime"]) > 0
-    assert float(r["mean_score_attention"]) == pytest.approx(0.85)
-    assert float(r["mean_score_rest"]) == pytest.approx(0.15)
-    assert float(r["mean_latency_attention"]) == pytest.approx(11.0)
-    assert float(r["mean_latency_rest"]) == pytest.approx(21.0)
+    assert float(r["mean_score_attention"]) == pytest.approx(0.15)
+    assert float(r["mean_score_rest"]) == pytest.approx(0.0)
     assert r["dir_hit_rate"] == ""      # speed channel: no direction metrics
+
+    # master: the three speed columns per trial (speed_active = ratio >= 0.10).
+    master = _read(tmp_path / "out" / "master_trials.csv")
+    assert [r["speed_active"] for r in master] == ["1", "1", "0", "0"]
+    assert float(master[0]["mean_cmd_lin"]) == pytest.approx(0.15)
+    assert float(master[0]["moving_time_ratio"]) == pytest.approx(1.0)
+
+
+def test_export_speed_single_frame_below_ratio_is_not_success(tmp_path):
+    """P# ①: one moving frame (cmd_lin > 0.02) but ratio < 10% → NOT a
+    successful trial → not a hit."""
+    _write_session(tmp_path, "s1b", roles=("speed",), trials=[
+        {"trial_idx": "0", "a_state": "attention", "b_state": "rest", "b_direction": "left", "n_samples": "1"},
+    ], frames={
+        0: _speed_trial(0, "attention", [0.0] * 19 + [0.05]),   # 1/20 = 5% moving
+    })
+    export_all(tmp_path, tmp_path / "out")
+    master = _read(tmp_path / "out" / "master_trials.csv")
+    assert master[0]["speed_active"] == "0"
+    assert float(master[0]["moving_time_ratio"]) == pytest.approx(0.05)
+    r = _read(tmp_path / "out" / "condition_summary.csv")[0]
+    assert r["n_attention"] == "1" and r["hit_rate"] == "0.0"   # judged, not a hit
+
+
+def test_export_speed_exactly_ten_percent_ratio_is_success(tmp_path):
+    """P# ②: exactly 10% of frames moving (2/20) → ratio == threshold → a
+    successful trial (>=)."""
+    _write_session(tmp_path, "s1c", roles=("speed",), trials=[
+        {"trial_idx": "0", "a_state": "attention", "b_state": "rest", "b_direction": "left", "n_samples": "1"},
+    ], frames={
+        0: _speed_trial(0, "attention", [0.05] * 2 + [0.0] * 18),   # 2/20 = 10%
+    })
+    export_all(tmp_path, tmp_path / "out")
+    master = _read(tmp_path / "out" / "master_trials.csv")
+    assert master[0]["speed_active"] == "1"
+    assert float(master[0]["moving_time_ratio"]) == pytest.approx(0.1)
+    r = _read(tmp_path / "out" / "condition_summary.csv")[0]
+    assert r["hit_rate"] == "1.0"
 
 
 def test_export_condition_summary_steering_direction(tmp_path):
@@ -374,7 +419,8 @@ def test_export_runs_analyzed_separately(tmp_path):
             w = csv.DictWriter(fh, fieldnames=TRIAL_CSV_COLUMNS)
             w.writeheader()
             row = dict.fromkeys(TRIAL_CSV_COLUMNS, "")
-            row.update({"trial_idx": "0", "speed_intent": "0.8" if run == 1 else "0.2"})
+            row.update({"trial_idx": "0", "speed_intent": "0.8" if run == 1 else "0.2",
+                        "role": "speed", "cmd_lin": "0.15" if run == 1 else "0.0"})
             w.writerow(row)
     export_all(tmp_path, tmp_path / "out")
     master = _read(tmp_path / "out" / "master_trials.csv")
@@ -383,24 +429,49 @@ def test_export_runs_analyzed_separately(tmp_path):
     assert float(master[1]["speed_intent"]) == pytest.approx(0.2)
     summary = _read(tmp_path / "out" / "condition_summary.csv")
     assert [r["run"] for r in summary] == ["1", "2"]
-    assert float(summary[0]["mean_score_attention"]) == pytest.approx(0.8)
-    assert float(summary[1]["mean_score_attention"]) == pytest.approx(0.2)
+    # P#: speed mean score = the actual mean_cmd_lin (0.15 moving / 0.0 stop).
+    assert float(summary[0]["mean_score_attention"]) == pytest.approx(0.15)
+    assert float(summary[1]["mean_score_attention"]) == pytest.approx(0.0)
 
 
 def test_export_dual_two_channels(tmp_path):
-    """Dual session with speed + steering roles → two summary rows."""
+    """P#: dual session — the speed row is judged from the speed-role frames
+    only (④); the steering row is unchanged (⑤)."""
     _write_session(tmp_path, "s3", roles=("speed", "steering"), trials=[
         {"trial_idx": "0", "a_state": "attention", "b_state": "attention", "b_direction": "left", "n_samples": "1"},
         {"trial_idx": "1", "a_state": "rest", "b_state": "rest", "b_direction": "left", "n_samples": "1"},
     ], frames={
-        0: [_frame(0, "attention", "attention", "left", 0.8, 0.7, "left", 10.0)],
-        1: [_frame(1, "rest", "rest", "left", 0.1, 0.2, "", 20.0)],
+        # trial 0: speed frames MOVING (0.15) + steering frames (ignored for speed).
+        0: [_frame(0, "attention", "attention", "left", 0.8, 0.7, "left", 10.0, role="speed", cmd_lin=0.15) for _ in range(5)]
+           + [_frame(0, "attention", "attention", "left", 0.8, 0.7, "left", 10.0, role="steering", cmd_lin=0.0) for _ in range(5)],
+        # trial 1: speed frames STATIONARY (0.0) — the steering frames are
+        # moving (0.3) but must be IGNORED for the speed judgment.
+        1: [_frame(1, "rest", "rest", "left", 0.1, 0.2, "", 20.0, role="speed", cmd_lin=0.0) for _ in range(5)]
+           + [_frame(1, "rest", "rest", "left", 0.1, 0.2, "", 20.0, role="steering", cmd_lin=0.3) for _ in range(5)],
     })
     export_all(tmp_path, tmp_path / "out")
     rows = _read(tmp_path / "out" / "condition_summary.csv")
     assert [r["channel"] for r in rows] == ["speed", "steering"]
-    assert rows[0]["n_attention"] == "1" and rows[0]["n_rest"] == "1"
-    assert rows[1]["channel"] == "steering"
+    speed, steer = rows
+    # speed: trial 0 (attention) moving → hit 1/1; trial 1 (rest) stationary →
+    # no FA (the steering frames' 0.3 cmd_lin are NOT counted).
+    assert speed["n_attention"] == "1" and speed["n_rest"] == "1"
+    assert float(speed["hit_rate"]) == pytest.approx(1.0)
+    assert float(speed["fa_rate"]) == pytest.approx(0.0)
+    assert float(speed["mean_score_attention"]) == pytest.approx(0.15)
+    assert float(speed["mean_score_rest"]) == pytest.approx(0.0)
+    # steering row: unchanged behavior (hit 1/1 from steer 0.7; a single
+    # attention trial → direction metrics empty).
+    assert steer["channel"] == "steering"
+    assert float(steer["hit_rate"]) == pytest.approx(1.0)
+    assert float(steer["fa_rate"]) == pytest.approx(0.0)
+    assert steer["dir_hit_rate"] == "" and steer["dir_fa_rate"] == ""
+    assert steer["clean_switch_rate"] == "" and steer["avg_toggles_per_switch"] == ""
+
+    # master: trial 0 speed_active=1 (speed frames all moving), trial 1 = 0.
+    master = _read(tmp_path / "out" / "master_trials.csv")
+    assert [r["speed_active"] for r in master] == ["1", "0"]
+    assert float(master[1]["mean_cmd_lin"]) == pytest.approx(0.0)   # steering ignored
 
 
 # ── tolerance + determinism ───────────────────────────────────────────────
