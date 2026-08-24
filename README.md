@@ -103,7 +103,7 @@ cd web_gui/frontend && npm install && npm run dev
 
 ```bash
 # 双设备仿真（dummy 双流验证）
-python lsl_test/dummy_dual_streams.py --blink
+python thymio_control/lsl_test/dummy_dual_streams.py --blink
 ros2 launch thymio_control experiment_core.launch.py use_sim:=true run_eeg:=true run_eeg2:=true eeg2_role:=steering
 ```
 
@@ -136,10 +136,13 @@ ros2 launch thymio_control experiment_core.launch.py use_sim:=true run_eeg:=true
 pytest thymio_control/test/test_*.py -v
 ```
 
-## 仓库结构
+## 目录结构
 
-- `thymio_control/`：EEG 处理管线（adapter、processor、policy）、ROS2 节点、launch
-- `gtec_bridge/`：Windows 端 LSL 桥接脚本和测试脚本
-- `web_gui/`：FastAPI 后端 + React 前端
-- `src/ros-thymio/`：Thymio ROS2 包
-- `src/ros-aseba/`：Aseba 桥接
+- `web_gui/`：web 前后端（FastAPI 后端 + React 前端；实验模式、导出、O2 对接）
+- `windows_launcher/`：O2 总控（操作者控制面板、服务编排、设备桥启动）
+- `thymio_control/`：ROS 控制 + 验证（EEG 处理管线 adapter/processor/policy、ROS2 节点、launch、单测）
+- `gtec_bridge/`：设备桥（g.tec gpype/UnicornPy → LSL 流）
+- `src/`：ROS2 工作区（`ros-aseba` Thymio 驱动 + `ros-thymio` + `thymio_web_bridge`）
+- `docs/`：计划 / 设计 / review（EXPERIMENT_PLAN、O2_LAUNCHER、PHASE3_DESIGN、REVIEW_FINDINGS、archived/）
+- `experiment_data/`：实验日志（session 目录、trial CSV、导出分析表）
+- `thymio_control/lsl_test/`：LSL 离线验证工具与测试（原根目录 `lsl_test/`，已移入 `thymio_control/`）

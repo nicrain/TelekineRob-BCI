@@ -1,6 +1,6 @@
 """RawLslAdapter — pulls raw EEG samples from LSL and applies DSP.
 
-This is the production migration of ``lsl_test/raw_lsl_adapter.py``
+This is the production migration of ``thymio_control/lsl_test/raw_lsl_adapter.py``
 (validated in Phase 1).
 
 Architecture

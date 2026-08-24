@@ -6,8 +6,10 @@ from pathlib import Path
 
 import pytest
 
-# Allow importing from thymio_control
-_thymio_path = Path(__file__).parent.parent / "thymio_control"
+# Put the top-level thymio_control/ dir on sys.path so both
+# `thymio_control.processors.*` (nested real package) and `lsl_test.*`
+# (this directory, a sibling) resolve — same convention as thymio_control/test.
+_thymio_path = Path(__file__).parent.parent
 if str(_thymio_path) not in sys.path:
     sys.path.insert(0, str(_thymio_path))
 

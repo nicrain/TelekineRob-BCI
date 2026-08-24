@@ -1,6 +1,6 @@
 """Band power extraction from EEG signals.
 
-This module is the **production copy** migrated from ``lsl_test/eeg_processor.py``
+This module is the **production copy** migrated from ``thymio_control/lsl_test/eeg_processor.py``
 (Phase 1 experimental area).  It is the single source of truth for the
 production pipeline.
 
