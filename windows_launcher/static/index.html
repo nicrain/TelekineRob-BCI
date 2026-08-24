@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>System Control</title>
+<style>
+  /* Ferrari-inspired theme — mirrors web_gui/src/styles.css tokens.
+     :root is the dark board; [data-theme="light"] overrides it. */
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+  :root {
+    --f-red:#DA291C; --f-red-dark:#B01E0A;
+    --f-black:#000000; --f-near-black:#181818;
+    --f-surface:#1e1e1e; --f-input-bg:#0c0c0c;
+    --f-border-subtle:#1a1a1a; --f-border-strong:#2a2a2a; --f-border-mid:#333333;
+    --f-text-primary:#FFFFFF; --f-text-secondary:#969696;
+    --f-ok:#03904A; --f-warn:#F13A2C; --f-info:#4C98B9;
+    --f-hover-bg:rgba(255,255,255,0.08);
+    --f-status-off:#3a3a3a;
+    --font-display:'Space Grotesk',Arial,Helvetica,sans-serif;
+    --font-mono:'IBM Plex Mono','Courier New',monospace;
+    --radius:2px;   /* razor */
+  }
+
+  /* P6: light board mirrors web_gui's [data-theme="light"] palette.
+     P7-②: ok/warn/info are NOT overridden here — web_gui's light block
+     doesn't override them either, so both sides fall back to :root's
+     #03904A/#F13A2C/#4C98B9 and stay value-identical. */
+  [data-theme="light"] {
+    --f-red:#C41E13; --f-red-dark:#B01E0A;  /* P15③: light danger border matches web_gui */
+    --f-black:#EFECE8; --f-near-black:#FAF8F5;
+    --f-surface:#FAF8F5; --f-input-bg:#FFFFFF;
+    --f-border-subtle:#E8E4DF; --f-border-strong:#D6D2CC; --f-border-mid:#D6D2CC;
+    --f-text-primary:#181818; --f-text-secondary:#666666;
+    --f-hover-bg:rgba(24,24,24,0.06);
+    --f-status-off:#D6D2CC;
+  }
+
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html,body { height:100%; font-family:var(--font-display); font-size:14px; color:var(--f-text-primary); background:var(--f-black); }
+  #app { display:flex; height:100vh; }
+
+  /* ---------- sidebar (P2: collapsible) ---------- */
+  #sidebar {
+    width:250px; min-width:250px; background:var(--f-black); border-right:1px solid var(--f-border-strong);
+    display:flex; flex-direction:column; padding:14px 10px; gap:6px; overflow-y:auto;
+    transition:width .2s ease, min-width .2s ease, padding .2s ease;
+  }
+  #sidebar.collapsed { width:0; min-width:0; padding:0; border-right:none; overflow:hidden; }
+  #sidebar h1 {
+    font-family:var(--font-mono); font-size:13px; letter-spacing:2px; text-transform:uppercase;
+    color:var(--f-text-primary); margin-bottom:8px;
+  }
+  .group-label {
+    font-family:var(--font-mono); font-size:10px; letter-spacing:2px; text-transform:uppercase;
+    color:var(--f-text-secondary); margin:10px 0 4px;
+  }
+  .item {
+    display:flex; align-items:center; gap:8px; padding:8px 10px;
+    background:var(--f-surface); border:1px solid var(--f-border-strong); border-radius:var(--radius);
+  }
+  .dot { width:12px; height:12px; border-radius:50%; background:var(--f-status-off); flex:none; }
+  .dot.on   { background:var(--f-ok); }
+  .dot.busy { background:var(--f-warn); animation:blink 1s infinite; }
+  .dot.err  { background:var(--f-warn); }
+  .item .label { flex:1; }
+  .btn {
+    border:1px solid var(--f-border-mid); background:transparent; color:var(--f-text-primary);
+    border-radius:var(--radius); padding:5px 10px; cursor:pointer;
+    font-family:var(--font-display); font-size:13px;
+  }
+  .btn:hover:not(:disabled) { background:var(--f-hover-bg); border-color:var(--f-text-secondary); }
+  .btn:disabled { opacity:.4; cursor:not-allowed; }
+  .btn.danger { color:var(--f-red); border-color:var(--f-red-dark); }
+  .btn.danger:hover:not(:disabled) { background:rgba(218,41,28,.12); }
+
+  /* P17②: View Log modal */
+  .hidden { display:none !important; }
+  #log-modal {
+    position:fixed; inset:0; background:rgba(0,0,0,.55);
+    display:flex; align-items:center; justify-content:center; z-index:50;
+  }
+  #log-modal-box {
+    width:min(760px, 92vw); max-height:80vh; display:flex; flex-direction:column;
+    background:var(--f-surface); border:1px solid var(--f-border-strong);
+    border-radius:2px; box-shadow:0 8px 40px rgba(0,0,0,.4);
+  }
+  #log-modal-head {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:10px 12px; border-bottom:1px solid var(--f-border-strong);
+    font-family:var(--font-mono); font-size:13px;
+  }
+  #log-modal-body {
+    margin:0; padding:12px; overflow:auto; font-family:var(--font-mono);
+    font-size:11.5px; line-height:1.5; color:var(--f-text-secondary);
+    white-space:pre-wrap; word-break:break-word;
+  }
+  @keyframes blink { 50% { opacity:.35; } }
+
+  /* ---------- message bar ---------- */
+  #msg {
+    position:fixed; bottom:14px; left:270px; right:14px; z-index:20;
+    background:var(--f-near-black); border:1px solid var(--f-info); border-radius:var(--radius);
+    padding:10px 14px; display:none; font-size:13px; color:var(--f-text-primary);
+  }
+  #msg.error { border-color:var(--f-warn); color:var(--f-warn); background:var(--f-input-bg); }
+  #msg .close { float:right; cursor:pointer; color:var(--f-text-secondary); }
+
+  /* ---------- P42: stale LAN forwarding prompt ---------- */
+  #lan-forward { margin-top:8px; }
+  #lan-forward .lan-warn {
+    font-size:13px; color:var(--f-warn); padding:8px; margin-bottom:6px;
+    border:1px solid var(--f-warn); border-radius:var(--radius);
+  }
+
+  /* ---------- main ---------- */
+  #main { flex:1; display:flex; flex-direction:column; }
+  #mainbar {
+    display:flex; align-items:center; gap:10px; padding:8px 14px;
+    background:var(--f-black); border-bottom:1px solid var(--f-border-strong); font-size:13px;
+  }
+  #mainbar a { color:var(--f-info); text-decoration:none; }
+  #mainbar a:hover { text-decoration:underline; }
+  #collapse-btn { flex:none; min-width:32px; }
+  iframe { flex:1; border:none; width:100%; display:none; }
+  .placeholder { flex:1; display:flex; align-items:center; justify-content:center; color:var(--f-text-secondary); }
+
+  /* ---------- main-area placeholder (P6) ---------- */
+  #placeholder {
+    flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:14px; background:var(--f-black); color:var(--f-text-secondary); text-align:center; padding:20px;
+  }
+  #placeholder .dot { width:18px; height:18px; }
+  #placeholder-title {
+    font-family:var(--font-mono); font-size:15px; letter-spacing:1px; text-transform:uppercase;
+    color:var(--f-text-primary);
+  }
+  #placeholder-hint { font-size:13px; max-width:440px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- ============ Sidebar (default skeleton; re-rendered from /config) ============ -->
+  <aside id="sidebar">
+    <h1>System Control</h1>
+    <div class="group-label">Status</div>
+    <div class="item" id="item-system">
+      <span class="dot"></span><span class="label">System State</span>
+      <span class="sys-state">Not Connected</span>
+    </div>
+    <div class="group-label">Devices</div>
+    <div id="devices-list"></div>
+    <div class="group-label">Operations</div>
+    <div id="ops-list"></div>
+    <!-- P42: stale LAN forwarding → non-tech prompt + one-click UAC fix -->
+    <div id="lan-forward"></div>
+    <div class="group-label">Log</div>
+    <button class="btn" id="log-btn" disabled onclick="viewLog()">View Log</button>
+  </aside>
+
+  <!-- ============ Main: web GUI iframe + offline placeholder ============ -->
+  <main id="main">
+    <div id="mainbar">
+      <!-- P2: collapse button lives in the static #mainbar -->
+      <button id="collapse-btn" class="btn" onclick="toggleSidebar()" title="Collapse / expand sidebar">«</button>
+      <!-- P5: refresh the (cross-origin) web GUI iframe -->
+      <!-- P7-⑤: the static "Experiment" label was removed — mainbar is just
+           [↻ Refresh] [☾] [Open in new tab] + the collapse chevron. -->
+      <button id="refresh-btn" class="btn" onclick="refreshFrame()" title="Reload the web GUI">↻ Refresh</button>
+      <!-- P6: light/dark theme toggle, synced with the web GUI via postMessage -->
+      <button id="theme-btn" class="btn" onclick="toggleTheme()" title="Toggle light/dark theme">☾</button>
+      <a id="open-new" href="http://localhost:5173" target="_blank">Open in new tab</a>
+    </div>
+    <!-- P6: elegant placeholder while the system is offline / starting -->
+    <div id="placeholder">
+      <span id="placeholder-dot" class="dot"></span>
+      <div id="placeholder-title">System Offline</div>
+      <div id="placeholder-hint">Start the system from the sidebar to load the experiment interface.</div>
+    </div>
+    <iframe id="frame" title="web GUI"></iframe>
+  </main>
+</div>
+
+<div id="msg"><span class="close" onclick="hideMsg()">✕</span><span id="msg-text"></span></div>
+
+<!-- P17②: View Log modal (launcher_server.log + bridge_*.log tails) -->
+<div id="log-modal" class="hidden">
+  <div id="log-modal-box">
+    <div id="log-modal-head">
+      <span>Launcher Log</span>
+      <div>
+        <button class="btn" id="log-refresh-btn" onclick="viewLog()">↻</button>
+        <button class="btn" onclick="closeLog()">✕</button>
+      </div>
+    </div>
+    <pre id="log-modal-body"></pre>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+const G = { config: null, status: null, webUrl: "http://localhost:5173", prevRunning: false };
+
+/* ---------- Default skeleton (file:// preview still looks sane) ---------- */
+const DEFAULT_DEVICES = [
+  { id: "headband", label: "Headband",     type: "device" },
+  { id: "hybrid",   label: "HybridBlack",  type: "device" },
+  { id: "thymio",   label: "Thymio",       type: "device" },
+];
+const DEFAULT_OPS = [
+  { id: "start-system", label: "Start System",  type: "action" },
+  { id: "restart-web",  label: "Restart Web",   type: "action" },
+  { id: "stop-system",  label: "Stop System",   type: "action" },
+  { id: "exit",         label: "Exit Launcher", type: "action" },
+];
+
+/* ---------- Theme (P6: synced with the web GUI across origins) ---------- */
+/* URL concat is a pure function so the ?/& boundary is unit-testable. */
+function webUrlWithTheme(url, theme) {
+  const sep = url.includes("?") ? "&" : "?";
+  return url + sep + "theme=" + theme;
+}
+function currentTheme() {
+  const t = document.documentElement.dataset.theme || localStorage.getItem("theme") || "dark";
+  return t === "light" ? "light" : "dark";
+}
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  localStorage.setItem("theme", theme);
+  const btn = document.getElementById("theme-btn");
+  if (btn) btn.textContent = theme === "dark" ? "☾" : "☀";
+  document.getElementById("open-new").href = webUrlWithTheme(G.webUrl, theme);
+  // Live-sync the embedded web GUI (cross-origin postMessage).
+  const frame = document.getElementById("frame");
+  if (frame.src && frame.src !== "about:blank") {
+    frame.contentWindow.postMessage({ type: "set-theme", theme }, "*");
+  }
+}
+function toggleTheme() {
+  applyTheme(currentTheme() === "dark" ? "light" : "dark");
+}
+
+/* ---------- Sidebar collapse (P2) ---------- */
+/* The fold lives on #sidebar's class and the button in #mainbar — neither
+   is inside the renderDevices/renderOps re-render containers, so the 1.5s
+   poll never resets it. */
+function sidebarCollapsed() {
+  return localStorage.getItem("launcherSidebarCollapsed") === "1";
+}
+function applySidebarState() {
+  const collapsed = sidebarCollapsed();
+  document.getElementById("sidebar").classList.toggle("collapsed", collapsed);
+  document.getElementById("collapse-btn").textContent = collapsed ? "»" : "«";
+}
+function toggleSidebar() {
+  const sidebar = document.getElementById("sidebar");
+  const collapsed = sidebar.classList.toggle("collapsed");
+  localStorage.setItem("launcherSidebarCollapsed", collapsed ? "1" : "0");
+  document.getElementById("collapse-btn").textContent = collapsed ? "»" : "«";
+}
+
+/* ---------- State → style ---------- */
+function dotClass(st) {
+  const map = {
+    running: "on", connected: "on",
+    starting: "busy", stopping: "busy", connecting: "busy", disconnecting: "busy",
+    error: "err",
+  };
+  return map[st] || "";
+}
+function sysLabel(st) {
+  const map = { stopped: "Stopped", starting: "Starting…", running: "Running", stopping: "Stopping…", error: "Error" };
+  return map[st] || st || "Not Connected";
+}
+function devLabel(st) {
+  const map = { disconnected: "Not Connected", connecting: "Connecting…", connected: "Connected", disconnecting: "Disconnecting…", error: "Failed" };
+  return map[st] || st || "Not Connected";
+}
+function showMsg(text, isError) {
+  const m = document.getElementById("msg");
+  document.getElementById("msg-text").textContent = text;
+  m.className = isError ? "error" : "";
+  m.style.display = "block";
+}
+function hideMsg() { document.getElementById("msg").style.display = "none"; }
+
+/* ---------- View Log (P17②) ---------- */
+async function viewLog() {
+  const modal = document.getElementById("log-modal");
+  const body = document.getElementById("log-modal-body");
+  modal.classList.remove("hidden");
+  body.textContent = "Loading…";
+  try {
+    const r = await api("/log");
+    const logs = r.logs || [];
+    body.textContent = logs.length
+      ? logs.map((f) => `── ${f.source} ──\n${f.lines.join("\n")}`).join("\n\n")
+      : "(no log files yet — start the system to generate launcher/bridge logs)";
+  } catch (e) {
+    body.textContent = `Failed to load logs: ${e.message}`;
+  }
+}
+function closeLog() { document.getElementById("log-modal").classList.add("hidden"); }
+
+/* ---------- API ---------- */
+async function api(path, body) {
+  const opts = { method: body ? "POST" : "GET", headers: body ? { "Content-Type": "application/json" } : {} };
+  if (body) opts.body = JSON.stringify(body);
+  const resp = await fetch(path, opts);
+  return resp.json();
+}
+
+/* ---------- Render ---------- */
+function renderDevices() {
+  const list = document.getElementById("devices-list");
+  list.innerHTML = "";
+  const devices = (G.config && G.config.groups
+    ? G.config.groups.find(g => g.id === "devices")?.items || DEFAULT_DEVICES
+    : DEFAULT_DEVICES);
+  devices.forEach(d => {
+    const st = G.status ? (G.status.devices[d.id]?.state || "disconnected") : "disconnected";
+    const sysUp = G.status && ["running", "starting"].includes(G.status.system.state);
+    const div = document.createElement("div");
+    div.className = "item";
+    div.innerHTML =
+      `<span class="dot ${dotClass(st)}"></span>` +
+      `<span class="label">${d.label}</span>` +
+      `<button class="btn" data-id="${d.id}" data-on="${st === "connected"}">${st === "connected" ? "Disconnect" : "Connect"}</button>`;
+    const btn = div.querySelector("button");
+    btn.disabled = !sysUp;               // §1.3: devices locked until system is up
+    btn.onclick = () => toggleDevice(d.id, btn.dataset.on === "true");
+    list.appendChild(div);
+  });
+}
+
+function opControl(opId, sysState, baseLabel) {
+  /* P10③: label + disabled + endpoint for an ops button, all derived from
+     the system state. Running Start becomes Restart System; busy (starting /
+     stopping) and stopped states disable the relevant buttons. Pure so the
+     state machine is Node-testable. */
+  const busy = sysState === "starting" || sysState === "stopping";
+  switch (opId) {
+    case "start-system":
+      return sysState === "running"
+        ? { label: "Restart System", endpoint: "/restart-system", disabled: false }
+        : { label: "Start System", endpoint: "/start-system", disabled: busy };
+    case "stop-system":
+      return { label: baseLabel || "Stop System", endpoint: "/stop-system", disabled: busy || sysState === "stopped" };
+    case "restart-web":
+      return { label: baseLabel || "Restart Web", endpoint: "/restart-web", disabled: sysState !== "running" && sysState !== "error" };
+    case "exit":
+      return { label: baseLabel || "Exit Launcher", endpoint: "/shutdown", disabled: false };
+    default:
+      return { label: baseLabel || opId, endpoint: "/" + opId, disabled: false };
+  }
+}
+
+function renderOps() {
+  const list = document.getElementById("ops-list");
+  list.innerHTML = "";
+  const ops = (G.config && G.config.groups
+    ? G.config.groups.find(g => g.id === "ops")?.items || DEFAULT_OPS
+    : DEFAULT_OPS);
+  const sysState = G.status ? G.status.system.state : "stopped";
+  ops.forEach(o => {
+    /* P10①: disabled is applied HERE, where the button is born — the old
+       code set it in renderSystem, then renderOps rebuilt the buttons
+       without it, so the disabled state never stuck. */
+    const ctl = opControl(o.id, sysState, o.label);
+    const btn = document.createElement("button");
+    btn.className = "btn" + (["stop-system", "exit"].includes(o.id) ? " danger" : "");
+    btn.textContent = ctl.label;
+    btn.id = "op-" + o.id;
+    btn.disabled = ctl.disabled;
+    btn.style.width = "100%";
+    btn.onclick = () => runAction(o.id);
+    list.appendChild(btn);
+  });
+}
+
+function renderSystem() {
+  const item = document.getElementById("item-system");
+  if (!G.status) return;
+  const s = G.status.system;
+  const dot = item.querySelector(".dot");
+  dot.className = "dot " + dotClass(s.state);
+  const lbl = item.querySelector(".sys-state");
+  lbl.textContent = sysLabel(s.state);
+  if (s.message) lbl.title = s.message;
+  /* P10①: op-button disabled now lives in renderOps (where buttons are
+     created) — touching them here would fight the rebuild every poll. */
+}
+
+/* ---------- P42: LAN forwarding (non-tech prompt + one-click fix) -------- */
+function renderLanForward() {
+  const box = document.getElementById("lan-forward");
+  if (!G.status || G.status.lan_forward !== "stale") {
+    box.innerHTML = "";
+    return;
+  }
+  box.innerHTML =
+    '<div class="group-label">LAN Forwarding</div>' +
+    '<div class="lan-warn">LAN forwarding needs an update</div>' +
+    '<button class="btn" id="lan-fix-btn" onclick="fixLanForward()" style="width:100%">Fix LAN forwarding</button>';
+}
+async function fixLanForward() {
+  const r = await api("/lan-forward/fix", {});
+  showMsg(r.message || (r.ok ? "Done" : "Failed"), !r.ok);
+  pollStatus();   // re-render — the state may have flipped to ok
+}
+
+/* ---------- Actions ---------- */
+async function toggleDevice(id, currentlyOn) {
+  const path = currentlyOn ? "/disconnect-device" : "/connect-device";
+  const r = await api(path, { device: id });
+  showMsg(r.message || (r.ok ? "Done" : "Failed"), !r.ok);
+}
+async function runAction(id) {
+  // P10③: the endpoint follows the system state — running Start → restart.
+  const sysState = G.status ? G.status.system.state : "stopped";
+  const path = opControl(id, sysState, null).endpoint;
+  if (!path) return;
+  // Empty JSON body forces POST: api() picks the method by body presence,
+  // so a bare api(path) would send GET → the server only has POST routes
+  // → 404 "Unknown path".
+  const r = await api(path, {});
+  showMsg(r.message || (r.ok ? "Done" : "Failed"), !r.ok);
+  pollStatus();   // refresh immediately
+}
+
+/* ---------- Polling ---------- */
+async function pollStatus() {
+  try {
+    G.status = await api("/status");
+  } catch {
+    showMsg("Cannot reach the control service — is it running?", true);
+    return;
+  }
+  /* P10①: renderOps FIRST so the ops buttons are created with their
+     disabled state before anything else reads them; renderSystem only
+     paints the system dot/label. */
+  renderOps(); renderDevices(); renderSystem(); renderLanForward();
+  updateMainArea();
+  G.prevRunning = G.status.system.state === "running";
+}
+
+/* ---------- Main area (P6): placeholder ↔ iframe by system state ---------- */
+function updateMainArea() {
+  const st = G.status.system.state;
+  const frame = document.getElementById("frame");
+  const ph = document.getElementById("placeholder");
+  if (st === "running") {
+    // Load the iframe only on the non-running → running transition (the
+    // launcher's ready-check confirms the frontend is up by then), themed.
+    if (!G.prevRunning) {
+      frame.src = webUrlWithTheme(G.webUrl, currentTheme());
+      frame.style.display = "block";
+    }
+    ph.style.display = "none";
+  } else {
+    frame.style.display = "none";
+    ph.style.display = "flex";
+    const dot = document.getElementById("placeholder-dot");
+    const title = document.getElementById("placeholder-title");
+    if (st === "starting" || st === "stopping") {
+      dot.className = "dot busy";
+      title.textContent = st === "starting" ? "Starting System…" : "Stopping System…";
+    } else {
+      // P7-①: the error branch shows a red (err) dot, not the grey off dot.
+      dot.className = st === "error" ? "dot err" : "dot";
+      title.textContent = st === "error" ? "System Error" : "System Offline";
+    }
+  }
+}
+
+/* ---------- iframe (cross-origin safe reload + §5 fallback) ---------- */
+function refreshFrame() {
+  // The web GUI is cross-origin (5173 vs the control service), so
+  // contentWindow.location.reload() would throw — re-point src instead.
+  // P7-③: guard on running — pointing the iframe at a dead frontend would
+  // flash the browser's error page (the "no crying-face" hole).
+  if (!G.status || G.status.system.state !== "running") return;
+  const frame = document.getElementById("frame");
+  frame.src = "about:blank";   // clear, force a fresh load
+  frame.src = webUrlWithTheme(G.webUrl, currentTheme());
+  frame.style.display = "block";
+}
+function setupFrame() {
+  const frame = document.getElementById("frame");
+  const link = document.getElementById("open-new");
+  link.href = webUrlWithTheme(G.webUrl, currentTheme());
+  // Never pre-load the web GUI at init — a dead frontend would render the
+  // browser's native error page in the main area (the offline placeholder
+  // is shown instead until the system runs).
+  frame.src = "about:blank";
+  frame.style.display = "none";
+  frame.onload = () => {
+    if (G.status && G.status.system.state === "running") frame.style.display = "block";
+  };
+  frame.onerror = () => { frame.style.display = "none"; };  // X-Frame-Options refusal → link only
+}
+
+/* ---------- Theme sync from the web GUI (P6, cross-origin) ---------- */
+window.addEventListener("message", (event) => {
+  const d = event.data;
+  if (d && d.type === "set-theme" && (d.theme === "dark" || d.theme === "light")) {
+    // Echo from the embedded GUI. React's same-state bail prevents loops:
+    // applying the same theme here re-broadcasts once, the GUI receives an
+    // identical theme, setTheme bails, and the exchange stops.
+    applyTheme(d.theme);
+  }
+});
+
+/* ---------- Init ---------- */
+async function init() {
+  applyTheme(currentTheme());
+  applySidebarState();
+  setupFrame();
+  renderDevices(); renderOps();
+  try {
+    const cfg = await api("/config");
+    G.config = cfg;
+    G.webUrl = cfg.web_url || G.webUrl;
+    const log = cfg.log;
+    const logBtn = document.getElementById("log-btn");
+    if (log) { logBtn.textContent = log.label; logBtn.disabled = !log.placeholder; }
+    applyTheme(currentTheme());   // re-point the new-tab link with the real url
+    setupFrame();
+    renderDevices(); renderOps();
+  } catch { /* file:// preview: keep the default skeleton */ }
+  pollStatus();
+  setInterval(pollStatus, 1500);
+}
+init();
+</script>
+</body>
+</html>

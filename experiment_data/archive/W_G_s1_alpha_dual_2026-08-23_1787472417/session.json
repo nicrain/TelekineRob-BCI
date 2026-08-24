@@ -1,0 +1,182 @@
+{
+  "session_id": "W_G_s1_alpha_dual_2026-08-23_1787472417",
+  "meta": {
+    "subject": "W",
+    "subject_b": "G",
+    "role": "pilot",
+    "session_no": 1,
+    "electrode": "",
+    "date": "2026-08-23"
+  },
+  "system": {
+    "metric": "alpha",
+    "device_mode": "dual",
+    "roles": [
+      "steering",
+      "speed"
+    ],
+    "devices": [
+      {
+        "role": "steering",
+        "device": "headband",
+        "metric": "alpha",
+        "lsl_source_id": "gtec_bci_core4"
+      },
+      {
+        "role": "speed",
+        "device": "hybrid",
+        "metric": "alpha",
+        "lsl_source_id": "gtec_hybrid_black"
+      }
+    ],
+    "has_hybrid": true
+  },
+  "protocol": {
+    "shuffle": "none",
+    "seed": null,
+    "prompt_sec": 5.0,
+    "n_trials": 20
+  },
+  "trials": [
+    {
+      "a_state": "attention",
+      "b_state": "attention",
+      "b_direction": "left",
+      "duration_sec": 20.0,
+      "rest_sec": 10.0
+    },
+    {
+      "a_state": "attention",
+      "b_state": "rest",
+      "b_direction": "left",
+      "duration_sec": 20.0,
+      "rest_sec": 10.0
+    },
+    {
+      "a_state": "rest",
+      "b_state": "attention",
+      "b_direction": "right",
+      "duration_sec": 20.0,
+      "rest_sec": 10.0
+    },
+    {
+      "a_state": "attention",
+      "b_state": "rest",
+      "b_direction": "right",
+      "duration_sec": 20.0,
+      "rest_sec": 10.0
+    },
+    {
+      "a_state": "rest",
+      "b_state": "rest",
+      "b_direction": "left",
+      "duration_sec": 20.0,
+      "rest_sec": 10.0
+    },
+    {
+      "a_state": "attention",
+      "b_state": "attention",
+      "b_direction": "right",
+      "duration_sec": 20.0,
+      "rest_sec": 10.0
+    },
+    {
+      "a_state": "attention",
+      "b_state": "attention",
+      "b_direction": "left",
+      "duration_sec": 20.0,
+      "rest_sec": 10.0
+    },
+    {
+      "a_state": "rest",
+      "b_state": "attention",
+      "b_direction": "left",
+      "duration_sec": 20.0,
+      "rest_sec": 10.0
+    },
+    {
+      "a_state": "attention",
+      "b_state": "rest",
+      "b_direction": "right",
+      "duration_sec": 20.0,
+      "rest_sec": 10.0
+    },
+    {
+      "a_state": "attention",
+      "b_state": "rest",
+      "b_direction": "left",
+      "duration_sec": 20.0,
+      "rest_sec": 10.0
+    },
+    {
+      "a_state": "attention",
+      "b_state": "attention",
+      "b_direction": "left",
+      "duration_sec": 20.0,
+      "rest_sec": 10.0
+    },
+    {
+      "a_state": "attention",
+      "b_state": "attention",
+      "b_direction": "right",
+      "duration_sec": 20.0,
+      "rest_sec": 10.0
+    },
+    {
+      "a_state": "rest",
+      "b_state": "attention",
+      "b_direction": "right",
+      "duration_sec": 20.0,
+      "rest_sec": 10.0
+    },
+    {
+      "a_state": "rest",
+      "b_state": "rest",
+      "b_direction": "right",
+      "duration_sec": 20.0,
+      "rest_sec": 10.0
+    },
+    {
+      "a_state": "attention",
+      "b_state": "rest",
+      "b_direction": "right",
+      "duration_sec": 20.0,
+      "rest_sec": 10.0
+    },
+    {
+      "a_state": "attention",
+      "b_state": "rest",
+      "b_direction": "left",
+      "duration_sec": 20.0,
+      "rest_sec": 10.0
+    },
+    {
+      "a_state": "rest",
+      "b_state": "rest",
+      "b_direction": "right",
+      "duration_sec": 20.0,
+      "rest_sec": 10.0
+    },
+    {
+      "a_state": "attention",
+      "b_state": "attention",
+      "b_direction": "right",
+      "duration_sec": 20.0,
+      "rest_sec": 10.0
+    },
+    {
+      "a_state": "rest",
+      "b_state": "attention",
+      "b_direction": "left",
+      "duration_sec": 20.0,
+      "rest_sec": 10.0
+    },
+    {
+      "a_state": "rest",
+      "b_state": "rest",
+      "b_direction": "left",
+      "duration_sec": 20.0,
+      "rest_sec": 10.0
+    }
+  ]
+}

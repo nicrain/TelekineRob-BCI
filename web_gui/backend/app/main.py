@@ -1,29 +1,63 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
+import time
 from pathlib import Path
 from typing import Any
 
 logging.basicConfig(level=logging.INFO, format="%(name)s | %(levelname)s | %(message)s")
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from .command_runner import cleanup_residual_processes, start_system, stop_system
 from .config_store import get_config_envelope, init_store, patch_config
-from .models import CommandRequest, ConfigPatch
+from .experiment import (
+    DEFAULT_PROTOCOL,
+    ExperimentSession,
+    TrialSpec,
+    config_summary,
+    load_protocol,
+    session_meta_from_request,
+    trial_dict,
+)
+from .experiment_export import default_data_dir, export_all
+from .logs import RingBufferHandler, tail_files
+from .models import (
+    CommandRequest,
+    ConfigPatch,
+    ExperimentConfigureRequest,
+)
 from .ros_probe import probe_system
 from .signal_subscriber import RosBridge
 
 app = FastAPI(title="Thymio Web GUI Backend", version="0.1.0")
 
-# Origin whitelist for CORS + WebSocket.  Set to a specific origin (e.g.
-# "https://eeg.zhaoyu.wang") to lock down access; leave unset or set to "*"
-# to allow any origin (convenient for research / shared use).
-_frontend_origin = os.getenv("WEB_GUI_FRONTEND_ORIGIN", "*").strip()
+# Origin whitelist for CORS + WebSocket. Defaults to the local Vite dev
+# server (reachable via both localhost and 127.0.0.1 — the frontend proxies
+# /api and /ws to the backend, so the browser's Origin stays on :5173).
+# Set WEB_GUI_FRONTEND_ORIGIN to a specific remote origin (e.g.
+# "https://eeg.zhaoyu.wang") to lock it down further. An explicit "*" still
+# disables the origin check for research convenience, but the Web GUI now
+# defaults to a locked-down posture.
+_DEFAULT_FRONTEND_ORIGINS = (
+    "http://127.0.0.1:5173",
+    "https://127.0.0.1:5173",
+    "http://localhost:5173",
+    "https://localhost:5173",
+)
+
+_frontend_origin = os.getenv("WEB_GUI_FRONTEND_ORIGIN", "http://127.0.0.1:5173").strip()
 _wildcard_origin = _frontend_origin in ("", "*")
+
+# Control token for robot-driving endpoints. Empty → token auth disabled.
+# Set WEB_GUI_CONTROL_TOKEN and pass `Authorization: Bearer <token>` (REST)
+# or `?token=<token>` (WebSocket) to use it. CORS does not protect
+# WebSockets, so a token is the defence-in-depth for a non-loopback bind.
+_control_token = os.getenv("WEB_GUI_CONTROL_TOKEN", "").strip()
 
 
 def _validate_origin(origin: str) -> bool:
@@ -34,8 +68,19 @@ def _validate_origin(origin: str) -> bool:
         return False
     if not (origin.startswith("http://") or origin.startswith("https://")):
         return False
-    allowed = [_frontend_origin, "http://127.0.0.1:5173", "https://127.0.0.1:5173"]
+    allowed = set(_DEFAULT_FRONTEND_ORIGINS)
+    allowed.add(_frontend_origin)
     return origin in allowed
+
+
+def _rest_authorized(authorization: str) -> bool:
+    """Token gate for REST control endpoints (Authorization: Bearer <token>)."""
+    return (not _control_token) or authorization == f"Bearer {_control_token}"
+
+
+def _ws_authorized(token: str) -> bool:
+    """Token gate for control WebSockets (browsers cannot set WS headers)."""
+    return (not _control_token) or token == _control_token
 
 
 async def _reject_invalid_origin(websocket: WebSocket) -> bool:
@@ -49,11 +94,9 @@ async def _reject_invalid_origin(websocket: WebSocket) -> bool:
     return True
 
 
-_cors_origins = ["*"] if _wildcard_origin else [
-    _frontend_origin,
-    "http://127.0.0.1:5173",
-    "https://127.0.0.1:5173",
-]
+_cors_origins = ["*"] if _wildcard_origin else sorted(
+    {_frontend_origin, *_DEFAULT_FRONTEND_ORIGINS}
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -64,6 +107,11 @@ app.add_middleware(
 )
 
 _subscriber: RosBridge | None = None
+_experiment = ExperimentSession()
+# P17①: recent-log ring for the log panel — captures everything routed to
+# root (main/ros_bridge/teleop/... propagate there).
+_ring = RingBufferHandler()
+logging.getLogger().addHandler(_ring)
 
 
 def _get_subscriber() -> RosBridge:
@@ -76,9 +124,8 @@ def _get_subscriber() -> RosBridge:
 @app.on_event("startup")
 async def _startup() -> None:
     init_store()
-    _get_subscriber()
-    _log = logging.getLogger("main")
-    _log.info(cleanup_residual_processes())
+    # P16/E1: the experiment recorder receives every raw analysis frame.
+    _get_subscriber().add_frame_handler(_experiment.on_frame)
 
 
 @app.on_event("shutdown")
@@ -112,20 +159,39 @@ def update_config(req: ConfigPatch) -> dict[str, Any]:
     return patch_config(req.patch).model_dump()
 
 
+@app.get("/api/config/control_token")
+def control_token(request: Request) -> dict[str, str]:
+    """Return the configured control token (empty string when unset).
+
+    Only **loopback** clients may read the token (M4-3): the local frontend
+    (via the Vite proxy → same-host backend) can, but LAN clients cannot —
+    otherwise the token's whole purpose (gating non-browser control calls)
+    would be defeated by anyone who can reach this endpoint. ⚠️ verify on
+    WSL2 that proxied local access still sees a loopback client.host.
+    """
+    host = request.client.host if request.client else ""
+    if host not in ("127.0.0.1", "::1"):
+        raise HTTPException(status_code=403, detail="control token only readable from loopback")
+    return {"token": _control_token}
+
+
 @app.get("/api/status")
 def get_status() -> dict[str, Any]:
     return probe_system().model_dump()
 
 
 @app.post("/api/system/start")
-def api_start(req: CommandRequest) -> dict[str, Any]:
+def api_start(request: Request, req: CommandRequest) -> dict[str, Any]:
+    if not _rest_authorized(request.headers.get("authorization", "")):
+        raise HTTPException(status_code=401, detail="missing or invalid control token")
     cfg = get_config_envelope().config
     return start_system(cfg, dry_run=req.dry_run).model_dump()
 
 
-
 @app.post("/api/system/stop")
-def api_stop(req: CommandRequest) -> dict[str, Any]:
+def api_stop(request: Request, req: CommandRequest) -> dict[str, Any]:
+    if not _rest_authorized(request.headers.get("authorization", "")):
+        raise HTTPException(status_code=401, detail="missing or invalid control token")
     return stop_system(dry_run=req.dry_run).model_dump()
 
 
@@ -136,13 +202,13 @@ async def ws_stream(websocket: WebSocket) -> None:
     await websocket.accept()
     try:
         while True:
-            frame = _get_subscriber().get_latest_frame()
+            frames = _get_subscriber().get_latest_frames()
             payload = {
-                "status": probe_system().model_dump(),
-                "channels": frame["channels"] if frame else None,
-                "features": frame["features"] if frame else None,
-                "control": frame["control"] if frame else None,
-                "timestamp": frame["timestamp"] if frame else None,
+                # O23: probe_system() runs blocking `which` + /dev globs — keep
+                # it off the event loop.
+                "status": (await asyncio.to_thread(probe_system)).model_dump(),
+                "devices": frames or None,
+                "timestamp": time.time(),
             }
             await websocket.send_json(payload)
             await asyncio.sleep(0.2)
@@ -200,12 +266,16 @@ async def ws_teleop(websocket: WebSocket) -> None:
     """WebSocket teleop endpoint: receives direction commands and publishes Twist."""
     if await _reject_invalid_origin(websocket):
         return
+    if not _ws_authorized(websocket.query_params.get("token", "")):
+        await websocket.close(code=1008, reason="unauthorized")
+        return
     await websocket.accept()
 
     cfg = get_config_envelope().config
     use_sim = cfg.launch.use_sim
 
-    # Send initial config so the client knows which topic is in use.
+    # Send initial config so the client knows which topic is in use
+    # (informational; the real topic is re-read on every message — O11).
     await websocket.send_json({
         "type": "config",
         "use_sim": use_sim,
@@ -216,8 +286,17 @@ async def ws_teleop(websocket: WebSocket) -> None:
     bridge = _get_subscriber()
     try:
         while True:
-            msg = await websocket.receive_json()
+            try:
+                msg = await websocket.receive_json()
+            except (json.JSONDecodeError, ValueError) as e:
+                # O23: malformed JSON must not crash the handler / spam tracebacks.
+                await websocket.send_json({"type": "error", "detail": f"invalid JSON: {e}"})
+                continue
             direction = msg.get("direction", "")
+            # O11: re-read config on every message so a sim ↔ real switch takes
+            # effect without reconnecting.
+            cfg = get_config_envelope().config
+            use_sim = cfg.launch.use_sim
             _log.info("received direction=%s", direction)
             ok, detail = bridge.publish_teleop(direction, use_sim, cfg)
             _log.info("publish direction=%s ok=%s detail=%s", direction, ok, detail)
@@ -230,7 +309,131 @@ async def ws_teleop(websocket: WebSocket) -> None:
         return
 
 
+# --------------------------------------------------------------------------- #
+# P16: experiment mode (E1 logging / E3 protocol + prompt UI / E4 labels)
+# --------------------------------------------------------------------------- #
+
+
+@app.get("/api/logs")
+def get_logs(lines: int = 100) -> dict[str, Any]:
+    """P17①: recent backend log records + best-effort WSL launcher log tails."""
+    return {"backend": _ring.tail(lines), "files": tail_files(lines)}
+
+
+@app.get("/api/experiment/protocol")
+def exp_protocol() -> dict[str, Any]:
+    """The default protocol file (trials + shuffle + prompt_sec) for the
+    E3 panel to show before the operator starts."""
+    proto = load_protocol(DEFAULT_PROTOCOL)
+    return {
+        "shuffle": proto["shuffle"],
+        "seed": proto["seed"],
+        "prompt_sec": proto["prompt_sec"],
+        "n_trials": len(proto["trials"]),
+        "trials": [trial_dict(t) for t in proto["trials"]],
+    }
+
+
+@app.post("/api/experiment/configure")
+def exp_configure(req: ExperimentConfigureRequest) -> dict[str, Any]:
+    """Start a session: hand-filled metadata + protocol (inline trials, or the
+    default protocol file), shuffle applied, session files opened.
+
+    P20: metric / device_mode are NOT accepted from the client — they are
+    derived from the live AppConfig so the recorded truth matches the actual
+    run. electrode is only recorded when the config includes a hybrid.
+    """
+    # P21: the frontend supplies its ACTUAL run config (validated by the
+    # pydantic model: literals + device-count + has_hybrid consistency) and
+    # it is recorded verbatim into session.json's system block. A direct API
+    # caller without a config falls back to the backend AppConfig summary.
+    if req.config is not None:
+        summary = req.config.model_dump()
+    else:
+        summary = config_summary(get_config_envelope().config)
+    meta = session_meta_from_request(
+        subject=req.meta.subject,
+        subject_b=req.meta.subject_b,
+        role=req.meta.role,
+        session_no=req.meta.session_no,
+        electrode=req.meta.electrode,
+        date=req.meta.date,
+        summary=summary,
+    )
+    if req.trials is not None:
+        trials = [TrialSpec(**t.model_dump()) for t in req.trials]
+        # P30: the frontend's buildProtocol already applied shuffle — the order
+        # it sends is final (WYSIWYG preview == run), so the session uses it
+        # verbatim. P31: the generated trials are NOT written back to the repo
+        # protocol.json (that would dirty the git worktree on every Configure) —
+        # they are fully recorded in session.json's protocol + trials blocks,
+        # and reuse is by regenerating in the panel. A hand-written
+        # protocol.json is still honored whenever trials are NOT sent.
+        shuffle = "none"
+        seed, prompt_sec = req.seed, req.prompt_sec
+    else:
+        proto = load_protocol(DEFAULT_PROTOCOL)
+        trials = proto["trials"]
+        shuffle = req.shuffle or proto["shuffle"]
+        seed = req.seed if req.seed is not None else proto["seed"]
+        prompt_sec = req.prompt_sec if req.prompt_sec is not None else proto["prompt_sec"]
+    session_id = _experiment.configure(meta, trials, shuffle, seed, prompt_sec, system_summary=summary)
+    return {"ok": True, "session_id": session_id, "state": _experiment.state()}
+
+
+@app.get("/api/experiment/state")
+def exp_state() -> dict[str, Any]:
+    # P21: the config display is frontend-real-time (App.jsx 01 props), not a
+    # backend poll — state() carries only the trial machine.
+    return _experiment.state()
+
+
+@app.post("/api/experiment/start")
+def exp_start() -> dict[str, Any]:
+    return {"ok": _experiment.start(), "state": _experiment.state()}
+
+
+@app.post("/api/experiment/pause")
+def exp_pause() -> dict[str, Any]:
+    _experiment.pause()
+    return {"state": _experiment.state()}
+
+
+@app.post("/api/experiment/resume")
+def exp_resume() -> dict[str, Any]:
+    _experiment.resume()
+    return {"state": _experiment.state()}
+
+
+@app.post("/api/experiment/reset")
+def exp_reset() -> dict[str, Any]:
+    _experiment.reset()
+    return {"state": _experiment.state()}
+
+
+@app.get("/api/experiment/export")
+def exp_export() -> dict[str, Any]:
+    """E6: run the E5 analysis export over the experiment data dir (default
+    <data_dir>/analysis). A failed export returns {ok:false, message} — never
+    a 500."""
+    try:
+        result = export_all(default_data_dir())
+    except Exception as exc:
+        return {"ok": False, "message": f"Export analysis failed: {exc}"}
+    return {
+        "ok": True,
+        "output_dir": result["out_dir"],
+        "master_trials": result["master_rows"],
+        "condition_summary": result["summary_rows"],
+    }
+
+
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8010, reload=False)
+    # Default to loopback only: the Web GUI drives a physical robot, so it
+    # must not be reachable from the LAN unless the operator explicitly
+    # opts in (WEB_GUI_HOST=0.0.0.0 — and then a control token is advised).
+    host = os.getenv("WEB_GUI_HOST", "127.0.0.1")
+    port = int(os.getenv("WEB_GUI_PORT", "8010"))
+    uvicorn.run("app.main:app", host=host, port=port, reload=False)

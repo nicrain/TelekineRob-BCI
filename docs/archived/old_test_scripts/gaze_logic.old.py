@@ -10,13 +10,13 @@ class GazeLogic(Node):
 
     def callback(self, msg):
         twist = Twist()
-        # 逻辑：x < 0.3 左转，x > 0.7 右转，中间直行
+        # Logic: x < 0.3 turn left, x > 0.7 turn right, middle straight
         if msg.x == 0.0 and msg.y == 0.0: 
             twist.linear.x = 0.0
             twist.angular.z = 0.0
-            self.get_logger().info("Signal perdu, arrêt du mouvement")
+            self.get_logger().info("Signal lost, stop movement")
         else:
-            # 原有的控制逻辑...
+            # Original control logic...
             if msg.x < 0.3:
                 twist.linear.x = 0.05
                 twist.angular.z = 0.8

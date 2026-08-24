@@ -1,6 +1,6 @@
 """Band power extraction from EEG signals.
 
-This module is the **production copy** migrated from ``lsl_test/eeg_processor.py``
+This module is the **production copy** migrated from ``thymio_control/lsl_test/eeg_processor.py``
 (Phase 1 experimental area).  It is the single source of truth for the
 production pipeline.
 
@@ -107,9 +107,16 @@ def convert_power_to_uv2(value: float, source_unit: str) -> float:
 # ---------------------------------------------------------------------------
 
 def _hanning_window(n: int) -> np.ndarray:
-    """Return an *n*-point Hanning window."""
+    """Return an *n*-point **periodic** Hann window.
+
+    Matches the default ``'hann'`` window used by ``scipy.signal.welch``
+    (``get_window('hann', n)`` with ``fftbins=True``), so the pure-NumPy
+    fallback produces PSDs equivalent to the scipy path. The symmetric
+    variant (denominator ``n - 1``) differs by ~0.6% and must not be used
+    here or the two code paths disagree.
+    """
     n_arr = np.arange(n)
-    return 0.5 * (1 - np.cos(2 * np.pi * n_arr / (n - 1)))
+    return 0.5 * (1 - np.cos(2 * np.pi * n_arr / n))
 
 
 def _manual_welch_psd(
@@ -139,6 +146,7 @@ def _manual_welch_psd(
     start = 0
     while start + nperseg <= n:
         segment = signal[start: start + nperseg]
+        segment = segment - np.mean(segment)  # detrend (matching scipy)
         windowed = segment * window
         spectrum = np.fft.rfft(windowed, n=nperseg)
         psd += np.abs(spectrum) ** 2
@@ -150,6 +158,14 @@ def _manual_welch_psd(
 
     psd /= n_ensembles
     psd /= fs
+    psd /= np.sum(window ** 2)  # window power (matching scipy Welch)
+    # One-sided PSD: double interior bins. DC is never doubled. The Nyquist
+    # bin exists only for even nperseg — for odd nperseg the last rfft bin is
+    # an interior frequency and must also be doubled (matches scipy.welch).
+    if nperseg % 2:
+        psd[1:] *= 2.0
+    else:
+        psd[1:-1] *= 2.0
     return freqs, psd
 
 
@@ -304,6 +320,12 @@ class DSPConfig:
     bands:       Optional[Dict[str, tuple]] = None  # None → use BANDS
     source_unit: str = "µV"             # amplitude unit of the source signal
 
+    def __post_init__(self) -> None:
+        if self.hop_sec > self.window_sec:
+            raise ValueError(
+                f"hop_sec ({self.hop_sec}) must be <= window_sec ({self.window_sec})"
+            )
+
 
 class StreamingBandPowerExtractor:
     """Sliding-window band power extractor for real-time EEG streams.
@@ -358,6 +380,14 @@ class StreamingBandPowerExtractor:
             raise ValueError(
                 f"hop_sec={self._cfg.hop_sec} too small for "
                 f"sample_rate={sample_rate}"
+            )
+        if self._hop_samples > self._window_samples:
+            # hop > window would stall feed_chunk forever: once the buffer is
+            # full the emit condition (since_hop >= hop) can never be reached,
+            # so `space` becomes 0 and the consume loop spins without progress.
+            raise ValueError(
+                f"hop_sec={self._cfg.hop_sec} must be <= window_sec="
+                f"{self._cfg.window_sec} at sample_rate={sample_rate}"
             )
 
         # Ring buffer: shape (n_channels, window_samples)
@@ -479,6 +509,14 @@ class StreamingBandPowerExtractor:
         pressure, replace with a zero-copy circular buffer.
         """
         keep = self._window_samples - self._hop_samples
+        if keep < 0:
+            # hop > window is rejected at construction; this guards against
+            # direct mutation of the private hop/window attrs. A negative
+            # keep would otherwise set buf_len < 0 and corrupt the ring.
+            raise ValueError(
+                f"hop_samples ({self._hop_samples}) must not exceed "
+                f"window_samples ({self._window_samples})"
+            )
         if keep > 0:
             self._buf[:, :keep] = self._buf[:, self._hop_samples: self._window_samples]
         self._buf_len   = keep
@@ -621,8 +659,8 @@ def per_channel_metrics(
 
     For example, with labels ``["Fz", "C3", "Cz", "C4", "Pz"]`` this emits
     ``alpha_Fz``, ``theta_C3``, ``alpha_C3``, ``alpha_C4``, … allowing the
-    policy layer to compute left/right asymmetry without losing spatial
-    information.
+    policy layer to access individual channel metrics without losing
+    spatial information.
 
     It also synthesises ``left_alpha`` and ``right_alpha`` as the mean of
     channels whose labels contain ``"3"`` (left) and ``"4"`` (right)

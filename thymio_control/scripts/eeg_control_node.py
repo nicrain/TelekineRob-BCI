@@ -14,11 +14,17 @@ import rclpy
 from geometry_msgs.msg import Twist
 from rclpy.node import Node
 from sensor_msgs.msg import Range
-from std_msgs.msg import ColorRGBA, String
+from std_msgs.msg import String
+try:
+    from thymio_msgs.msg import Led as ThymioLed  # type: ignore
+except ImportError:
+    ThymioLed = None  # thymio_msgs not installed (e.g. simulation)
 
 # --- Modular architecture ---
 from thymio_control.pipeline import POLICIES, build_adapter
+from thymio_control.processors.blink_metric import MetricBlinkDetector
 from thymio_control.processors.enrich import clip01, enrich_features
+from thymio_control.watchdog import decide_watchdog_action
 
 
 class _AdapterArgs:
@@ -30,11 +36,13 @@ class _AdapterArgs:
         lsl_stream_type: str,
         lsl_timeout: float,
         lsl_source_id: str,
+        dsp_debug_frames: int = 0,
     ):
         self.input = input_mode
         self.lsl_stream_type = lsl_stream_type
         self.lsl_timeout = lsl_timeout
         self.lsl_source_id = lsl_source_id
+        self.dsp_debug_frames = dsp_debug_frames
 
 
 class EegControlNode(Node):
@@ -54,9 +62,15 @@ class EegControlNode(Node):
         self.declare_parameter("calibrate", False)
         self.declare_parameter("calib_offset", 0.0)
         self.declare_parameter("calib_scale", 1.0)
+        self.declare_parameter("calib_config_file", "eeg_control_node.params.yaml")
         self.declare_parameter("lsl_stream_type", "EEG")
         self.declare_parameter("lsl_timeout", 8.0)
         self.declare_parameter("lsl_source_id", "")
+        # Diagnostic probe: >0 logs the first N DSP frames' signal RMS, raw
+        # band powers (source_unit²) and converted metrics so a zero-metric
+        # device can be pinned to a stage (data-not-arriving / frequency
+        # mapping / unit conversion). 0 = off (default, no overhead).
+        self.declare_parameter("dsp_debug_frames", 0)
         self.declare_parameter("role", "speed")
 
         # Output and control parameters
@@ -64,23 +78,26 @@ class EegControlNode(Node):
         self.declare_parameter("analysis_topic", "/eeg_analysis")
         self.declare_parameter("publish_hz", 20.0)
         self.declare_parameter("watchdog_sec", 0.5)
+        # Dual-device: stop publishing partial twists on data loss so the
+        # fuser sees staleness instead of stale-replayed commands.
+        self.declare_parameter("stop_on_data_loss", False)
         self.declare_parameter("verbose", False)
         self.declare_parameter("analysis_verbose", False)
         self.declare_parameter("record_csv", False)
         self.declare_parameter("csv_path", "/tmp/thymio_eeg_log.csv")
 
         # Motion mapping parameters
-        self.declare_parameter("max_forward_speed", 0.1)
+        self.declare_parameter("max_forward_speed", 0.05)
         self.declare_parameter("reverse_speed", -0.15)
-        self.declare_parameter("turn_forward_speed", 0.1)
         self.declare_parameter("turn_angular_speed", 0.8)
-        self.declare_parameter("reverse_threshold", 0.2)
         self.declare_parameter("steer_deadzone", 0.1)
         self.declare_parameter("blink_holdoff_frames", 4)
         self.declare_parameter("blink_confirm_frames", 2)
 
         # Optional line-following
         self.declare_parameter("line_mode", "")  # '', 'blackline', 'whiteline'
+        self.declare_parameter("line_pivot_gain", 8.0)
+        self.declare_parameter("line_spin_gain", 15.0)
 
         input_mode = self.get_parameter("input").value
         policy_name = self.get_parameter("policy").value
@@ -93,12 +110,14 @@ class EegControlNode(Node):
             lsl_stream_type=self.get_parameter("lsl_stream_type").value,
             lsl_timeout=float(self.get_parameter("lsl_timeout").value),
             lsl_source_id=self.get_parameter("lsl_source_id").value,
+            dsp_debug_frames=int(self.get_parameter("dsp_debug_frames").value),
         )
         self.adapter = build_adapter(adapter_args)
 
         calib_offset = float(self.get_parameter("calib_offset").value)
         calib_scale = float(self.get_parameter("calib_scale").value)
         self._calibrate = bool(self.get_parameter("calibrate").value)
+        self._calib_config_file = str(self.get_parameter("calib_config_file").value)
         self._calib_samples: list[float] = []
         self._calib_deadline: float = 0.0
 
@@ -107,10 +126,16 @@ class EegControlNode(Node):
         self.pub = self.create_publisher(Twist, self.get_parameter("cmd_topic").value, 10)
         self.analysis_pub = self.create_publisher(String, self.get_parameter("analysis_topic").value, 10)
 
-        # LED publishers for steering direction indication
-        _driver_ns = "/thymio_driver"
-        self._led_left  = self.create_publisher(ColorRGBA, f"{_driver_ns}/led/body/bottom_left", 10)
-        self._led_right = self.create_publisher(ColorRGBA, f"{_driver_ns}/led/body/bottom_right", 10)
+        # Parse robustly: launch may hand over a "true"/"false" string (from
+        # a PythonExpression) or a native bool.
+        self.stop_on_data_loss = str(
+            self.get_parameter("stop_on_data_loss").value
+        ).lower() in {"1", "true", "yes", "on"}
+
+        # Circle LED publisher for steering direction indication
+        self._led_circle = None
+        if ThymioLed is not None:
+            self._led_circle = self.create_publisher(ThymioLed, "/led", 10)
         self.watchdog_sec = float(self.get_parameter("watchdog_sec").value)
         self.verbose = bool(self.get_parameter("verbose").value)
         self.analysis_verbose = bool(self.get_parameter("analysis_verbose").value)
@@ -118,9 +143,7 @@ class EegControlNode(Node):
         self.csv_path = str(self.get_parameter("csv_path").value)
         self.max_forward_speed = min(1.0, max(0.0, float(self.get_parameter("max_forward_speed").value)))
         self.reverse_speed = min(0.0, max(-1.0, float(self.get_parameter("reverse_speed").value)))
-        self.turn_forward_speed = min(1.0, max(0.0, float(self.get_parameter("turn_forward_speed").value)))
         self.turn_angular_speed = min(3.0, max(0.0, float(self.get_parameter("turn_angular_speed").value)))
-        self.reverse_threshold = min(1.0, max(0.0, float(self.get_parameter("reverse_threshold").value)))
         self.steer_deadzone = min(1.0, max(0.0, float(self.get_parameter("steer_deadzone").value)))
         self._csv_file = None
         self._csv_writer = None
@@ -147,6 +170,8 @@ class EegControlNode(Node):
                 self._csv_writer.writeheader()
 
         self.line_mode = str(self.get_parameter("line_mode").value).strip() or None
+        self.line_pivot_gain = float(self.get_parameter("line_pivot_gain").value)
+        self.line_spin_gain = float(self.get_parameter("line_spin_gain").value)
         self.ground = {"left": 0.5, "right": 0.5}
         self.state_dir = 0
 
@@ -169,20 +194,28 @@ class EegControlNode(Node):
         self.last_twist = Twist()
         self._steer_role = str(self.get_parameter("role").value) == "steering"
         self.steer_direction = 1   # 1 = right, -1 = left (blink toggles)
-        self._blink_holdoff = 0
-        self._blink_holdoff_frames = int(self.get_parameter("blink_holdoff_frames").value)
 
-        # Metric-based blink confirmation: raw-signal blink candidates must
-        # also show a corresponding spike/drop in the policy metric.
-        # Uses calibration p5/p95 as the normal-range reference.
-        # EI is inverted (blink → denominator up → EI below p5);
-        # TBR/Alpha spike upward (blink → theta/alpha above p95).
+        # P44③: TRANSIENT metric-blink detection — a spike/drop vs the recent
+        # short-window baseline (rolling median), NOT an absolute level, so a
+        # sustained rest drift (high alpha/tbr, low ei) never triggers a
+        # false-blink loop. EI is inverted (blink → EI drops); TBR/Alpha
+        # spike upward. The raw-signal blink candidate mentioned in older
+        # comments is NOT wired; the confirm counter + median baseline reject
+        # single-frame artifacts.
         self._metric_key = self._CALIB_METRIC.get(policy_name, "")
-        self._metric_inverse = (policy_name == "ei")
         self._blink_confirm_frames = int(self.get_parameter("blink_confirm_frames").value)
-        self._metric_blink_counter = 0
+        self._blink_holdoff_frames = int(self.get_parameter("blink_holdoff_frames").value)
+        # P47 (minimal): clamp the up-metric blink baseline to the calibration
+        # p50 (the rest level) — the detector applies it only in 'up' mode
+        # (alpha/tbr); ei is untouched. p50 = offset + scale, recovered from
+        # the values stored at calibration.
+        self._blink_detector = MetricBlinkDetector(
+            mode="down" if policy_name == "ei" else "up",
+            confirm_frames=self._blink_confirm_frames,
+            holdoff_frames=self._blink_holdoff_frames,
+            clamp_ref=calib_offset + calib_scale,
+        )
         self._last_clean_features: dict = {}
-        self._update_leds()  # initial direction: right
 
         hz = float(self.get_parameter("publish_hz").value)
         self.create_timer(1.0 / max(hz, 1e-6), self._tick)
@@ -194,52 +227,36 @@ class EegControlNode(Node):
             )
         )
 
-    def _confirm_blink_metric(self, features: dict) -> bool:
-        """Check that the policy metric exceeds its calibrated normal range.
-
-        TBR / Alpha: blink EOG inflates theta or alpha → metric spikes
-        above p95.  Check: ``metric > p95 × 2``.
-
-        EI: blink inflates alpha + theta (denominator) → EI drops below
-        p5.  Check: ``metric < p5 / 2``.
-        """
-        val = features.get(self._metric_key, None)
-        if val is None:
-            return False
-        val = float(val)
-
-        offset = float(self.get_parameter("calib_offset").value)
-        scale  = float(self.get_parameter("calib_scale").value)
-        p5  = offset
-        p95 = offset + scale
-
-        if self._metric_inverse:
-            confirmed = val < p5 / 2.0
-            ref = f"p5={p5:.3f} p5/2={p5 / 2:.3f}"
-        else:
-            confirmed = val > p95 * 2.0
-            ref = f"p95={p95:.3f} p95*2={p95 * 2:.3f}"
-
-        if confirmed:
-            self.get_logger().info(
-                f"Blink metric confirmed: {self._metric_key}={val:.3f} "
-                f"({ref})"
-            )
-        return confirmed
-
     def _finish_calibration(self) -> None:
-        """Compute p5/p95 from collected samples and update the parameter file."""
+        """Compute p5/p50 from collected samples and update the parameter file."""
         import numpy as np
-        import yaml
         import traceback
         from pathlib import Path
+
+        from thymio_control.calibration import (
+            MIN_CALIB_SAMPLES,
+            enough_samples,
+            write_calib_result,
+        )
+
+        # Both the source tree and the colcon install dir hold the params
+        # file; write to whichever exists. Computed up front so the abort
+        # path can also clear calibrate=false.
+        source_root = Path(__file__).resolve().parents[2]
+        install_dir = Path(__file__).parents[2] / "share" / "thymio_control" / "config"
+        cfg_roots = [install_dir, source_root / "thymio_control" / "config"]
 
         try:
             samples = np.array(self._calib_samples)
             n = len(samples)
             self.get_logger().info(f"CALIB: {n} samples collected")
-            if n < 60:
-                self.get_logger().error("CALIB: not enough samples — abort")
+            if not enough_samples(n):
+                # Abort but still clear calibrate=false so the frontend's poll
+                # terminates — otherwise it hangs at "Calibrating… 0s".
+                self.get_logger().error(
+                    f"CALIB: not enough samples ({n} < {MIN_CALIB_SAMPLES}) — abort"
+                )
+                write_calib_result(cfg_roots, self._calib_config_file)
                 return
             p5 = float(np.percentile(samples, 5))
             p50 = float(np.percentile(samples, 50))
@@ -262,27 +279,18 @@ class EegControlNode(Node):
                     f"CALIB: set_parameters() failed (in-memory params not updated): {exc}"
                 )
 
-            source_root = Path(__file__).resolve().parents[2]
-            install_dir = Path(__file__).parents[2] / "share" / "thymio_control" / "config"
-            for cfg_root in [install_dir, source_root / "thymio_control" / "config"]:
-                try:
-                    cfg_file = cfg_root / "eeg_control_node.params.yaml"
-                    with cfg_file.open("r", encoding="utf-8") as fhand:
-                        doc = yaml.safe_load(fhand) or {}
-                    params = doc.setdefault("/**", {}).setdefault("ros__parameters", {})
-                    params["calib_offset"] = offset
-                    params["calib_scale"] = scale
-                    params["calibrate"] = False
-                    with cfg_file.open("w", encoding="utf-8") as fhand:
-                        yaml.safe_dump(doc, fhand, sort_keys=False, allow_unicode=False)
-                    self.get_logger().info(f"CALIB: wrote {cfg_file}")
-                except Exception as exc:
-                    self.get_logger().error(
-                        f"CALIB: failed to write {cfg_root}: {exc}"
-                    )
+            ok = write_calib_result(
+                cfg_roots, self._calib_config_file, offset=offset, scale=scale
+            )
+            if ok:
+                self.get_logger().info(f"CALIB: wrote {self._calib_config_file}")
+            else:
+                self.get_logger().error("CALIB: failed to write one or more config files")
 
-            policy_name = str(self.get_parameter("policy").value)
-            self.policy = POLICIES[policy_name](offset=offset, scale=scale)
+            # Update offset/scale in place — rebuilding the policy instance
+            # would reset its EMA smoothing state and cause an intent jump
+            # immediately after calibration.
+            self.policy.set_calibration(offset=offset, scale=scale)
 
         except Exception:
             self.get_logger().error(f"CALIB failed:\n{traceback.format_exc()}")
@@ -307,6 +315,7 @@ class EegControlNode(Node):
         self.ground["right"] = float(msg.range)
 
     def _tick(self) -> None:
+        self._update_leds()
         frame = self.adapter.read_frame()
         if frame is not None:
             has_band_features = all(key in frame.metrics for key in ("alpha", "theta", "beta"))
@@ -324,35 +333,33 @@ class EegControlNode(Node):
                 if time.time() >= self._calib_deadline:
                     self._finish_calibration()
 
-            # Metric-based blink detection — requires metric to stay outside
-            # the calibrated normal range for N consecutive frames.
-            # Single-frame spikes (noise/artifact) are rejected by the counter.
-            if self._steer_role and has_band_features and self._blink_holdoff == 0:
-                if self._confirm_blink_metric(features):
-                    self._metric_blink_counter += 1
-                    if self._metric_blink_counter >= self._blink_confirm_frames:
-                        self.steer_direction *= -1  # toggle left ↔ right
-                        self._blink_holdoff = self._blink_holdoff_frames
-                        self._metric_blink_counter = 0
-                        self.get_logger().info(
-                            f"Blink detected — steer: {'RIGHT' if self.steer_direction > 0 else 'LEFT'}"
-                        )
-                        self._update_leds()
-                else:
-                    self._metric_blink_counter = 0
+            # P44③: TRANSIENT metric-blink detection — the detector keeps its
+            # own recent-baseline median and confirm/holdoff state. A blink is
+            # confirmed only when the metric spikes/drops vs the recent
+            # baseline (sustained rest drift raises the baseline and stops
+            # triggering); a single artifact frame is rejected by the counter.
+            if self._steer_role and has_band_features and not self._calibrate:
+                val = features.get(self._metric_key, None)
+                if val is not None and self._blink_detector.update(float(val)):
+                    self.steer_direction *= -1  # toggle left ↔ right
+                    self.get_logger().info(
+                        f"Blink detected — steer: {'RIGHT' if self.steer_direction > 0 else 'LEFT'}"
+                    )
 
-            # Skip policy during hold-off AND while blink counter is
-            # accumulating — EOG already contaminates the Welch window
-            # before the metric reaches the 2-frame threshold.
-            in_blink = self._blink_holdoff > 0 or self._metric_blink_counter > 0
+            # Skip policy while a blink is being confirmed / held off — EOG
+            # already contaminates the Welch window before the metric reaches
+            # the confirm threshold. P44③b: do NOT freeze the stale steer
+            # value during this window — clamp it to neutral (straight) so the
+            # car never keeps turning at an old magnitude.
+            in_blink = self._blink_detector.in_progress
 
-            if self._blink_holdoff > 0:
-                self._blink_holdoff -= 1
-            elif has_band_features and not in_blink:
+            if has_band_features and not in_blink:
                 self.last_intents = self.policy.compute_intents(features)
                 self._last_clean_features = features
-            elif not has_band_features:
-                self.last_intents = {"speed_intent": 0.5, "steer_intent": 0.5}
+            else:
+                self.last_intents["steer_intent"] = 0.5
+                if not has_band_features:
+                    self.last_intents["speed_intent"] = 0.5
 
             self.last_msg_ts = time.time()
             self._adapter_connected = True
@@ -363,12 +370,17 @@ class EegControlNode(Node):
             # Use clean features during hold-off to avoid showing EOG-
             # contaminated spikes in the web GUI charts.
             show_features = features
-            if self._blink_holdoff > 0 and self._last_clean_features:
+            if self._blink_detector.in_progress and self._last_clean_features:
                 show_features = self._last_clean_features
 
             analysis = {
                 "ts": frame.ts,
+                # P16/E1 (§2 #6): wall-clock when the command was computed —
+                # the experiment recorder compares it to its receive wall
+                # clock for the pipeline/transport latency.
+                "cmd_vel_ts": time.time(),
                 "source": frame.source,
+                "role": "steering" if self._steer_role else "speed",
                 "metrics": frame.metrics,
                 "features": show_features,
                 "intents": self.last_intents,
@@ -402,23 +414,38 @@ class EegControlNode(Node):
 
             if self.verbose:
                 self.get_logger().info(
-                    "src=%s speed_intent=%.3f steer_intent=%.3f"
-                    % (
-                        frame.source,
-                        self.last_intents.get("speed_intent", 0.5),
-                        self.last_intents.get("steer_intent", 0.5),
-                    )
+                    f"src={frame.source} "
+                    f"speed_intent={self.last_intents.get('speed_intent', 0.5):.3f} "
+                    f"steer_intent={self.last_intents.get('steer_intent', 0.5):.3f}"
                 )
             return
 
-        if time.time() - self.last_msg_ts > self.watchdog_sec:
-            if self._adapter_connected:
-                self._adapter_connected = False
-                self.pub.publish(Twist())
+        # No frame this tick — the watchdog response is a pure decision.
+        # Frames arrive at hop cadence (~2 Hz) but _tick runs at 20 Hz; the
+        # inter-frame ticks are NOT loss, so both modes "replay" to keep the
+        # partial at ~20 Hz. Only a real loss (stale) makes the node go
+        # silent: single device sends one zero, dual device halts and lets
+        # the fuser's freshness watchdog take over.
+        action = decide_watchdog_action(
+            stale=time.time() - self.last_msg_ts > self.watchdog_sec,
+            connected=self._adapter_connected,
+            stop_on_data_loss=self.stop_on_data_loss,
+        )
+
+        if action == "replay":
+            # Within the grace window (both modes): hold the last intents.
+            if not self._calibrate:
+                self.pub.publish(self._intents_to_twist(self.last_intents))
             return
 
-        if not self._calibrate:
-            self.pub.publish(self._intents_to_twist(self.last_intents))
+        # "zero" (single-device timeout) or "halt" (dual / already stopped):
+        # the node publishes nothing further until data resumes.
+        if self._adapter_connected:
+            self._adapter_connected = False
+            if action == "zero":
+                self.pub.publish(Twist())  # one zero, then silent
+            else:
+                self.get_logger().warning("data loss — partial twist halted (dual mode)")
     def _intents_to_twist(self, intents) -> Twist:
         speed_intent = clip01(float(intents.get("speed_intent", 0.0)))
         steer_intent = clip01(float(intents.get("steer_intent", 0.5)))
@@ -444,8 +471,8 @@ class EegControlNode(Node):
                     else:
                         self.state_dir = 10
 
-                w_pivot = speed * 8.0
-                w_spin = speed * 15.0
+                w_pivot = speed * self.line_pivot_gain
+                w_spin = speed * self.line_spin_gain
                 if self.state_dir == 0:
                     twist.linear.x = speed
                 elif self.state_dir == 1:
@@ -474,18 +501,36 @@ class EegControlNode(Node):
         return twist
 
     def _update_leds(self) -> None:
-        """Set bottom LEDs to show current steer direction (green = active side)."""
-        green = ColorRGBA(r=0.0, g=1.0, b=0.0, a=1.0)
-        off   = ColorRGBA(r=0.0, g=0.0, b=0.0, a=0.0)
+        """Light circle LEDs to show current steer direction.
+
+        Called on every tick so the first message after DDS discovery
+        lands reliably — no priming counter or timing guess needed.
+
+        Circle LED indices (from Thymio default behaviours source):
+              0 (front)
+          7       1
+        6           2
+          5       3
+              4 (back)
+
+        Right turn → LEDs 1, 2, 3 (right arc)
+        Left turn  → LEDs 5, 6, 7 (left arc)
+        No turn    → all off
+
+        Only the steering node drives the LEDs — a speed node (including
+        single-device mode) publishes nothing, otherwise two nodes contend
+        on /led and overwrite each other.
+        """
+        if self._led_circle is None or not self._steer_role:
+            return
+        CIRCLE = 0  # thymio_msgs Led.CIRCLE
         if self.steer_direction > 0:
-            self._led_right.publish(green)
-            self._led_left.publish(off)
+            values = [0.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0]  # right arc
         elif self.steer_direction < 0:
-            self._led_left.publish(green)
-            self._led_right.publish(off)
+            values = [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]  # left arc
         else:
-            self._led_right.publish(off)
-            self._led_left.publish(off)
+            values = [0.0] * 8
+        self._led_circle.publish(ThymioLed(id=CIRCLE, values=values))
 
 
 def main(args: Optional[list] = None) -> None:

@@ -1,8 +1,9 @@
 """
 Single rclpy bridge thread for the web GUI backend.
 
-Subscribes to /eeg_analysis for signal data AND publishes Twist
-for teleop — all from one rclpy thread to avoid executor conflicts.
+Subscribes to the three analysis topics (/eeg_analysis + role-suffixed)
+for signal data AND publishes Twist for teleop — all from one rclpy
+thread to avoid executor conflicts. publish_teleop only enqueues (O20).
 """
 
 from __future__ import annotations
@@ -12,26 +13,48 @@ import logging
 import queue
 import threading
 import time
+from functools import partial
 from typing import Any, Optional
 
 _log = logging.getLogger("ros_bridge")
 
 TELEOP_DIRECTIONS = {"forward", "backward", "left", "right", "stop"}
 
+# Three analysis topics are always subscribed (design §5.4.4): in single-device
+# mode only the bare topic carries data, in dual-device mode only the two
+# role-suffixed ones do. No resubscription needed when the mode changes.
+DEFAULT_ANALYSIS_TOPICS = [
+    "/eeg_analysis",
+    "/eeg_analysis/speed",
+    "/eeg_analysis/steering",
+]
+
 
 class RosBridge:
     """Background rclpy thread: subscriber + teleop publisher in one node."""
 
-    def __init__(self, analysis_topic: str = "/eeg_analysis", stale_threshold: float = 0.5) -> None:
-        self._analysis_topic = analysis_topic
+    def __init__(
+        self,
+        analysis_topics: Optional[list[str]] = None,
+        stale_threshold: float = 0.5,
+        role_by_topic: Optional[dict[str, str]] = None,
+    ) -> None:
+        self._analysis_topics = analysis_topics or list(DEFAULT_ANALYSIS_TOPICS)
+        # Fallback role per topic when a frame has no ``role`` field (legacy
+        # pre-M2 node). The M2 node always emits ``role``, so this is a backstop.
+        self._role_by_topic = role_by_topic or {}
         self._stale_threshold = stale_threshold
         self._lock = threading.Lock()
-        self._latest: Optional[dict[str, Any]] = None
-        self._last_ts: float = 0.0
+        self._latest: dict[str, dict[str, Any]] = {}
+        self._last_ts: dict[str, float] = {}
         self._msg_count: int = 0
+        # P16/E1: raw-analysis frame handlers (e.g. the experiment recorder).
+        # Called on every parsed analysis message with the raw JSON dict.
+        self._frame_handlers: list = []
         self._twist_queue: queue.Queue = queue.Queue()
         self._twist_publisher: Any = None
         self._twist_topic: str = ""
+        self._twist_lock = threading.Lock()
         self._stop_event = threading.Event()
         self._ready = threading.Event()
         self._error: Optional[str] = None
@@ -51,20 +74,65 @@ class RosBridge:
         with self._lock:
             return self._msg_count
 
+    def add_frame_handler(self, handler) -> None:
+        """Register a callback receiving every raw analysis dict (P16/E1)."""
+        self._frame_handlers.append(handler)
+
     # ── Signal data ──────────────────────────────────────────────────────────
 
     def get_latest_frame(self) -> Optional[dict[str, Any]]:
+        """Single-device compatibility entry: the latest bare /eeg_analysis frame."""
         with self._lock:
-            if self._latest is None:
+            frame = self._latest.get("/eeg_analysis")
+            if frame is None:
                 return None
-            if time.monotonic() - self._last_ts > self._stale_threshold:
+            if time.monotonic() - self._last_ts.get("/eeg_analysis", 0.0) > self._stale_threshold:
                 return None
-            return dict(self._latest)
+            return dict(frame)
+
+    def get_latest_frames(self) -> dict[str, dict[str, Any]]:
+        """Fresh analysis frames keyed by device role (``{"speed": {...}}``).
+
+        Only frames received within ``stale_threshold`` are returned. Role
+        resolution: the frame's own ``role`` field (M2+) → topic suffix →
+        constructor ``role_by_topic`` backstop.
+        """
+        with self._lock:
+            now = time.monotonic()
+            out: dict[str, dict[str, Any]] = {}
+            for topic, frame in self._latest.items():
+                if now - self._last_ts.get(topic, 0.0) > self._stale_threshold:
+                    continue
+                out[self._resolve_role(topic, frame)] = dict(frame)
+            return out
+
+    def _resolve_role(self, topic: str, frame: dict[str, Any]) -> str:
+        role = frame.get("role")
+        if role in ("speed", "steering"):
+            return role
+        suffix = topic.rsplit("/", 1)[-1]
+        if suffix in ("speed", "steering"):
+            return suffix
+        fallback = self._role_by_topic.get(topic)
+        if fallback in ("speed", "steering"):
+            return fallback
+        return "speed"
 
     # ── Teleop ───────────────────────────────────────────────────────────────
 
     def publish_teleop(self, direction: str, use_sim: bool, cfg: Any) -> tuple[bool, str]:
-        """Queue a teleop direction for the rclpy thread to publish. Non-blocking."""
+        """Enqueue a teleop direction for the rclpy thread — never publishes
+        directly from the caller's thread (O20: keeps every rclpy call on the
+        single bridge thread). Truly non-blocking.
+
+        If the topic changed since the last create, a create request is queued
+        first (the rclpy thread destroys the old publisher — O24), then the
+        teleop message. Both are processed in order.
+        """
+        if self._error:
+            return False, f"Bridge unavailable: {self._error}"
+        if not self._ready.is_set():
+            return False, "Bridge not yet ready"
         if direction not in TELEOP_DIRECTIONS:
             return False, f"Unknown direction: {direction!r}"
 
@@ -84,26 +152,12 @@ class RosBridge:
         else:
             lin, ang = (0.0, 0.0)
 
-        if self._twist_publisher is None or self._twist_topic != topic:
+        with self._twist_lock:
+            topic_changed = self._twist_topic != topic
+        if topic_changed:
             self._twist_queue.put(("__create__", topic, 0.0))
-            deadline = time.monotonic() + 3.0
-            while self._twist_publisher is None and time.monotonic() < deadline:
-                time.sleep(0.005)
-
-        pub = self._twist_publisher
-        if pub is None:
-            return False, "Teleop publisher not ready"
-
-        from geometry_msgs.msg import Twist
-        msg = Twist()
-        msg.linear.x = float(lin)
-        msg.linear.y = 0.0
-        msg.linear.z = 0.0
-        msg.angular.x = 0.0
-        msg.angular.y = 0.0
-        msg.angular.z = float(ang)
-        pub.publish(msg)
-        return True, f"Published {direction} to {self._twist_topic}"
+        self._twist_queue.put(("__teleop__", topic, lin, ang))
+        return True, f"Queued {direction} to {topic}"
 
     # ── Thread ───────────────────────────────────────────────────────────────
 
@@ -132,10 +186,11 @@ class RosBridge:
 
         try:
             self._rclpy_node = Node("web_gui_bridge")
-            self._rclpy_node.create_subscription(
-                String, self._analysis_topic, self._on_analysis, 10
-            )
-            _log.info("subscribed to %s", self._analysis_topic)
+            for topic in self._analysis_topics:
+                self._rclpy_node.create_subscription(
+                    String, topic, partial(self._on_analysis, topic), 10
+                )
+            _log.info("subscribed to %s", ", ".join(self._analysis_topics))
         except Exception as e:
             self._error = f"ROS2 node setup failed: {e}"
             _log.warning("%s", self._error)
@@ -149,7 +204,10 @@ class RosBridge:
             try:
                 rclpy.spin_once(self._rclpy_node, timeout_sec=0.02)
             except Exception as e:
-                _log.warning("spin_once exception: %s", e)
+                # O18: record the failure — otherwise /api/health keeps
+                # reporting ready while teleop is silently dead.
+                self._error = f"spin_once failed: {e}"
+                _log.warning("%s", self._error)
                 break
             self._drain_twist_queue()
 
@@ -161,7 +219,9 @@ class RosBridge:
             pass
 
     def _drain_twist_queue(self) -> None:
-        """Process publisher creation requests in the rclpy thread."""
+        """Process publisher creation and teleop requests in the rclpy thread."""
+        from geometry_msgs.msg import Twist
+
         while True:
             try:
                 item = self._twist_queue.get_nowait()
@@ -170,18 +230,49 @@ class RosBridge:
 
             _tag, topic, *_rest = item
             if _tag == "__create__":
-                from geometry_msgs.msg import Twist
+                if self._twist_publisher is not None:
+                    # O24: destroy the old publisher — switching sim ↔ real
+                    # topics repeatedly used to leak rclpy publisher objects.
+                    self._rclpy_node.destroy_publisher(self._twist_publisher)
+                    self._twist_publisher = None
                 self._twist_publisher = self._rclpy_node.create_publisher(Twist, topic, 10)
-                self._twist_topic = topic
+                with self._twist_lock:
+                    self._twist_topic = topic
                 _log.info("created teleop publisher on %s", topic)
+            elif _tag == "__teleop__":
+                with self._twist_lock:
+                    topic_ok = self._twist_topic == topic
+                if not topic_ok:
+                    # Stale teleop for a topic that was switched away (O24):
+                    # don't silently publish to the wrong topic.
+                    _log.warning("dropped stale teleop for %s (current %s)", topic, self._twist_topic)
+                    continue
+                if self._twist_publisher is not None:
+                    lin, ang = _rest[0], _rest[1]
+                    msg = Twist()
+                    msg.linear.x = float(lin)
+                    msg.linear.y = 0.0
+                    msg.linear.z = 0.0
+                    msg.angular.x = 0.0
+                    msg.angular.y = 0.0
+                    msg.angular.z = float(ang)
+                    self._twist_publisher.publish(msg)
 
     # ── Analysis callback ────────────────────────────────────────────────────
 
-    def _on_analysis(self, msg: Any) -> None:
+    def _on_analysis(self, topic: str, msg: Any) -> None:
         try:
             data = json.loads(msg.data)
         except (json.JSONDecodeError, AttributeError):
             return
+
+        # P16/E1: fan the raw analysis out to recorders (experiment log). A
+        # handler failure must never break the bridge thread.
+        for handler in list(self._frame_handlers):
+            try:
+                handler(data)
+            except Exception:
+                _log.exception("analysis frame handler failed")
 
         metrics = data.get("metrics", {})
         features = data.get("features", {})
@@ -192,6 +283,11 @@ class RosBridge:
         beta = float(metrics.get("beta", 0))
 
         frame = {
+            # The M2 node emits role in the analysis JSON — carry it through
+            # so _resolve_role's first link hits on the production path
+            # (single-device steering on the bare topic would otherwise fall
+            # through to the "speed" backstop).
+            "role": data.get("role"),
             "channels": {
                 "alpha": alpha,
                 "theta": theta,
@@ -202,7 +298,6 @@ class RosBridge:
             "features": {
                 "theta_beta_ratio": float(features.get("theta_beta", 0)),
                 "focus_index": float(features.get("beta_alpha_theta", 0)),
-                "asymmetry": float(features.get("alpha_asym", 0)),
             },
             "control": {
                 "speed_intent": float(intents.get("speed_intent", 0)),
@@ -213,8 +308,8 @@ class RosBridge:
         }
 
         with self._lock:
-            self._latest = frame
-            self._last_ts = time.monotonic()
+            self._latest[topic] = frame
+            self._last_ts[topic] = time.monotonic()
             was_first = self._msg_count == 0
             self._msg_count += 1
             if was_first:

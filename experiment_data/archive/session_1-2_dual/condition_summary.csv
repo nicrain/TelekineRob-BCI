@@ -1,0 +1,5 @@
+session_id,run,channel,n_attention,n_rest,hit_rate,fa_rate,d_prime,auc,mean_score_attention,mean_score_rest,mean_latency_attention,mean_latency_rest,dir_hit_rate,dir_fa_rate,clean_switch_rate,avg_toggles_per_switch
+W_G_s1_alpha_dual_2026-08-23_1787472417,1,steering,10,10,1.0,0.4,5.006771,0.78,0.515172,0.50712,0.76487,0.736712,0.75,0.2,0.0,32.0
+W_G_s1_alpha_dual_2026-08-23_1787472417,1,speed,12,8,0.0,0.0,0.0,0.677083,0.122462,0.056439,0.767308,0.726016,,,,
+W_G_s2_tbr_dual_2026-08-23_1787473771,1,steering,10,10,0.8,0.5,0.841621,0.74,0.525061,0.503803,0.730594,0.679027,0.5,0.2,0.25,41.0
+W_G_s2_tbr_dual_2026-08-23_1787473771,1,speed,12,8,0.0,0.0,0.0,0.541667,0.106627,0.122734,0.707237,0.70117,,,,

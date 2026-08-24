@@ -1,19 +1,18 @@
 #!/usr/bin/env python3
-"""WSL/ROS2 版本 “All-in-one” Thymio 控制（不依赖 tdm/Thymio Suite）。
+"""WSL/ROS2 version "All-in-one" Thymio control (without tdm/Thymio Suite dependency).
 
-这个脚本：
-- 作为 ROS2 节点运行
-- 从本地 UDP 5005 接收注视点数据 (x,y)
-- 根据 gaze 方向发布 /cmd_vel 速度指令给 Thymio
+This script:
+- Runs as a ROS2 node
+- Receives gaze point data (x, y) from local UDP port 5005
+- Publishes /cmd_vel velocity commands to Thymio based on gaze direction
 
-使用前提：
-1. 已启动 ROS2（source /opt/ros/<distro>/setup.bash 或 workspace install/setup.bash）
-2. 已通过 asebaros + thymio_driver 连接 Thymio（见 README）
-3. 眼势数据发往 UDP 5005，格式为 JSON: {"x": 0.5, "y": 0.4}
+Prerequisites:
+1. ROS2 environment sourced (source /opt/ros/<distro>/setup.bash or workspace install/setup.bash)
+2. Thymio connected via asebaros + thymio_driver (see README)
+3. Gaze data sent to UDP port 5005 in JSON format: {"x": 0.5, "y": 0.4}
 
-运行：
-  python3 src/thymio_ros_gaze_all_in_one.py
-
+Usage:
+  python3 thymio_ros_gaze_all_in_one.py
 """
 
 import json
@@ -30,19 +29,19 @@ class ThymioRosGaze(Node):
         super().__init__('thymio_ros_gaze_all_in_one')
         self.last_msg_time = time.time()
 
-        # ROS 话题
+        # ROS topics
         self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel', 10)
 
-        # UDP 接收设置
+        # UDP receiver settings
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.bind(('0.0.0.0', 5005))
         self.sock.setblocking(False)
 
-        # 定时器
+        # Timers
         self.create_timer(0.1, self.udp_receive_loop)
         self.create_timer(0.2, self.watchdog_check)
 
-        self.get_logger().info('ROS 视线控制节点已启动，等待 UDP gaze 数据 (port 5005)')
+        self.get_logger().info('ROS gaze control node started, waiting for UDP gaze data (port 5005)')
 
     def udp_receive_loop(self):
         latest_data = None
@@ -64,22 +63,22 @@ class ThymioRosGaze(Node):
         self.last_msg_time = time.time()
         twist = Twist()
 
-        # 1. 优先级最高：向下看 (y > 0.8) -> 后退
+        # 1. Highest priority: look down (y > 0.8) -> backward
         if y > 0.8:
             twist.linear.x = -0.15
             twist.angular.z = 0.0
 
-        # 2. 其次判断左右：x < 0.3 为左转
+        # 2. Next check left/right: x < 0.3 is turn left
         elif x < 0.3:
             twist.linear.x = 0.1
             twist.angular.z = 1.2
 
-        # 3. x > 0.7 为右转
+        # 3. x > 0.7 is turn right
         elif x > 0.7:
             twist.linear.x = 0.1
             twist.angular.z = -1.2
 
-        # 4. 其他情况（看中间或上方）：直行
+        # 4. Other cases (look middle or up): straight
         else:
             twist.linear.x = 0.2
             twist.angular.z = 0.0

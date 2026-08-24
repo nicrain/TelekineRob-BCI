@@ -1,16 +1,12 @@
-"""TbrPolicy — uses theta/beta ratio for speed and alpha asymmetry for steering.
+"""TbrPolicy — uses theta/beta ratio for speed and steering.
 
 Algorithm
 ---------
 - **speed_intent**: inversely proportional to ``theta_beta`` (theta/beta ratio, TBR).
   A higher TBR typically indicates lower attentional engagement,
   so higher ratio → lower speed intent.  EMA smoothing (α=0.35) applied.
-- **steer_intent**: same alpha asymmetry mapping as EiPolicy.
-
-Calibration
------------
-Parameters calibrated against ``20260408111446_Patient01.edf`` (3-min window).
-Re-calibrate for different recordings.
+- **steer_intent**: same metric as speed (theta_beta), mapped to [0.5, 0.75].
+  Direction controlled by blink toggle.
 """
 from __future__ import annotations
 
@@ -21,20 +17,20 @@ from thymio_control.processors.enrich import clip01
 
 
 class TbrPolicy(Policy):
-    """Use theta/beta ratio for speed intent and alpha asymmetry for steering."""
+    """Use theta/beta ratio for speed and steering (blink controls direction)."""
 
-    # Normalisation: clip01(1.0 - (ratio_smooth - offset) / scale)
-    # Calibrated to map p5~p95 of theta_beta to [0, 1]
-    tbr_offset: float = 0.207    # p5 of theta_beta
-    tbr_scale:  float = 2.215    # p95 - p5
-    ema_alpha:  float = 0.35
+    ema_alpha: float = 0.35
 
-    def __init__(self, offset: float = 0.207, scale: float = 2.215) -> None:
+    def __init__(self, offset: float = 0.0, scale: float = 1.0) -> None:
         super().__init__()
         self.tbr_offset = offset
         self.tbr_scale = scale
         self._tbr_smooth: float = 0.0
         self._primed: bool = False
+
+    def set_calibration(self, offset: float, scale: float) -> None:
+        self.tbr_offset = offset
+        self.tbr_scale = scale
 
     def compute_intents(self, features: Dict[str, float]) -> Dict[str, float]:
         ratio = features.get("theta_beta", 1.0)

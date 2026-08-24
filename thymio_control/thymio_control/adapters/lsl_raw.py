@@ -1,6 +1,6 @@
 """RawLslAdapter — pulls raw EEG samples from LSL and applies DSP.
 
-This is the production migration of ``lsl_test/raw_lsl_adapter.py``
+This is the production migration of ``thymio_control/lsl_test/raw_lsl_adapter.py``
 (validated in Phase 1).
 
 Architecture
@@ -76,6 +76,7 @@ class RawLslAdapter(BaseAdapter):
         timeout: float = 5.0,
         source_id: Optional[str] = None,
         config: Optional[DSPConfig] = None,
+        debug_frames: int = 0,
     ) -> None:
         try:
             from pylsl import StreamInlet, resolve_byprop  # type: ignore
@@ -138,6 +139,23 @@ class RawLslAdapter(BaseAdapter):
                 n_channels=self._n_channels,
             )
 
+        # Diagnostic probe (off by default, gated by the node's
+        # dsp_debug_frames param): print the stream facts once, then the
+        # first N frames' signal RMS + raw band powers (source_unit², before
+        # the µV² conversion) + converted metrics. These three signals pin a
+        # zero-metric device to a stage:
+        #   rms≈0            → data never reaches the extractor (scaling / pull)
+        #   rms real, raw≈0  → frequency mapping (declared vs actual sample rate)
+        #   raw real, conv≈0 → source_unit mismatch between stream and data
+        self._debug_remaining = int(debug_frames)
+        if self._debug_remaining > 0:
+            print(
+                f"[dsp-debug] stream={self._stream_name} nominal_rate={self._sample_rate}Hz "
+                f"ch={self._n_channels} source_unit={self._cfg.source_unit!r} "
+                f"from_stream={self._unit_from_stream} labels={self._channel_labels}",
+                flush=True,
+            )
+
     # ------------------------------------------------------------------
     # Properties
     # ------------------------------------------------------------------
@@ -193,6 +211,24 @@ class RawLslAdapter(BaseAdapter):
         metrics.update(
             per_channel_metrics(self._channel_labels, latest, self._cfg.source_unit)
         )
+
+        if self._debug_remaining > 0:
+            rms = float(np.sqrt(np.mean(chunk ** 2))) if chunk.size else 0.0
+            ch_pows = " ".join(
+                f"ch{i}=[t{latest[i].theta:.4g} a{latest[i].alpha:.4g} "
+                f"b{latest[i].beta:.4g}]"
+                for i in sorted(latest)
+            )
+            print(
+                f"[dsp-debug] rms={rms:.4g} raw_avg="
+                f"[d{avg_bp.delta:.4g} t{avg_bp.theta:.4g} a{avg_bp.alpha:.4g} "
+                f"b{avg_bp.beta:.4g} g{avg_bp.gamma:.4g}] "
+                f"conv=[alpha={metrics.get('alpha'):.4g} "
+                f"beta={metrics.get('beta'):.4g} theta={metrics.get('theta'):.4g}] "
+                f"{ch_pows}",
+                flush=True,
+            )
+            self._debug_remaining -= 1
 
         return EegFrame(ts=time.time(), source="lsl_raw", metrics=metrics)
 

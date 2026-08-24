@@ -1,14 +1,14 @@
 /**:
   ros__parameters:
     input: lsl
-    policy: tbr
+    policy: ei
     eeg_device: bci-core-4
     lsl_stream_type: EEG
     lsl_timeout: 8.0
-    lsl_source_id: ''
+    lsl_source_id: gtec_hybrid_black
     calibrate: false
-    calib_offset: 0.0
-    calib_scale: 1.0
+    calib_offset: 0.0736
+    calib_scale: 0.9154
     cmd_topic: /cmd_vel
     analysis_topic: /eeg_analysis
     publish_hz: 20.0
@@ -21,6 +21,9 @@
     reverse_speed: -0.15
     turn_forward_speed: 0.1
     turn_angular_speed: 1.2
-    reverse_threshold: 0.2
     steer_deadzone: 0.1
     line_mode: ''
+    role: steering
+    line_pivot_gain: 8.0
+    line_spin_gain: 15.0
+    dsp_debug_frames: 5

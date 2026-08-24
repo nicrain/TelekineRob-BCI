@@ -18,6 +18,7 @@ install(DIRECTORY docs/
 
 install(PROGRAMS
   scripts/eeg_control_node.py
+  scripts/cmd_vel_fuser.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

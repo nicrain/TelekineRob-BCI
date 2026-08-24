@@ -1,4 +1,4 @@
-"""AlphaPolicy — uses alpha band power for speed and asymmetry for steering.
+"""AlphaPolicy — uses alpha band power for speed and steering.
 
 Algorithm
 ---------
@@ -6,16 +6,8 @@ Algorithm
   Alpha suppression (lower alpha) indicates cortical activation and
   higher attention, so lower alpha → higher speed intent.
   EMA smoothing (α=0.35) applied before normalisation.
-- **steer_intent**: derived from ``alpha_asym`` (same mapping as
-  EiPolicy and TbrPolicy).  Values > 0.5 indicate rightward bias.
-
-Calibration
------------
-Parameters are **placeholder values** estimated from the alpha range
-observed in ``20260408111446_Patient01.edf`` (~0.5–7.5 µV²).
-NOT yet calibrated via p5/p95 statistics like EiPolicy and
-TbrPolicy.  TODO: run formal calibration against the
-calibrated data before production use.
+- **steer_intent**: same metric as speed (alpha), mapped to [0.5, 0.75].
+  Direction controlled by blink toggle.
 """
 from __future__ import annotations
 
@@ -26,20 +18,20 @@ from thymio_control.processors.enrich import clip01
 
 
 class AlphaPolicy(Policy):
-    """Use alpha power inversely for speed intent; alpha asymmetry for steering."""
+    """Use alpha power for speed and steering (blink controls direction)."""
 
-    # Normalisation: clip01(1.0 - (alpha_smooth - offset) / scale)
-    # Alpha range from calibration: ~0.5 to ~7.5 µV²
-    alpha_offset: float = 0.5    # p5 of alpha power
-    alpha_scale:  float = 7.0    # p95 - p5
-    ema_alpha:    float = 0.35
+    ema_alpha: float = 0.35
 
-    def __init__(self, offset: float = 0.5, scale: float = 7.0) -> None:
+    def __init__(self, offset: float = 0.0, scale: float = 1.0) -> None:
         super().__init__()
         self.alpha_offset = offset
         self.alpha_scale = scale
         self._alpha_smooth: float = 0.0
         self._primed: bool = False
+
+    def set_calibration(self, offset: float, scale: float) -> None:
+        self.alpha_offset = offset
+        self.alpha_scale = scale
 
     def compute_intents(self, features: Dict[str, float]) -> Dict[str, float]:
         alpha = features.get("alpha", 0.0)

@@ -1,2 +1,0 @@
-[console_scripts]
-gazebo_camera_bridge = thymio_web_bridge.gazebo_camera_bridge:main

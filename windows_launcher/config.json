@@ -1,0 +1,103 @@
+{
+  "service": {
+    "host": "127.0.0.1",
+    "port": 8020,
+    "allowed_origins": []
+  },
+
+  "wsl": {
+    "distro": "Ubuntu",
+    "repo_path": "/home/robot/TelekineRob-BCI",
+    "stop_wsl": true,
+    "ready_timeout_sec": 60,
+    "ready_poll_sec": 2
+  },
+
+  "sync": {
+    "tool": "robocopy",
+    "src_wsl_root": "\\\\wsl$\\Ubuntu\\home\\robot\\TelekineRob-BCI",
+    "dst_root": "C:\\Users\\Robot\\Desktop\\gpype_test\\TelekineRob-BCI",
+    "items": [
+      { "src": "windows_launcher", "exclude": ["config.json"] },
+      { "src": "gtec_bridge", "exclude": [] }
+    ],
+    "success_exit_codes": [0, 1, 2, 3, 4, 5, 6, 7]
+  },
+
+  "web": {
+    "url": "http://localhost:5173",
+    "backend_url": "http://localhost:8010",
+    "backend_cmd": "export WEB_GUI_FRONTEND_ORIGIN=* && cd web_gui/backend && source /opt/ros/kilted/setup.bash && source ${wsl.repo_path}/install/setup.bash && source ../../.venv/bin/activate && ../../.venv/bin/python -m app.main > /tmp/launcher_backend.log 2>&1",
+    "frontend_cmd": "cd web_gui/frontend && npm run dev -- --port 5173 --strictPort > /tmp/launcher_frontend.log 2>&1",
+    "stop_cmd": "pkill -f 'app.main' ; pkill -f 'npm run dev' ; true",
+    "ready_timeout_sec": 60,
+    "health_interval_sec": 10
+  },
+
+  "devices": {
+    "headband": {
+      "label": "Headband",
+      "type": "bridge",
+      "connect_mode": "open_in_ide",
+      "python_cmd": "python",
+      "script": "gpype_lsl_bridge.py",
+      "cwd": "${sync.dst_root}\\gtec_bridge",
+      "lsl_source_id": "gtec_bci_core4",
+      "verify_timeout_sec": 30,
+      "verify_poll_sec": 2,
+      "open_ide_timeout_sec": 120,
+      "open_cmd": "code \"${sync.dst_root}\\gtec_bridge\\gpype_lsl_bridge.py\"",
+      "open_fallback_cmd": "cmd /c start \"\" \"${sync.dst_root}\\gtec_bridge\\gpype_lsl_bridge.py\""
+    },
+    "hybrid": {
+      "label": "HybridBlack",
+      "type": "bridge",
+      "connect_mode": "spawn",
+      "python_cmd": "python",
+      "script": "unicornpy_lsl_bridge.py",
+      "cwd": "${sync.dst_root}\\gtec_bridge",
+      "lsl_source_id": "gtec_hybrid_black",
+      "verify_timeout_sec": 20,
+      "verify_poll_sec": 2
+    },
+    "thymio": {
+      "label": "Thymio",
+      "type": "usbipd",
+      "attach_cmd": "usbipd attach --wsl=Ubuntu --busid=1-1",
+      "detach_cmd": "usbipd detach --busid=1-1",
+      "verify_cmd": "wsl -d Ubuntu -e bash -lc \"test -e /dev/ttyACM0 && echo ok\"",
+      "verify_delay_sec": 3,
+      "reconcile_sec": 10
+    }
+  },
+
+  "sidebar": {
+    "groups": [
+      {
+        "id": "system",
+        "label": "Status",
+        "items": [{"id": "system-state", "type": "status", "label": "System State"}]
+      },
+      {
+        "id": "devices",
+        "label": "Devices",
+        "items": [
+          {"id": "headband", "type": "device", "label": "Headband"},
+          {"id": "hybrid", "type": "device", "label": "HybridBlack"},
+          {"id": "thymio", "type": "device", "label": "Thymio"}
+        ]
+      },
+      {
+        "id": "ops",
+        "label": "Operations",
+        "items": [
+          {"id": "start-system", "type": "action", "label": "Start System"},
+          {"id": "restart-web", "type": "action", "label": "Restart Web"},
+          {"id": "stop-system", "type": "action", "label": "Stop System"},
+          {"id": "exit", "type": "action", "label": "Exit Launcher"}
+        ]
+      }
+    ],
+    "log": {"id": "view-log", "type": "action", "label": "View Log", "placeholder": true}
+  }
+}
