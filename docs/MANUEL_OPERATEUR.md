@@ -100,7 +100,7 @@
 |---|---|---|
 | **无波形**(03 — Real-time Signals 空白) | 后端信号处理未正常启动;或设备流未到 | 确认侧边栏该设备为 **Connected**;点 **Restart Web** 重启前后端;仍无 → 断开该设备再 **Connect** |
 | **校准卡在 Preparing…**(点 Calibrate 后不进入倒计时) | 校准在等第一帧分析数据,但设备没流 / 桥停 | 确认侧边栏设备为 **Connected**;点 **Restart Web**;检查设备是否还开着 |
-| **断流**(设备断电/拔出,状态变灰或红) | 设备断电 / USB 断开 / 桥进程退出 | 重新开设备、插好 USB;系统会自动恢复(桥重建 + 状态变绿);不恢复 → **Disconnect** 再 **Connect**;系统变 **Error** → **Restart System** |
+| **断流**(设备断电/拔出,状态变灰或红) | 设备断电 / USB 断开 / 桥进程退出 | 重新开设备、插好 USB;系统会自动恢复(桥重建 + 状态变绿);不恢复 → **Disconnect** 再 **Connect**;系统变 **Error** → **Start System** 重试 |
 | **Start System 超时**(长时间不 Ready) | WSL 没就绪(60 秒超时);或 web 服务没起来 | 按底部提示判断:WSL 未就绪 → 检查 WSL;web 未就绪 → 点 **View Log** 看日志,点 **Restart Web** 后重试 |
 
 ## 8. 停止系统
