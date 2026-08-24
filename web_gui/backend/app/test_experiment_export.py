@@ -277,7 +277,7 @@ def test_export_clean_switch_trajectories(tmp_path):
         # trial 0: baseline, output already on the left target.
         0: [_frame(0, "rest", "attention", "left", 0.0, 0.7, "left", 9.0)],
         # trial 1: target changed left→right BUT the output is already right
-        # (起点已对) → toggles 0 == needed 0 → clean.
+        # (starting point already matches) → toggles 0 == needed 0 → clean.
         1: [_frame(1, "rest", "attention", "right", 0.0, 0.7, "right", 10.0)],
         # trial 2: single hit — one flip right→left lands on the new target.
         2: [_frame(2, "rest", "attention", "left", 0.0, 0.7, "right", 10.0),

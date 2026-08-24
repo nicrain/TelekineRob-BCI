@@ -195,7 +195,7 @@ def balanced_shuffle(trials: list[TrialSpec], seed: Optional[int] = None) -> lis
 
     Each condition bucket is shuffled first (random within condition), then
     dequeued one-at-a-time in stable bucket order — balanced target exposure
-    AND no fatigue-inducing streaks (防顺序效应, plan §1.4/§1.5).
+    AND no fatigue-inducing streaks (prevent order effects, plan §1.4/§1.5).
     """
     rnd = random.Random(seed)
     buckets: dict[tuple, list] = {}

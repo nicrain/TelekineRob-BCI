@@ -220,7 +220,7 @@ class LauncherApp:
     def status(self) -> dict:
         # Reconcile before reporting so a bridge that died without an
         # explicit disconnect shows red/grey, not a stale "connected" (§4:
-        # 状态显示反映真实系统).
+        # status display reflects actual system state).
         self._reconcile_proc_health()
         self._reconcile_system_health()
         return status_payload(self.state)
@@ -346,7 +346,7 @@ class LauncherApp:
     # -- M3: system chain ------------------------------------------------
 
     def start_system(self) -> dict:
-        """wsl 检测 → 同步 launcher+桥文件（自同步）→ 起前后端 → 就绪检测."""
+        """WSL detection → sync launcher+bridge files (self-sync) → start frontend/backend → readiness check."""
         with self._lock:
             if not can_start_system(self.state):
                 return {"ok": True, "message": "System already starting or running"}
@@ -573,7 +573,7 @@ class LauncherApp:
         return self._ready_check(url, timeout)
 
     def stop_system(self) -> dict:
-        """停桥进程 + 停 web 进程 + 停 WSL（§1.3 关闭流程）。"""
+        """Stop bridge processes + stop web processes + stop WSL (§1.3 shutdown flow)."""
         with self._lock:
             if not can_stop_system(self.state):
                 return {"ok": True, "message": "System stopped"}
@@ -606,7 +606,7 @@ class LauncherApp:
             return {"ok": False, "message": self.state.system_msg}
 
     def restart_web(self) -> dict:
-        """停掉旧 web 进程（pkill）并重新拉起。"""
+        """Stop old web processes (pkill) and restart them."""
         with self._lock:
             if not can_stop_system(self.state):
                 return {"ok": False, "message": "System not running — nothing to restart"}
@@ -1037,7 +1037,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     # parse config.json (avoids batch quoting pain) and stays correct even
     # if the operator changes the port.
     (HERE / "last_url.txt").write_text(f"http://{host}:{port}/\n", encoding="utf-8")
-    write_pidfile()  # P1: bat 用它在下次双击时幂等替换
+    write_pidfile()  # P1: bat uses this for idempotent replacement on next double-click
     try:
         server.serve_forever()
     except KeyboardInterrupt:

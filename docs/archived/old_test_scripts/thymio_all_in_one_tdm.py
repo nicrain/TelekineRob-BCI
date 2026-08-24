@@ -7,7 +7,7 @@ import socket
 import json
 import asyncio
 import time
-import os  # 在文件顶部导入 os
+import os  # Import os at the top of the file
 from threading import Thread
 
 class ThymioGazeSystem(Node):
@@ -16,7 +16,7 @@ class ThymioGazeSystem(Node):
         self.thymio_node = None
         self.last_msg_time = time.time()
         
-        # 初始化连接
+        # Initialize connection
         self.client = ClientAsync(tdm_addr="172.27.96.1", tdm_port=8596)
 
         # UDP Socket
@@ -24,11 +24,11 @@ class ThymioGazeSystem(Node):
         self.sock.bind(("0.0.0.0", 5005))
         self.sock.setblocking(False)
 
-        # 定时器：每0.1秒接收一次，平衡实时性与缓冲区负载
+        # Timer: receive every 0.1s, balance real-time responsiveness and buffer load
         self.create_timer(0.1, self.udp_receive_loop) 
         self.create_timer(0.2, self.watchdog_check)
 
-        self.get_logger().info("Système en temps réel : réactivité optimisée et arrêt d'urgence")
+        self.get_logger().info("Real-time system: optimized responsiveness and emergency stop")
 
     def udp_receive_loop(self):
         latest_data = None
@@ -50,28 +50,28 @@ class ThymioGazeSystem(Node):
         self.last_msg_time = time.time()
         twist = Twist()
         
-        # 1. 优先级最高：向下看 (y > 0.8) -> 后退
+        # 1. Highest priority: look down (y > 0.8) -> backward
         if y > 0.8:
-            twist.linear.x = -0.15  # 负值代表后退
+            twist.linear.x = -0.15  # Negative value means backward
             twist.angular.z = 0.0
             
-        # 2. 其次判断左右：x < 0.3 为左转
+        # 2. Next check left/right: x < 0.3 is turn left
         elif x < 0.3:
             twist.linear.x = 0.1
             twist.angular.z = 1.2
             
-        # 3. x > 0.7 为右转
+        # 3. x > 0.7 is turn right
         elif x > 0.7:
             twist.linear.x = 0.1
             twist.angular.z = -1.2
             
-        # 4. 其他情况（看中间或上方）：直行
+        # 4. Other cases (look middle or up): straight
         else:
             twist.linear.x = 0.2
             twist.angular.z = 0.0
 
         if self.thymio_node:
-            # 使用当前的异步发送方式
+            # Use async dispatch
             asyncio.run_coroutine_threadsafe(self.send_to_robot(twist), self.loop)
 
     def watchdog_check(self):
@@ -126,9 +126,9 @@ def main():
         print("Exécution de l'arrêt d'urgence matériel...")
         if node.thymio_node:
             try:
-                # 使用临时事件循环发送停止指令
+                # Use temporary event loop to send stop command
                 async def final_stop():
-                    # 获取控制权并清除指令
+                    # Obtain control and clear commands
                     await node.thymio_node.lock()
                     await node.thymio_node.set_variables({
                         "motor.left.target": [0], 
@@ -140,22 +140,19 @@ def main():
                 stop_loop = asyncio.new_event_loop()
                 stop_loop.run_until_complete(final_stop())
                 stop_loop.close()
-                print("Commande matérielle envoyée.")
+                print("Hardware command sent.")
             except Exception as e:
-                print(f"Échec de l'envoi de la commande d'arrêt : {e}")
+                print(f"Failed to send stop command: {e}")
 
-        # 清理并退出
-        print("Fermeture du programme...")
+        # Clean up and exit
+        print("Closing program...")
         try:
             node.destroy_node()
             rclpy.shutdown()
         except:
             pass
-        # 最后使用强制退出以终止进程
+        # Force exit to terminate process
         os._exit(0)
-
-if __name__ == '__main__':
-    main()
 
 if __name__ == '__main__':
     main()
