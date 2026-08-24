@@ -262,7 +262,7 @@ function useCalibration(device, setFeedback, onDone) {
     // the node log instead of silently finishing.
     const unchanged = Math.abs(newOffset - prevCalibRef.current.offset) < 1e-9
       && Math.abs(newScale - prevCalibRef.current.scale) < 1e-9;
-    if (unchanged) setFeedback('校准未产出新值(见节点日志)');
+    if (unchanged) setFeedback('Calibration produced no new values (see node log)');
     if (onDone) onDone();
   }
 

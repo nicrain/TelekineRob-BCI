@@ -1,5 +1,7 @@
 # TelekineRob-BCI 项目架构说明书
 
+> ⚠️ **outdated（已归档）**：本文档为 gtec-only 时代的旧架构说明书（分支 `feature/gtec-only`）。项目已演进到 `feature/double-gtec`（双设备 + O2 总控 + web GUI 实验模式），现行架构见 [docs/EXPERIMENT_PLAN.md](../EXPERIMENT_PLAN.md) 与 [docs/O2_LAUNCHER.md](../O2_LAUNCHER.md)。
+
 ## 1. 文档信息
 - 项目: g.tec EEG 驱动的 Thymio 机器人控制平台
 - 版本: v3.1

@@ -147,7 +147,7 @@ def test_refresh_button_reloads_iframe():
 
 def test_user_visible_layer_has_no_cjk():
     """P5: the shipped page and config labels must be CJK-free (English UI)."""
-    cjk = re.compile(r"[一-鿿]")
+    cjk = re.compile(r"[\u4e00-\u9fff]")
     html = INDEX.read_text(encoding="utf-8")
     assert not cjk.search(html), "index.html has residual CJK"
     cfg = json.loads(CONFIG.read_text(encoding="utf-8"))

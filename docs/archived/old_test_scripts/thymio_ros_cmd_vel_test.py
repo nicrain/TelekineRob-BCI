@@ -1,19 +1,18 @@
 #!/usr/bin/env python3
-"""ROS2 脚本：通过 /cmd_vel 控制 Thymio（不依赖 Thymio Suite）。
+"""ROS2 script: control Thymio via /cmd_vel (without Thymio Suite dependency).
 
-使用条件：
-- 当前环境已正确安装并配置 ROS2（已 source ROS2 环境）。
-- 已经在同一 ROS_DOMAIN / ROS_NAMESPACE 下运行 Thymio ROS 节点（例如 asebaros + thymio_driver）。
-- Thymio 已连通（USB 通过 usbipd 转发，或网络模式），asebaros 已将其代理成 ROS 节点。
+Prerequisites:
+- ROS2 is installed and sourced in the current environment.
+- Thymio ROS nodes (e.g. asebaros + thymio_driver) are running in the same ROS_DOMAIN / ROS_NAMESPACE.
+- Thymio is connected (USB via usbipd or network mode), and proxied as a ROS node by asebaros.
 
-运行后脚本会：
-  1) 前进 2 秒
-  2) 停止 2 秒
-  3) 退出
+Workflow:
+  1) Move forward for 2 seconds
+  2) Stop for 2 seconds
+  3) Exit
 
-用法：
-  python3 src/thymio_ros_cmd_vel_test.py
-
+Usage:
+  python3 thymio_ros_cmd_vel_test.py
 """
 
 import rclpy
@@ -26,7 +25,7 @@ class ThymioCmdVelTest(Node):
         super().__init__('thymio_ros_cmd_vel_test')
         self.pub = self.create_publisher(Twist, '/cmd_vel', 10)
         self.start_time = self.get_clock().now()
-        self.get_logger().info('发布 /cmd_vel 到 Thymio，2s 前进，2s 停止，然后退出。')
+        self.get_logger().info('Publishing /cmd_vel to Thymio: 2s forward, 2s stop, then exit.')
         self.timer = self.create_timer(0.1, self.timer_callback)
 
     def timer_callback(self):
@@ -38,7 +37,7 @@ class ThymioCmdVelTest(Node):
         elif elapsed < 4.0:
             twist.linear.x = 0.0
         else:
-            self.get_logger().info('测试完成，退出。')
+            self.get_logger().info('Test completed, exiting.')
             try:
                 rclpy.shutdown()
             except RuntimeError:

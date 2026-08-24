@@ -30,4 +30,4 @@ def test_bat_user_facing_strings_are_english():
     assert "Python not found" in text
     assert "startup timed out" in text
     assert "Could not read the service address" in text
-    assert not re.search(r"[一-鿿]", text), "launcher.bat has residual CJK"
+    assert not re.search(r"[\u4e00-\u9fff]", text), "launcher.bat has residual CJK"

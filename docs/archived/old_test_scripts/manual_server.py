@@ -4,25 +4,25 @@ from tdmclient.tcp import TDMServerTCP
 from tdmclient.nodes_local import NodesLocal
 
 def run_server():
-    print("Tentative de démarrage manuel du serveur TDM...")
+    print("Attempting manual startup of TDM server...")
     try:
-        # 1. 强制初始化本地节点发现（直接扫串口）
+        # 1. Force initialization of local node discovery (scan serial ports directly)
         nodes_local = NodesLocal()
         
-        # 2. 创建 TDM 核心服务逻辑
+        # 2. Create TDM core server logic
         server = Server(nodes_local=nodes_local)
         
-        # 3. 绑定 TCP 端口 8596
-        # 这是为了骗过你的 thymio_bridge.py
+        # 3. Bind TCP port 8596
+        # This is to interface with thymio_bridge.py
         tcp_server = TDMServerTCP(server, 8596)
         
-        print("Serveur prêt, écoute sur le port : 8596")
-        print("Recherche de robots en cours, veuillez vérifier que usbipd est attaché et que chmod a été exécuté...")
+        print("Server ready, listening on port: 8596")
+        print("Searching for robots, please verify usbipd is attached and permissions are set...")
         
-        # 4. 进入永久循环
+        # 4. Enter main loop
         tcp_server.run()
     except Exception as e:
-        print(f"Échec du démarrage : {e}")
+        print(f"Startup failed: {e}")
 
 if __name__ == "__main__":
     run_server()

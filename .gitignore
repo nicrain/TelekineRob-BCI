@@ -8,6 +8,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 .venv/
+*.egg-info/
+.pytest_cache/
+.antigravitycli/
 
 # Frontend build artifacts
 web_gui/frontend/node_modules/
@@ -36,6 +39,8 @@ Thumbs.db
 **/test.urdf
 CLAUDE.md
 AGENTS.md
+TASKS.md
+docs/REVIEW_FINDINGS.md
 
 # O2 launcher runtime artifacts (service log, per-device bridge logs, URL)
 windows_launcher/last_url.txt

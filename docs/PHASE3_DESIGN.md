@@ -795,9 +795,9 @@ pytest web_gui/backend/app/test_*.py -v
 
 双设备端到端（无需真实硬件）：
 
-1. 起两个 dummy LSL 流（验证工具，已决定提交）：`python lsl_test/dummy_dual_streams.py`
+1. 起两个 dummy LSL 流（验证工具，已决定提交）：`python thymio_control/lsl_test/dummy_dual_streams.py`
    - 行为：两个 pylsl outlet，`source_id=gtec_bci_core4`（4 通道）+ `source_id=gtec_hybrid_black`（8 通道），均 250Hz、type=EEG；发送合成频段信号（正弦 + 噪声），可选 `--blink` 模拟眨眼。
-   - 只进 `lsl_test/`（离线验证目录），不进生产路径；参考 `lsl_test/edf_to_lsl.py` 的 StreamInfo 写法。
+   - 只进 `thymio_control/lsl_test/`（离线验证目录），不进生产路径；参考 `thymio_control/lsl_test/edf_to_lsl.py` 的 StreamInfo 写法。
    - 或直接跑 Windows 侧两个真实 bridge。
 2. `ros2 launch thymio_control experiment_core.launch.py use_sim:=true run_eeg:=true run_eeg2:=true eeg2_role:=steering`
 3. `ros2 topic echo /eeg_cmd_vel/speed`、`/eeg_cmd_vel/steering`、`/model/thymio/cmd_vel`（或 `/cmd_vel`）确认融合结果。
@@ -821,7 +821,7 @@ pytest web_gui/backend/app/test_*.py -v
 | M2 ROS 融合 | eeg 节点 5 处小改、cmd_vel_fuser、launch 双节点、eeg2 参数文件、CMake | `eeg_control_node.py`、`cmd_vel_fuser.py`、`experiment_core.launch.py`、`eeg_control_node.eeg2.params.yaml`、`CMakeLists.txt`、测试 | 融合/watchdog 单测通过；sim 下双流端到端 |
 | M3 后端接入 | command_runner 双设备启动、RosBridge 多主题、WS 负载、进程清理 | `command_runner.py`、`signal_subscriber.py`、`main.py`、测试 | /ws/stream 返回 devices；stop 无残留 |
 | M4 前端 | 双系列、每设备校准 UI（双设备校准后自动停）、buildPatch、图表列数据分离 | `App.jsx` | 手动验收清单通过 |
-| M5 收尾 | `dummy_dual_streams.py` 验证工具、端到端回归（dummy 双流）、文档同步、TASKS.md 状态更新 | `lsl_test/dummy_dual_streams.py`、`AGENTS.md`/`README.md`/`web_gui/DESIGN.md`、`TASKS.md` | 全量测试 + 双设备验收通过 |
+| M5 收尾 | `dummy_dual_streams.py` 验证工具、端到端回归（dummy 双流）、文档同步、TASKS.md 状态更新 | `thymio_control/lsl_test/dummy_dual_streams.py`、`AGENTS.md`/`README.md`/`web_gui/DESIGN.md`、`TASKS.md` | 全量测试 + 双设备验收通过 |
 
 ---
 
@@ -868,5 +868,5 @@ pytest web_gui/backend/app/test_*.py -v
 - `web_gui/backend/app/main.py`
 - `web_gui/backend/app/test_models.py`（新增）/ `test_config_store.py`
 - `web_gui/frontend/src/App.jsx`
-- `lsl_test/dummy_dual_streams.py`（新增，验证工具）
+- `thymio_control/lsl_test/dummy_dual_streams.py`（新增，验证工具）
 - `TASKS.md`（M5 时更新 P3.1/P3.2 状态）

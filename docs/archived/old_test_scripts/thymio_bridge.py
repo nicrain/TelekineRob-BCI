@@ -9,16 +9,16 @@ class ThymioSafeBridge(Node):
     def __init__(self):
         super().__init__('thymio_bridge')
         try:
-            # 即使报错 ConnectionRefused 也强制继续
+            # Force continue even if ConnectionRefused occurs
             self.client = ClientAsync()
         except ConnectionRefusedError:
-            self.get_logger().warn("Serveur TDM introuvable, bascule en mode port série local...")
-            # 这里的 self.client 其实已经创建了，只是连接失败了
+            self.get_logger().warn("TDM server not found, falling back to local serial mode...")
+            # self.client is created, but connection failed
             pass 
         
         self.thymio_node = None
         self.subscription = self.create_subscription(Twist, '/cmd_vel', self.cmd_vel_callback, 10)
-        self.get_logger().info('Pont Thymio sécurisé démarré')
+        self.get_logger().info('Safe Thymio bridge started')
 
     async def connect(self):
         while rclpy.ok() and self.thymio_node is None:
@@ -26,7 +26,7 @@ class ThymioSafeBridge(Node):
                 self.client.start_local_discovery()
                 self.thymio_node = await self.client.wait_for_node()
                 await self.thymio_node.lock()
-                self.get_logger().info(f'Robot verrouillé : {self.thymio_node.id_str}')
+                self.get_logger().info(f'Robot locked: {self.thymio_node.id_str}')
                 break
             except:
                 await asyncio.sleep(1.0)
@@ -38,7 +38,7 @@ class ThymioSafeBridge(Node):
         try:
             await self.thymio_node.set_variables({"motor.left.target": [l], "motor.right.target": [r]})
         except Exception as e:
-            self.get_logger().error(f"Échec d'envoi : {e}")
+            self.get_logger().error(f"Send failed: {e}")
 
 async def main():
     rclpy.init()
@@ -49,10 +49,10 @@ async def main():
             rclpy.spin_once(node, timeout_sec=0.01)
             await asyncio.sleep(0.01)
     except KeyboardInterrupt:
-        node.get_logger().warn('Arrêt d\'urgence en cours...')
+        node.get_logger().warn('Emergency stop in progress...')
     finally:
         if node.thymio_node:
-            # 退出前最后的步骤：强制停机
+            # Final step before exiting: force stop
             await node.thymio_node.set_variables({"motor.left.target": [0], "motor.right.target": [0]})
             await asyncio.sleep(0.2)
             await node.thymio_node.unlock()

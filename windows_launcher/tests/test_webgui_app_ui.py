@@ -85,7 +85,7 @@ def test_experiment_target_style_markers():
     assert "phase === 'rest'" not in panel
     # the old warning-red target color is gone; no Chinese labels anywhere
     assert "'var(--f-red)'" not in panel
-    for zh in ("注意", "放松", "休息", "方向"):
+    for zh in ("\u6ce8\u610f", "\u653e\u677e", "\u4f11\u606f", "\u65b9\u5411"):
         assert zh not in panel
 
 
