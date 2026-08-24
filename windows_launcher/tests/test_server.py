@@ -216,7 +216,7 @@ def test_service_messages_are_english():
     """P5: every user-facing {ok, message} value must be CJK-free."""
     import re
 
-    cjk = re.compile(r"[一-鿿]")
+    cjk = re.compile(r"[\u4e00-\u9fff]")
     cfg = load_config(REPO_CONFIG)
     for dev in cfg["devices"].values():
         dev["verify_timeout_sec"] = 0
