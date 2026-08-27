@@ -618,3 +618,23 @@ def test_export_old_log_without_role_column_falls_back_to_all_frames():
     assert agg["steer_direction_last"] == "1"
     assert agg["toggles"] == 1
     assert agg["speed_intent"] == pytest.approx(0.7)
+
+
+def test_export_metadata_json_written(tmp_path):
+    """P# (reviewer B50AC1C-1): export writes export_metadata.json with the
+    schema version + dual-device role-filtering provenance, so downstream
+    analysis knows how direction metrics were aggregated."""
+    _write_session(tmp_path, "sess1", roles=("speed",), trials=[
+        {"trial_idx": "0", "a_state": "attention", "b_state": "rest", "b_direction": "left",
+         "mean_alpha": "0.5", "mean_tbr": "0.6", "mean_ei": "0.7", "blink_count": "0", "n_samples": "2"},
+    ], frames={
+        0: [_frame(0, "attention", "rest", "left", 0.8, 0.1, "left", 12.0)],
+    })
+    out = tmp_path / "analysis"
+    export_all(tmp_path, out)
+    meta = json.loads((out / "export_metadata.json").read_text())
+    assert meta == {
+        "export_schema_version": 2,
+        "dual_role_filtering": True,
+        "direction_source_role": "steering",
+    }

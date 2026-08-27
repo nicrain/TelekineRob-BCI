@@ -191,7 +191,7 @@ def _speed_movement(frames: list[dict]) -> Optional[tuple]:
     moving_time_ratio >= MOVING_RATIO_THRESHOLD (the trial count as
     successful)."""
     cms = [_f(r.get("cmd_lin")) for r in frames
-           if str(r.get("role", "")).strip() == "speed" and _f(r.get("cmd_lin")) is not None]
+           if str(r.get("role", "")).strip().lower() == "speed" and _f(r.get("cmd_lin")) is not None]
     if not cms:
         return None
     moving = sum(1 for c in cms if c > SPEED_CMD_THRESHOLD)
@@ -511,11 +511,11 @@ def session_summary_rows(session: dict) -> list[dict]:
                 "latency_ms": agg["latency_ms"],
             })
         for role in roles:
-            if role == "speed":
+            if role.strip().lower() == "speed":
                 rows.append(_channel_summary_row(sid, run, "speed", trials,
                                                  state_key="a_state", score_key="score_a",
                                                  threshold=None, blink=False))
-            elif role == "steering":
+            elif role.strip().lower() == "steering":
                 rows.append(_channel_summary_row(sid, run, "steering", trials,
                                                  state_key="b_state", score_key="score_b",
                                                  threshold=STEER_HIT_THRESHOLD, blink=True))
