@@ -14,6 +14,7 @@ from app.experiment import TRIAL_CSV_COLUMNS, TRIALS_CSV_COLUMNS
 from app.experiment_export import (
     MASTER_COLUMNS,
     _switch_annotation,
+    aggregate_frames,
     auc_rank,
     direction_sequence,
     export_all,
@@ -551,3 +552,69 @@ def test_auc_rank_and_zscore():
     assert zscore(0.5) == pytest.approx(0.0)             # probit midpoint
     assert zscore(0.9772) == pytest.approx(2.0, abs=1e-3)
     assert zscore(0.0) < 0 and zscore(1.0) > 0           # clamped, finite
+
+
+# ── P# dual-device direction aggregation ──────────────────────────────────
+
+def test_export_dual_direction_metrics_use_steering_frames_only():
+    """P#: on a mixed speed+steering frame list the direction metrics come ONLY
+    from the steering-role frames, and speed_intent ONLY from the speed-role
+    frames.
+
+    Steering frames carry steer_direction -1,-1,1,1; a trailing speed frame
+    carries -1. The speed frame must NOT be counted — steer_direction_last
+    would be '-1' (and toggles 2) if the whole mixed stream were used. E1 writes
+    steer_direction as int 1/-1 → CSV '1'/'-1' (no '+'), so the normalized
+    sequence is left,left,right,right.
+    """
+    frames = [
+        _frame(0, "attention", "attention", "left", 0.99, 0.7, "-1", 2.0, role="steering"),
+        _frame(0, "attention", "attention", "left", 0.99, 0.8, "-1", 3.0, role="steering"),
+        _frame(0, "attention", "attention", "left", 0.99, 0.9, "1", 4.0, role="steering"),
+        _frame(0, "attention", "attention", "left", 0.99, 1.0, "1", 5.0, role="steering"),
+        _frame(0, "attention", "attention", "left", 0.60, 0.0, "-1", 6.0, role="speed"),
+    ]
+    agg = aggregate_frames(frames, device_mode="dual")
+    # direction from the steering frames only: -1,-1,1,1 → left,left,right,right
+    assert agg["start_direction"] == "left"
+    assert agg["steer_direction_last"] == "1"            # NOT the trailing speed -1
+    assert agg["toggles"] == 1
+    # speed_intent from the speed frames only (0.6), the steering node's junk
+    # speed_intent (0.99) excluded
+    assert agg["speed_intent"] == 0.6
+    # steer_intent from the steering frames only
+    assert agg["steer_intent"] == pytest.approx(0.85)
+    # latency keeps ALL frames
+    assert agg["latency_ms"] == pytest.approx(4.0)
+
+
+def test_export_dual_no_steering_frames_leaves_direction_empty(capsys):
+    """P#: device_mode=dual with NO steering-role frames is a data gap — the
+    direction metrics stay '' (no mixed-frame fallback masking it), a warning
+    is printed, and nothing crashes. speed_intent still comes from speed frames."""
+    frames = [
+        _frame(0, "attention", "rest", "left", 0.6, 0.0, "-1", 1.0, role="speed"),
+        _frame(0, "attention", "rest", "left", 0.7, 0.0, "-1", 2.0, role="speed"),
+    ]
+    agg = aggregate_frames(frames, device_mode="dual")
+    assert agg["steer_direction"] == ""
+    assert agg["steer_direction_last"] == ""
+    assert agg["toggles"] is None
+    assert agg["start_direction"] is None
+    assert agg["is_blink"] == 0
+    assert agg["speed_intent"] == pytest.approx(0.65)
+    assert "no steering-role frame" in capsys.readouterr().out
+
+
+def test_export_old_log_without_role_column_falls_back_to_all_frames():
+    """P#: older single-role logs have no role column — frames_for_role falls
+    back to all frames, preserving the pre-role aggregation behavior."""
+    f1 = _frame(0, "attention", "attention", "left", 0.6, 0.7, "-1", 1.0)
+    f2 = _frame(0, "attention", "attention", "left", 0.8, 0.9, "1", 2.0)
+    del f1["role"]
+    del f2["role"]
+    agg = aggregate_frames([f1, f2])                    # device_mode defaults ""
+    assert agg["start_direction"] == "left"
+    assert agg["steer_direction_last"] == "1"
+    assert agg["toggles"] == 1
+    assert agg["speed_intent"] == pytest.approx(0.7)

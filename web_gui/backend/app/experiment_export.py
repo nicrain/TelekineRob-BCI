@@ -5,6 +5,7 @@ Reads every session under the experiment data dir (respects
 
   master_trials.csv       — one row per trial, ALL sessions (long table)
   condition_summary.csv   — one row per (session, channel) discrimination stats
+  export_metadata.json    — export provenance (schema version, role filtering)
 
 P46 adds the steering direction-control quality metric: ``clean_switch`` per
 trial (master table) and ``clean_switch_rate`` / ``avg_toggles_per_switch`` per
@@ -343,19 +344,50 @@ def session_runs(trials_rows: list[dict]) -> dict:
     return runs
 
 
-def aggregate_frames(frames: list[dict]) -> dict:
+def frames_for_role(frames: list[dict], role: str) -> list[dict]:
+    """Frames whose ``role`` column matches ``role``; older single-role logs
+    without a role column fall back to all frames."""
+    selected = [r for r in frames
+                if str(r.get("role", "")).strip().lower() == role]
+    return selected if selected else frames
+
+
+def aggregate_frames(frames: list[dict], device_mode: str = "") -> dict:
     """Per-trial outputs from the frame rows — tolerant of empty values:
-    missing frames → '' aggregates, never a crash."""
-    speed = [_f(r.get("speed_intent")) for r in frames]
-    steer = [_f(r.get("steer_intent")) for r in frames]
+    missing frames → '' aggregates, never a crash.
+
+    Dual-device trial logs interleave rows from the ``speed`` and ``steering``
+    roles. Directional values must therefore be computed only from the latter;
+    otherwise the two partial command streams create artificial direction
+    changes. ``speed_intent`` likewise comes only from the speed role (the
+    steering node's speed_intent is a useless default); ``latency_ms`` keeps
+    all frames. Older single-role logs may not carry a role column, in which
+    case all frames remain the appropriate source (``frames_for_role``
+    fallback). In dual mode a trial with NO steering frames is a data gap —
+    its direction metrics stay '' (with a warning) instead of being masked by
+    the mixed-frame fallback.
+    """
+    steering_frames = frames_for_role(frames, "steering")
+    speed_frames = frames_for_role(frames, "speed")
+    # P# (dual-device direction aggregation): device_mode == dual + no steering
+    # frames → leave direction metrics '' (data gap, not a valid trial), do NOT
+    # fall back to the mixed stream (it would fabricate direction changes).
+    if str(device_mode).strip().lower() == "dual" and not any(
+            str(r.get("role", "")).strip().lower() == "steering" for r in frames):
+        print(f"[experiment_export] device_mode=dual but no steering-role frame "
+              f"in trial ({len(frames)} frames) — direction metrics left empty")
+        steering_frames = []
+    speed = [_f(r.get("speed_intent")) for r in speed_frames]
+    steer = [_f(r.get("steer_intent")) for r in steering_frames]
     lat = [_f(r.get("latency_ms")) for r in frames]
-    dirs = [str(r.get("steer_direction", "")).strip() for r in frames
+    dirs = [str(r.get("steer_direction", "")).strip() for r in steering_frames
             if str(r.get("steer_direction", "")).strip()]
-    blink = any(str(r.get("is_blink", "")).strip() not in ("", "0", "False", "false") for r in frames)
+    blink = any(str(r.get("is_blink", "")).strip() not in ("", "0", "False", "false")
+                for r in steering_frames)
     # P46: the direction trajectory — 'toggles' = frame-by-frame flips of the
     # OUTPUT direction (None when the trial has no direction output);
     # 'start_direction' = the first output direction (None likewise).
-    seq = direction_sequence(frames)
+    seq = direction_sequence(steering_frames)
     toggles = None if not seq else sum(1 for a, b in zip(seq, seq[1:]) if a != b)
     return {
         "speed_intent": _mean(speed),
@@ -391,7 +423,7 @@ def session_master_rows(session: dict) -> list[dict]:
             except (ValueError, TypeError):
                 idx = 0
             frames = read_trial_frames(session["dir"], idx, run)
-            agg = aggregate_frames(frames)
+            agg = aggregate_frames(frames, sys.get("device_mode", ""))
             mov = _speed_movement(frames)          # P#: ACTUAL forward movement
             ann = _switch_annotation(t.get("b_state"), t.get("b_direction"), prev_target,
                                      agg["toggles"], agg["start_direction"])
@@ -455,7 +487,7 @@ def session_summary_rows(session: dict) -> list[dict]:
             except (ValueError, TypeError):
                 idx = 0
             frames = read_trial_frames(session["dir"], idx, run)
-            agg = aggregate_frames(frames)
+            agg = aggregate_frames(frames, sys.get("device_mode", ""))
             mov = _speed_movement(frames)          # P#: ACTUAL forward movement
             ann = _switch_annotation(t.get("b_state"), t.get("b_direction"), prev_target,
                                      agg["toggles"], agg["start_direction"])
@@ -626,6 +658,17 @@ def export_all(data_dir: Path | str, out_dir: Optional[Path | str] = None) -> di
 
     _write_csv(out_dir / "master_trials.csv", MASTER_COLUMNS, master)
     _write_csv(out_dir / "condition_summary.csv", SUMMARY_COLUMNS, summary)
+    # P#: export provenance — schema version + the dual-device role-filtering
+    # contract, so downstream analyses know how the direction metrics were
+    # aggregated (steering-role frames only, speed from speed frames).
+    _EXPORT_METADATA = {
+        "export_schema_version": 2,
+        "dual_role_filtering": True,
+        "direction_source_role": "steering",
+    }
+    with open(out_dir / "export_metadata.json", "w", encoding="utf-8") as fh:
+        json.dump(_EXPORT_METADATA, fh, indent=2)
+        fh.write("\n")
     return {
         "sessions": len(sessions),
         "master_rows": len(master),
