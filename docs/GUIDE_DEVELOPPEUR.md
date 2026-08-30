@@ -56,6 +56,13 @@ LSL 流 (Windows bridge)
 3. 参数文件 `eeg_control_node.params.yaml` 设 `policy: <新名>`。
 4. 校准:30s 采集 → p5/p50 → 写回 `calib_offset`/`calib_scale` → 重建 policy。
 
+**EMA 平滑参数(`ema_alpha`)。**
+- 三个策略 `policies/tbr.py`、`policies/ei.py`、`policies/alpha.py` 都有类属性 `ema_alpha: float = 0.35`。
+- 作用:对原始指标(α 功率 / θ/β 比值)先做指数移动平均,再归一化——`smoothed = ema_alpha × 新值 + (1 − ema_alpha) × 上次平滑值`;0.35 = 新数据信 35%、历史信 65%。
+- 效果:单帧波动不突跳,控制更稳;代价是反应略慢。第一帧无历史,直接取原始值(`_primed` 标志)。
+- 调参:调大 → 更跟手、更抖;调小 → 更平滑、更钝;0.35 为当前中间偏稳取值。
+- 注明:`ei` 已不用于实验,`alpha` / `tbr` 在用。
+
 **新增设备。**
 - 在 `thymio_control/device_profiles.py` 注册表登记设备(如 `hybrid-black` 8 通道、`bci-core-4` 4 通道);`RawLslAdapter` 从 LSL StreamInfo 自动读取通道数与采样率。
 
