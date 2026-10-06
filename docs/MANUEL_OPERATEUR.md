@@ -1,111 +1,149 @@
 # MANUEL_OPERATEUR
 
-> 操作者手册 — 中文源文(将翻译为法语)。规矩:中文叙述只翻技术标识符之外的部分;内部三方注解(CTO/programmer/reviewer)禁止入正文。术语与 docs/GLOSSAIRE.md 保持一致。
+[中文版](MANUEL_OPERATEUR_cn.md)
 
-## 1. 简介与安全
+> Manuel opérateur : vérifications avant utilisation, connexion et calibration, démarrage de la commande EEG, dépannage courant et arrêt. Les noms des boutons restent en anglais, comme dans l'interface, pour les retrouver facilement.
 
-**O2 是什么。** O2 是 Windows 上的总控台(windows_launcher):你只需双击一个图标,浏览器就会打开控制页,你在里面点按钮就能启动整个系统、连接 EEG 设备、运行实验、导出数据。全程点击按钮,不碰命令行。
+Accès rapide : [Vérifications avant utilisation](#vérifications-avant-utilisation) · [Démarrer le système](#2-démarrer-le-système) · [Connexion et calibration](#3-connexion-des-appareils-et-calibration) · [Démarrer la commande EEG](#4-démarrer-la-commande-eeg) · [Dépannage](#6-dépannage) · [Arrêter le système](#7-arrêter-le-système)
 
-**谁用。** 本手册写给不熟悉电脑技术的操作者。实验可由一人或两人完成:
-- 一人模式:同一人戴一台设备,前进/停止与转向分块各测。
-- 双人模式:一人(A)戴一台设备负责 **Speed**(前进/停止);另一人(B)戴另一台负责 **Steering**(转向)与 **Direction**(用眨眼切换左转/右转)。
+## 1. Présentation et sécurité
 
-**佩戴与安全。**
-1. 戴 **headband**(g.tec 头戴设备)或 **Hybrid Black** 前,先清洁接触部位的皮肤,保持干爽。
-2. 使用 **wet**(湿电极)时:在电极与皮肤之间涂抹导电凝胶,信号才稳定;实验结束后用纸巾擦净凝胶。
-3. 使用 **dry**(干电极)时:不需要凝胶,让电极贴紧皮肤即可。
-4. 开始前确认设备电量/供电充足;实验中途不要拔插 USB 或电源线。
-5. 实验过程中不要取下或移动设备——信号中断会触发断流判断(见 §7)。
+### Les deux pages à connaître
 
-**注意(眨眼)。** 只有负责转向的操作者(B)用眨眼切换方向(左转 ↔ 右转)。B 请自然眨眼,不要刻意频繁、用力眨眼,以免无意中切换方向。
+**La page de contrôle général (System Control)** s'ouvre après un double-clic sur `launcher.bat` sous Windows. Sa barre latérale permet de démarrer le système, de connecter les appareils et de redémarrer les services web.
 
-## 2. 启动系统
+**La page de commande EEG (Thymio EEG Control)** s'affiche dans la zone principale de System Control. Vous pouvez aussi l'ouvrir séparément avec **Open in new tab**. Elle permet de sélectionner les appareils et leurs rôles, de calibrer, d'observer les signaux et de commander le robot.
 
-1. **双击 O2 图标**(`launcher.bat`)。浏览器自动打开总控页 **System Control**。
-2. 刚打开时,系统状态显示 **Stopped**(灰点),三个设备按钮为灰色、不可点。
-3. 点侧边栏 **Operations** 组的 **Start System**。
-   - 系统依次执行:启动 WSL → 同步文件 → 启动后台服务(web 前端 + 后端)。
-   - 等待期间:状态显示 **Starting…**(橙色闪烁点),主区显示 "Starting System…"。
-   - 完成:状态变 **Running**(绿点),主区显示 web 界面,设备按钮解除置灰。
-4. **状态灯含义:**
-
-   | 状态显示 | 颜色 | 含义 |
-   |---|---|---|
-   | Stopped | 灰 | 系统未启动 |
-   | Starting… | 橙(闪烁) | 正在启动 |
-   | Running | 绿 | 系统就绪,可用 |
-   | Stopping… | 橙(闪烁) | 正在停止 |
-   | Error | 红 | 出错(见 §7) |
-
-5. **失败时的表现:** 底部弹出**一句人话提示**(无技术堆栈);系统状态变 **Error**(红点),主区显示 "System Error"。按提示处理(常见原因见 §7),再点 **Start System** 重试。
-
-## 3. 连接设备与校准
-
-1. 系统 **Running** 后,在侧边栏 **Devices** 组点设备的 **Connect** 按钮:
-   - **Headband**(g.tec 头戴设备)
-   - **HybridBlack**
-   - **Thymio**(机器人)
-2. 每个设备从 **Not Connected**(灰)→ **Connecting…**(橙)→ **Connected**(绿)。再点一次同一按钮(此时为 **Disconnect**)即断开。
-3. 设备连上后,在 web 界面主区:
-   - **01 — Input Source** 区:每台设备一列(单设备一列;双设备两列,列标签 **Speed device** / **Steering device**)。
-   - 每列设置 **Role**(Speed / Steering)与 **Metric**(Alpha / TBR / EI)。
-4. **校准:** 点设备列的 **Calibrate** 按钮。
-   - 系统自动采集 30 秒基线,按钮显示 **Calibrating… Ns** 倒计时。
-   - 30 秒后自动停止,得到校准参考 **p5/p50**,图中显示参考虚线。
-   - **双设备模式:** 两列各有独立的 **Calibrate**,各自校准、互不影响。
-5. 校准完自动停止,**不会自动开始实验**——你手动点 **Start** 才开始正式实验。
-
-## 4. 运行实验
-
-1. 在 web 界面 **04 — Experiment Mode** 面板填字段(按顺序):
-   - **Subject**、**Session #**(被试代号与第几次会话)
-   - **Electrode**(仅含 Hybrid Black 时显示:干 = dry / 湿 = wet)
-   - **Metric**(Alpha / TBR / EI)
-   - **Roles**(Speed / Steering)
-   - **Mode**(Single / Dual)
-2. **协议模板自动跟随**以上配置,不用手选:
-   - **A Forward/Stop**(单设备 + Speed):前进/停止
-   - **B Steering + Direction**(单设备 + Steering):转向 + 方向
-   - **Dual Collaborative**(双设备):两人协同
-3. 设置协议参数:**trials**(总试次数)、**duration**(每试次秒数)、**prompt**(试次之间 "Get ready" 倒计时的秒数)、**shuffle**(试次顺序打乱方式)。
-4. 点 **Configure new session**(已有会话时是 **Configure session**)确认配置。
-5. 回到主界面顶部点 **Start**,实验开始。
-
-## 5. 实验进行中
-
-**看什么。**
-- **03 — Real-time Signals** 区:每台设备的实时波形与指标曲线,确认信号持续跳动、没有停顿。
-- 实验面板显示当前试次目标表 **Subjects | Actions | Direction**:状态显示 **Focus**(蓝)/ **Relax**(绿),方向显示 **LEFT** / **RIGHT**。
-- 试次之间有 **Get ready** 提示倒计时;每个试次显示进度 **Trial x/y**。
-- 观察机器人是否按目标动作:Focus 时前进/转向,Relax 时停止/不转;方向提示改变时用眨眼切换。
-
-**不要做。**
-- 试次运行中不要点 **Configure**、**Calibrate**、**Start** 或改任何设备设置——会打断当前试次。
-- 不要拔设备、不要关设备电源、不要取下头戴/电极。
-- 不要长时间切走浏览器标签页——提示按墙上时钟推进,回来可能已错过目标。
-- 试次进行中请按提示做:提示 Focus 就集中注意力,提示 Relax 就放松,不要全程一直用力。
-
-## 6. 导出数据
-
-1. 实验结束(或想保存当前结果)后,在 **04 — Experiment Mode** 面板点 **Export analysis**。
-2. 导出成功,结果行显示 `Exported → <目录> (N trials, M conditions)`。
-3. 生成两个文件:
-   - **master_trials.csv**(主试次表:每个试次一行)
-   - **condition_summary.csv**(条件汇总表)
-4. 文件默认落在 `experiment_data/analysis/` 目录(WSL 侧);如需拿到 Windows,请技术人员协助拷贝。
-
-## 7. 故障排查
-
-| 现象 | 可能原因 | 操作 |
+| Emplacement | Bouton | Fonction |
 |---|---|---|
-| **无波形**(03 — Real-time Signals 空白) | 后端信号处理未正常启动;或设备流未到 | 确认侧边栏该设备为 **Connected**;点 **Restart Web** 重启前后端;仍无 → 断开该设备再 **Connect** |
-| **校准卡在 Preparing…**(点 Calibrate 后不进入倒计时) | 校准在等第一帧分析数据,但设备没流 / 桥停 | 确认侧边栏设备为 **Connected**;点 **Restart Web**;检查设备是否还开着 |
-| **断流**(设备断电/拔出,状态变灰或红) | 设备断电 / USB 断开 / 桥进程退出 | 重新开设备、插好 USB;系统会自动恢复(桥重建 + 状态变绿);不恢复 → **Disconnect** 再 **Connect**;系统变 **Error** → **Start System** 重试 |
-| **Start System 超时**(长时间不 Ready) | WSL 没就绪(60 秒超时);或 web 服务没起来 | 按底部提示判断:WSL 未就绪 → 检查 WSL;web 未就绪 → 点 **View Log** 看日志,点 **Restart Web** 后重试 |
+| Barre latérale de System Control | Start System / Stop System | Démarrer / arrêter l'ensemble du système |
+| Haut de la page de commande EEG | Start / Stop | Démarrer / arrêter le traitement EEG et la commande du robot |
 
-## 8. 停止系统
+Après la connexion et la calibration, cliquez sur **Start** en haut de la page de commande EEG pour démarrer la commande, voir la [section 4](#4-démarrer-la-commande-eeg).
 
-1. **停止实验:** 实验运行中,主界面顶部按钮显示 **Running…**,点它停止实验(或等它自然结束)。
-2. **停止系统:** 点侧边栏 **Operations** 组的 **Stop System**。系统停止后端、前端与桥进程,状态依次 **Stopping…** → **Stopped**,主区回到 "System Offline"。
-3. **退出总控:** 点 **Exit Launcher** 关闭总控台服务(无窗口,日志在 `launcher_server.log`)。退出总控**不影响** WSL 侧实验——它只是关闭控制界面。
-4. **安全收尾:** 关闭设备电源,拔掉不用的 USB;湿电极擦净凝胶。
+### Vérifications avant utilisation
+
+1. **Charge des appareils et alimentation de l'ordinateur :** chargez Headband, Hybrid Black et Thymio. Utilisez l'ordinateur avec son chargeur branché, afin de limiter les effets possibles de l'économie d'énergie / gestion de l'alimentation de Windows sur les connexions Bluetooth EEG. Allumez les appareils utilisés.
+2. **Bluetooth de l'ordinateur :** faites un clic droit sur le bouton Démarrer de Windows, ouvrez le **Gestionnaire de périphériques**, puis développez Bluetooth. Le module Bluetooth intégré à l'ordinateur ne doit présenter aucun point d'exclamation jaune ou rouge, ni avertissement. En cas d'avertissement, faites un clic droit sur ce module, puis **Désactiver** et **Activer**.
+3. **Module Bluetooth pour l'EEG :** Headband et Hybrid Black utilisent tous deux par défaut le Bluetooth intégré à l'ordinateur. L'adaptateur Bluetooth USB fourni avec Hybrid Black a entraîné des déconnexions fréquentes dans ce projet ; évitez de l'utiliser.
+4. **Dongle Thymio :** pour le robot réel, branchez le dongle USB sur le port prévu. Chaque paire Thymio / dongle est déjà appairée par défaut ; il n'est généralement pas nécessaire de refaire l'appairage. Uniquement si vous soupçonnez un problème d'appairage, essayez de le refaire en suivant la [procédure officielle](https://www.thymio.org/fr/faq/comment-configurer-lappairage-du-thymio-sans-fil-avec-son-dongle/).
+5. **Nouveau / autre Thymio :** « partager » signifie rendre le dongle USB branché sous Windows accessible au programme de commande du robot sous Linux (WSL). La configuration actuelle utilise le BUSID **`1-1`**. Lors de la première utilisation de son dongle, vérifiez le partage selon les [étapes pour un nouveau dongle](GUIDE_DEBUG.md#4-point-7--vérifier-et-partager-un-nouveau-dongle-thymio). Si cet identifiant est absent, débranchez puis rebranchez le dongle sur le port USB prévu et vérifiez à nouveau.
+6. **Environnement Python du Headband :** dans VS Code, sélectionnez le venv existant utilisé pour les expériences. Les étapes sont décrites dans [Connexion et déconnexion du Headband](#connexion-et-déconnexion-du-headband).
+
+L'adaptateur Bluetooth USB fourni avec Hybrid Black et le dongle USB Thymio sont deux appareils différents. **Pour le robot réel, le dongle Thymio doit rester branché.**
+
+### Mise en place et rôles
+
+- Nettoyez les zones de contact des électrodes avant de mettre le dispositif. Pour les électrodes humides, utilisez le gel conducteur selon les instructions de l'appareil. Les électrodes sèches n'ont pas besoin de gel ; assurez-vous qu'elles sont bien en contact avec la peau.
+- Un seul EEG : une personne utilise un appareil avec **Speed** (avancer / arrêter) ou **Steering** (tourner). Réglez Role sur **None** à la deuxième ligne.
+- Deux EEG : attribuez **Speed** à un appareil et **Steering** à l'autre. Une personne gère l'avance / l'arrêt, l'autre la rotation et le changement de direction par clignement des yeux.
+- La personne responsable de **Steering** change la direction gauche / droite en clignant des yeux. Évitez les clignements fréquents ou forcés, qui peuvent provoquer plusieurs changements.
+- Pendant l'utilisation, ne déplacez pas le dispositif porté ou les électrodes, ne désactivez pas le Bluetooth et ne débranchez ni le dongle ni le chargeur de l'ordinateur. En cas de mouvement anormal du robot, cliquez d'abord sur **Stop** en haut de la page de commande EEG, puis sur **Stop System** dans System Control.
+
+## 2. Démarrer le système
+
+1. Sous Windows, double-cliquez sur `launcher.bat`. Le navigateur ouvre **System Control**.
+2. Si le système est **Stopped**, cliquez sur **Start System** dans **Operations**, dans la barre latérale.
+3. Attendez que **Starting…** devienne **Running** en vert. La page de commande EEG apparaît dans la zone principale et les boutons de connexion des appareils sont disponibles.
+4. Connectez les appareils utilisés selon la [section 3](#3-connexion-des-appareils-et-calibration).
+
+| État du système | Signification | Action |
+|---|---|---|
+| Stopped | Système non démarré | Cliquez sur Start System |
+| Starting… / Stopping… | Démarrage / arrêt en cours | Attendez la fin |
+| Running | Services web prêts | Vous pouvez connecter les appareils ; pour la commande EEG, cliquez séparément sur Start en haut de la page |
+| Error | Erreur de démarrage ou de service | Consultez le message affiché et suivez le [dépannage](#6-dépannage) |
+
+Quand le système est **Running**, le bouton Start System devient **Restart System**. Il redémarre l'ensemble du système : ne cliquez pas dessus pendant l'utilisation.
+
+## 3. Connexion des appareils et calibration
+
+Une fois le système **Running**, connectez les appareils utilisés dans **Devices**, dans la barre latérale. La connexion de Headband est différente de celle de Hybrid Black.
+
+### Connexion et déconnexion du Headband
+
+En raison des limitations de l'API officielle, le script passerelle Headband doit être lancé et interrompu manuellement dans **VS Code sous Windows**.
+
+Pour connecter :
+
+1. Dans System Control, cliquez sur **Connect** pour Headband. Le script `gpype_lsl_bridge.py` s'ouvre dans VS Code.
+2. Appuyez sur **Ctrl+Shift+P**, saisissez et sélectionnez **Python: Select Interpreter**, puis choisissez le **venv** existant utilisé pour les expériences. Vérifiez l'environnement sélectionné en bas de la fenêtre.
+3. Cliquez sur le **bouton d'exécution triangulaire (▶), en haut à droite de VS Code**, pour lancer le script passerelle ouvert.
+4. Attendez que Headband affiche **Connected** (vert) dans System Control.
+
+Pour déconnecter :
+
+1. Cliquez d'abord sur **Stop** en haut de la page de commande EEG.
+2. Dans VS Code, cliquez dans le terminal où le script s'exécute, puis appuyez sur **Ctrl+C** pour l'interrompre.
+3. Revenez dans System Control. Si le bouton **Disconnect** de Headband est encore disponible, cliquez dessus.
+
+**Disconnect** et **Stop System** dans System Control n'interrompent pas à votre place le script Headband exécuté dans VS Code. Interrompez l'ancien script avant de le relancer.
+
+### Connexion et déconnexion de Hybrid Black et Thymio
+
+- **Hybrid Black :** dans System Control, cliquez sur **Connect** pour **HybridBlack** et attendez **Connected** (vert). Pour déconnecter, cliquez sur **Disconnect**. Il n'est pas nécessaire de gérer le script manuellement dans VS Code.
+- **Thymio :** pour le robot réel, vérifiez qu'il est allumé et que le dongle est sur le port USB prévu, puis cliquez sur **Connect** pour **Thymio**. La simulation ne nécessite pas de connecter un Thymio réel.
+- Avant de déconnecter un appareil, cliquez sur **Stop** en haut de la page de commande EEG.
+
+Le bouton **Connect** de Thymio fait passer le dongle USB de **BUSID `1-1`** de **Shared** à **Attached**, c'est-à-dire qu'il est connecté à Linux (WSL).
+
+Un appareil en vert est connecté. Les graphiques se mettent à jour pendant la calibration ou après le démarrage de la commande avec le bouton en haut de la page.
+
+### Choisir les appareils, les rôles et la sortie
+
+Dans **01 — Input Source** sur la page de commande EEG, réglez :
+
+| Champ | Choix |
+|---|---|
+| Role | Un EEG : première ligne Speed ou Steering, deuxième ligne None. Deux EEG : une ligne Speed et l'autre Steering |
+| Device | EEG pour chaque ligne active |
+| Brand | g.tec Headband ou g.tec Hybrid Black, selon l'appareil utilisé sur cette ligne |
+| Source | LSL Stream |
+| Metric | Alpha / TBR / EI selon l'indicateur prévu pour l'expérience |
+
+Dans **02 — Output Target**, choisissez **Thymio** pour le robot réel ou **Thymio Simu** pour la simulation.
+
+### Calibration
+
+1. Dans **03 — Real-time Signals**, trouvez **Calibrate** pour l'appareil concerné et cliquez une fois.
+2. **Preparing…** apparaît d'abord. Dès la réception des données d'analyse, le compte à rebours de 30 secondes **Calibrating… Ns** démarre.
+3. Attendez la fin de la calibration ; le graphique affiche les références de calibration. Si Preparing reste affiché, suivez le [dépannage](#6-dépannage).
+4. Avec deux EEG, terminez la calibration du premier avant de calibrer le second. Les résultats sont conservés séparément pour chaque appareil.
+5. Après la calibration, si le haut de la page affiche encore **Running…**, cliquez sur **Stop** en haut, puis démarrez la commande EEG selon la [section 4](#4-démarrer-la-commande-eeg).
+
+## 4. Démarrer la commande EEG
+
+1. Vérifiez que le [choix des appareils et des rôles](#choisir-les-appareils-les-rôles-et-la-sortie) et la [calibration](#calibration) sont terminés.
+2. Cliquez sur **Start en haut de la page de commande EEG** et attendez l'état **Running…**.
+3. Dans **03 — Real-time Signals**, vérifiez que les signaux et indicateurs de chaque appareil se mettent à jour et observez les mouvements du robot.
+4. Pour faire une pause, cliquez sur **Stop** en haut de la page. Pour reprendre, cliquez à nouveau sur **Start** en haut.
+
+## 5. Pendant la commande
+
+- **Speed :** l'indicateur EEG commande l'avance / l'arrêt.
+- **Steering :** l'indicateur EEG commande la rotation sur place ; un clignement des yeux change la direction gauche / droite.
+- **Deux EEG :** les deux personnes gèrent respectivement la vitesse et la rotation. La perte de données de l'un des appareils déclenche l'arrêt de sécurité du robot.
+- **03 — Real-time Signals :** vérifiez que les signaux et indicateurs se mettent à jour et que l'état des appareils est normal.
+
+Pendant la commande, ne recalibrez pas, ne changez pas d'appareil et ne redémarrez pas les services web. Avant tout réglage, cliquez sur **Stop** en haut de la page. À la fin, suivez les étapes pour [arrêter le système](#7-arrêter-le-système).
+
+## 6. Dépannage
+
+Les étapes détaillées sont dans le [guide de dépannage](GUIDE_DEBUG.md). Avant de reconnecter un appareil ou de redémarrer un service, cliquez sur **Stop** en haut de la page de commande EEG.
+
+| Problème | Vérifications et actions |
+|---|---|
+| Calibration bloquée sur Preparing / aucun signal après le démarrage | Vérifiez le [Bluetooth de l'ordinateur, la charge des appareils et le branchement du chargeur de l'ordinateur](#vérifications-avant-utilisation), puis [Role et Brand](#choisir-les-appareils-les-rôles-et-la-sortie). Pour Headband, interrompez puis relancez le script dans VS Code ; pour Hybrid Black, cliquez sur Disconnect puis Connect dans System Control. Une fois la [connexion rétablie](#3-connexion-des-appareils-et-calibration), recalibrez. |
+| Headband reste Connecting après Connect | Connect ouvre seulement le script. Suivez les [étapes de connexion Headband](#connexion-et-déconnexion-du-headband) pour choisir le bon venv et lancer le script manuellement. |
+| Perte de données, état gris ou rouge | Vérifiez que les appareils sont allumés et chargés, que le Bluetooth de l'ordinateur fonctionne et que son chargeur est branché. Rétablissez la [connexion de l'appareil concerné](#3-connexion-des-appareils-et-calibration). Avec deux EEG, la perte de données de l'un des appareils déclenche l'arrêt de sécurité du robot. |
+| Thymio ne bouge pas | Vérifiez que le robot est allumé, que le dongle est sur le port USB prévu, que Thymio est connecté dans System Control et que Output Target est réglé sur Thymio. Pour un nouveau dongle, vérifiez `1-1` selon les [étapes de vérification du partage](GUIDE_DEBUG.md#4-point-7--vérifier-et-partager-un-nouveau-dongle-thymio). Une fois la connexion rétablie, cliquez sur Start en haut de la page. |
+| Running est vert, mais la page de commande EEG ne s'affiche pas | Cliquez sur **↻ Refresh** dans System Control. Si elle ne s'affiche toujours pas, cliquez sur **Restart Web** et attendez le rechargement. |
+| Start System échoue avec l'état Error | Consultez le message en bas de la page et cliquez sur **View Log** pour voir le journal. Cliquez ensuite sur **Start System** pour réessayer. Pendant Starting, attendez la fin ; ne cliquez pas plusieurs fois de suite. |
+
+## 7. Arrêter le système
+
+1. **Arrêter la commande EEG :** cliquez sur **Stop** en haut de la page de commande EEG pour arrêter la commande du robot.
+2. **Arrêter le script Headband :** si vous utilisez Headband, appuyez sur **Ctrl+C** dans le terminal du script dans VS Code. System Control ne l'interrompt pas à votre place.
+3. **Arrêter l'ensemble du système :** cliquez sur **Stop System** dans la barre latérale de System Control et attendez **Stopping… → Stopped**.
+4. **Quitter le service System Control :** cliquez enfin sur **Exit Launcher**. Ce bouton ferme uniquement le service de contrôle général ; il ne remplace ni Stop ni Stop System.
+5. **Ranger les appareils :** éteignez-les. Pour les électrodes humides, nettoyez le gel selon les instructions de l'appareil. Rangez les dispositifs portés et le dongle.
