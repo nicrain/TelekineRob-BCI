@@ -2,6 +2,8 @@
 
 本文覆盖 `thymio_control/` 包的架构和数据流，帮助你理解系统如何运作。
 
+> 本文是模块导读，不是完整交接手册。测试和排障入口见[开发者指南](../../docs/GUIDE_DEVELOPPEUR.md)；2026-10-08 修正了旧眨眼阈值、校准和清理说明。
+
 ---
 
 ## 1. 架构分层
@@ -74,11 +76,11 @@ EEG 主控制节点。`_tick` 流程：
 5. 每 tick 更新圆圈 LED（显示转向方向）
 6. 看门狗：超时发布零速 Twist
 
-**Blink 检测（metric-only）**：策略指标连续 `blink_confirm_frames` 帧超出校准正常范围（TBR/Alpha `> p95×2`；EI `< p5/2`）即判定眨眼 → 切换 `steer_direction`，进入 `blink_holdoff_frames` 冷却。
+**Blink 检测（metric-only）**：`MetricBlinkDetector` 相对短期滚动中位基线检测瞬态上冲（TBR/Alpha）或下降（EI），连续 `blink_confirm_frames` 帧确认后切换方向，再进入冷却。上冲基线以节点创建时读取的校准 p50 作下限；不是旧的固定 `p95` / `p5` 阈值。详见[眨眼检测说明](../../docs/ARCHITECTURE_TECHNIQUE.md#5-眨眼转向检测)。
 
 **Role 映射**：`speed` → `linear.x = max_forward_speed × speed_intent`、`angular.z = 0`；`steering` → `linear.x = 0`、`angular.z = -steer_direction × turn_angular_speed × |steer_intent-0.5|`。
 
-支持校准模式（`calibrate=true`）：30 秒收集指标 → 计算 p5/p50 → 写入 YAML → 重建 policy → 将 `calibrate` 置回 `false`。
+支持校准模式（`calibrate=true`）：收到数据后采集 30 秒指标 → 计算 p5/p50 → 写入 YAML并将 `calibrate` 置回 `false` → 原位更新 policy 的 offset/scale，保留 EMA 状态。样本不足时会中止并清除校准标志，不产出新的阈值。
 
 ### 4.3 `thymio_control/pipeline.py`
 
@@ -100,6 +102,8 @@ EEG 主控制节点。`_tick` 流程：
 ## 5. 配置文件
 
 ### `eeg_control_node.params.yaml`
+
+以下仅为字段示例，不是交付电脑的实际配置；数值以对应参数文件和界面选择为准。
 ```yaml
 input: lsl
 policy: tbr
@@ -139,7 +143,7 @@ pytest thymio_control/test/test_*.py -v
 
 ## 7. 易踩坑
 
-1. **LSL 连接挂起（无波形/校准卡 preparing）**：WSL2 未禁用 eth0 的 IPv6 → liblsl 选中不可达的 IPv6 link-local 地址。需执行 `sysctl net.ipv6.conf.eth0.disable_ipv6=1`（持久化见 README「WSL2 网络配置」）
+1. **LSL 连接挂起（无波形 / 校准卡 Preparing）**：先检查 Windows 桥的数据和 source_id；当前部署的 IPv6 问题及处理见[安装指南的网络配置](../../docs/GUIDE_INSTALLATION.md#4-网络配置)。
 2. `use_teleop=true` 时 EEG 节点不启动 → 设 `use_teleop:=false`
-3. 校准后值没更新 → 需 clean rebuild（`rm -rf install/build thymio_control`）
-4. 前端 YAML 读不到最新值 → 确保 `npm run dev` 重建前端，backend 重启
+3. 校准后值未更新 → 先停止控制，检查 `CALIB:` 日志和对应参数文件；不需要为校准结果重新编译，不要删除源码目录。
+4. 网页配置未更新 → 查看 `/api/config` 的 `source_files`，确认运行的仓库、参数文件和校准写回路径，见[开发者排障说明](../../docs/GUIDE_DEVELOPPEUR.md#5-编码规范)。

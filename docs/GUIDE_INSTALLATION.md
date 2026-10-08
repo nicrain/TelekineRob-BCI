@@ -1,7 +1,7 @@
 # GUIDE_INSTALLATION
 
-> 安装指南 — 中文源文(将翻译为法语)。规矩:中文叙述只翻技术标识符之外的部分;内部三方注解(CTO/programmer/reviewer)禁止入正文。术语与 docs/GLOSSAIRE.md 保持一致。
-> **受众 = 技术人员(安装者)**:本文档允许命令行,与操作手册(MANUEL_OPERATEUR,全程 GUI)相反。
+> 安装指南（中文版，面向部署者）。2026-10-08 核对仓库路径、启动配置及依赖入口；尚未在一台全新 Windows + WSL 电脑上复现全部步骤。后续将并入开发者交接手册。
+> 日常使用见[用户操作手册（中文）](MANUEL_OPERATEUR_cn.md)，常见问题见[排障手册（中文）](GUIDE_DEBUG_cn.md)。Headband 仍需在 VS Code 手动运行 / 中断脚本，不是完全无终端的操作流程。
 
 ## 1. 概览与前置要求
 
@@ -9,7 +9,7 @@
 
 ```
 Windows 主机:
-  windows_launcher/   O2 总控台(非 IT 操作者用;双击 launcher.bat)
+  windows_launcher/   System Control 总控页面（双击 launcher.bat）
   gtec_bridge/        设备桥:gpype_lsl_bridge.py(Headband) / unicornpy_lsl_bridge.py(Hybrid Black) → LSL
         ↓ LSL (raw EEG)
 WSL2 / Ubuntu 24.04:
@@ -25,7 +25,7 @@ WSL2 / Ubuntu 24.04:
 |---|---|
 | Windows | 10/11,WSL2 启用 |
 | WSL2 发行版 | Ubuntu 24.04 |
-| Python | 3.12+(Windows 侧跑 launcher;WSL 侧 venv) |
+| Python | WSL 侧以 3.12 为项目环境基线；Windows 桥的版本及位数须匹配安装的 g.tec SDK，交付电脑实值待确认 |
 | ROS2 | Kilted(Ubuntu 24.04 对应版) |
 | Node.js / npm | 18+(前端 Vite 5 需要) |
 | g.tec 驱动 | gpype(Headband)/ UnicornPy(Hybrid Black) |
@@ -34,17 +34,19 @@ WSL2 / Ubuntu 24.04:
 ## 2. Windows 主机准备
 
 1. **安装 Python 3**,安装时勾选 **"Add Python to PATH"**(`launcher.bat` 依赖 `python` / `pythonw`)。
-2. **安装 g.tec 驱动**:Headband 用 g.Pype(`gpype`);Hybrid Black 用 `UnicornPy`。设备桥经 `pylsl` 发布 LSL 流,三者在跑桥的 Python 环境里都要能 `import`。
-3. **安装 VS Code**:头戴桥走 `open_in_ide`(g.Pype 免费版授权闸门——桥只能在 IDE 内运行),需要在 VS Code 里打开桥脚本点 Run;确认 `code` 命令可用。
+2. **准备设备 SDK 和 Python 环境**：Headband 桥需要 `gpype` 和 `pylsl`；Hybrid Black 桥需要 `UnicornPy`、`numpy` 和 `pylsl`。SDK 安装包、授权和实际版本需要单独交接，不能仅靠仓库根 `requirements.txt` 恢复。分别确认所用解释器能够导入对应模块。
+3. **安装 VS Code**：当前 Headband 采用 `open_in_ide`，点 Connect 后打开桥脚本，由操作者选对 venv并点右上角三角形运行按钮；断开时在脚本终端按 Ctrl+C。确认 `code` 命令可用。此工作流已由用户确认，具体 SDK 授权版本仍需在交付电脑登记。
 4. **首次把 `windows_launcher/` 从 WSL 仓库拷到 Windows 目标目录**(仅这一次;之后每次 **Start System** 自动自同步,你不再碰它):
-   ```
-   xcopy /E /I /Y \\wsl$\<distro>\home\robot\TelekineRob-BCI\windows_launcher <目标目录>
+   在 **Windows PowerShell / CMD** 执行，不是在 WSL 的 Linux shell 中执行；先替换发行版、仓库路径和目标目录，目标为 Windows 本地的 `windows_launcher` 文件夹：
+   ```powershell
+   xcopy /E /I /Y "\\wsl$\<distro>\home\robot\TelekineRob-BCI\windows_launcher" "<Windows项目目录>\windows_launcher"
    ```
 5. **填 Windows 侧的 `config.json`**(机器本地配置,同步时被排除、永不被仓库版覆盖):
-   - `devices.thymio.attach_cmd` / `detach_cmd`(usbipd busid,只有你知道,**必须填**)
+   - `devices.thymio.attach_cmd` / `detach_cmd`：当前默认 BUSID 为 `1-1`，attach 的发行版名也须与 `wsl.distro` 一致。
    - `wsl.distro`(发行版名)、`wsl.repo_path`(WSL 内仓库路径)
    - `sync.dst_root`(同步目标目录)、`web.backend_cmd` / `frontend_cmd`(可调)
-   - 字段含义见 `windows_launcher/README.md`「首次部署」表。
+   - 字段含义见[launcher 的首次部署说明](../windows_launcher/README.md#首次部署部署者在真机做一次)。Windows 的 `devices.*.python_cmd` 必须能运行相应桥 / LSL 探针；Headband 在 VS Code 选择相应环境。
+6. **安装并检查 usbipd-win**：这是 Windows 上额外安装的工具，不是 WSL / Windows 内置命令。当前新 Dongle 的共享及 `1-1` 检查见[排障手册第 4 节](GUIDE_DEBUG_cn.md#4-第-7-项怎么做检查并共享新的-thymio-dongle)。现有设备通常已共享，System Control 的 Thymio Connect负责 attach到 WSL。
 
 ## 3. WSL2 环境
 
@@ -82,7 +84,7 @@ sudo sysctl --system
 启用 systemd 后,该配置在每次 WSL 启动自动应用;若未启用 systemd,改用 `/etc/wsl.conf` 的 `[boot] command` 每次启动执行上述 sysctl。
 
 **② 局域网访问(Windows 主机)。**
-- **确认 `.wslconfig` 文件名正确**(`C:\Users\<用户>\.wslconfig`,不是 `.wksconfig`);**保持默认 NAT 网络**——镜像网络(`networkingMode=mirrored`)会破坏 host→WSL 的 `\\wsl$` 连通,勿用。
+- **确认 `.wslconfig` 文件名正确**（`C:\Users\<用户>\.wslconfig`，不是 `.wksconfig`）。当前项目流程按 NAT 网络配置；在交付电脑上确认实际网络模式和 `\\wsl$` 访问。镜像网络未在本次核对中验证，不把当前机器遇到的故障推广为所有 WSL 版本的结论。
 - **端口转发**:launcher 每次 **Start System** 后自动执行(监听 `0.0.0.0:5173` → WSL IP,只转前端 5173,后端 8010 保持 loopback)。手动执行(需管理员 CMD):
   ```
   netsh interface portproxy delete v4tov4 listenport=5173 listenaddress=0.0.0.0
@@ -103,7 +105,9 @@ sudo sysctl --system
 ```
 cd web_gui/backend
 source ../../.venv/bin/activate
-pip install -r requirements.txt
+python -m pip install -r ../../requirements.txt
+source /opt/ros/kilted/setup.bash
+source ../../install/setup.bash
 python -m app.main
 ```
 
@@ -134,18 +138,18 @@ python -m app.main
 
 ## 6. 真机验证清单
 
-装完按此确认能用:
+以下均为**待在交付电脑执行的验收项**，不是已经通过的记录。通常沿网页流程操作，不要在网页已启动 ROS 管线时再手动启动一份相同的 launch。
 
 - [ ] 双击 `launcher.bat` → 总控页 **System Control** 打开,设备按钮全灰、不可点
 - [ ] 点 **Start System** → 状态变 **Running**,web GUI 出现在主区
 - [ ] 设备桥出 LSL 流:Windows 起桥(Headband 在 VS Code 里 Run;Hybrid Black 由 launcher spawn),侧边栏对应设备变 **Connected**(绿 = 流有数据)
-- [ ] eeg 节点连上:WSL 端 `ros2 launch thymio_control experiment_core.launch.py use_sim:=false run_eeg:=true use_teleop:=false input:=lsl`,web GUI **03 — Real-time Signals** 有波形
+- [ ] eeg 节点连上：按[操作手册](MANUEL_OPERATEUR_cn.md#3-连接设备与校准)选择设备、角色和输出；校准或网页顶部 Start 后，**03 — Real-time Signals** 有数据。仅在不用网页控制的开发调试中，才手动运行 ROS launch。
 - [ ] 校准可跑:点 **Calibrate** → 30 秒倒计时 → p5/p50 写入参数文件
 - [ ] Thymio 响应:侧边栏 Connect Thymio(绿 = ttyACM0),遥控/实验指令让小车动
 - [ ] 导出可跑:实验后 **Export analysis** → `master_trials.csv` + `condition_summary.csv`
-- [ ] 断流检测:拔设备 → 状态变灰/红;插回 → 桥自动重建、状态自动变绿
+- [ ] 断流检测：测试前清空机器人周围区域；运行中断开 EEG，确认零速度控制和实际停车，再确认恢复行为。系统仍 Running 时数据恢复可能自动恢复控制，需停住时点网页顶部 Stop；代码阈值不作为实测停车延迟。
 - [ ] 局域网可访问:同一局域网另一台机器浏览器开 `http://<Windows-IP>:5173` 能看到 GUI
-- [ ] 点 **Stop System** → 进程清干净、状态回 **Stopped**;点 **Exit Launcher** → 控制服务关闭
+- [ ] 先点网页顶部 **Stop**，Headband 在 VS Code按 **Ctrl+C**，再点 **Stop System** → 状态回 **Stopped**；点 **Exit Launcher** 退出总控服务。确认没有残留桥进程；默认 Stop System终止配置中的 WSL发行版，会影响其中其他任务。
 
 ## 7. 依赖与版本表
 
@@ -157,4 +161,5 @@ python -m app.main
 | ROS2 | Kilted(apt;`/opt/ros/kilted`) | Ubuntu 24.04 |
 | 前端(npm) | vite / react / echarts | vite ^5.4.11、react ^18.3.1(Node 18+) |
 | g.tec 设备桥 | gpype / UnicornPy / pylsl | 跑桥的 Python 环境 |
-| 系统工具 | usbipd / wsl / robocopy / netsh | Windows / WSL 内置 |
+| 系统工具 | wsl / robocopy / netsh | Windows 工具；WSL需先安装启用 |
+| USB 共享工具 | usbipd-win | Windows额外安装；交付电脑实际版本待记录 |

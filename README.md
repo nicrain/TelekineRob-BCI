@@ -67,7 +67,7 @@ python thymio_control/lsl_test/dummy_dual_streams.py --blink
 ros2 launch thymio_control experiment_core.launch.py use_sim:=true run_eeg:=true run_eeg2:=true eeg2_role:=steering
 ```
 
-双设备:一台 speed、一台 steering,`cmd_vel_fuser` 融合发布最终 `/cmd_vel`;任一流断流 → 0.5s 内整车零速(fail-safe)。主题按 role 字面量后缀(`/eeg_analysis/steering`、`/eeg_cmd_vel/steering`,非 `steer`);每设备独立参数文件,校准回写互不覆盖。
+双设备：一台 speed、一台 steering，`cmd_vel_fuser` 融合发布最终 `/cmd_vel`。EEG节点断流后停止发布partial；融合器检查partial消息新鲜度，默认超时阈值0.5s时发布零速度命令。这不是从EEG断连到电机停车的实测时限。主题按role字面量后缀命名（`/eeg_analysis/steering`、`/eeg_cmd_vel/steering`，非 `steer`）；两路独立参数文件，校准分别回写。
 
 **Web GUI:**
 
@@ -84,7 +84,7 @@ cd web_gui/frontend && npm install && npm run dev
 pytest thymio_control/test/test_*.py -v
 ```
 
-完整测试与扩展见 `docs/GUIDE_DEVELOPPEUR.md` §3。
+完整测试入口见[开发者指南](docs/GUIDE_DEVELOPPEUR.md#3-运行测试)。仓库根直接执行 `pytest` 不包含后端测试；上述命令也仅测试ROS控制模块，不是整套系统验收。
 
 ## 文档导航
 
@@ -92,7 +92,10 @@ pytest thymio_control/test/test_*.py -v
 |---|---|---|
 | README.md(本文件) | 项目总览与文档导航 | 全体 |
 | docs/GLOSSAIRE.md | 术语表:中文术语 ↔ 技术标识符 | 全体 |
-| docs/MANUEL_OPERATEUR.md | 操作手册:启动/连设备/校准/跑实验/导出/排查 | 操作者 |
+| [docs/MANUEL_OPERATEUR.md](docs/MANUEL_OPERATEUR.md) | 操作手册（法语）:启动/连设备/校准/EEG 控制/排查/收尾 | 操作者 |
+| [docs/MANUEL_OPERATEUR_cn.md](docs/MANUEL_OPERATEUR_cn.md) | 操作手册（中文） | 操作者 |
+| [docs/GUIDE_DEBUG.md](docs/GUIDE_DEBUG.md) | 调试手册（法语）:基本操作、链路检查、常见小问题恢复 | 操作者 |
+| [docs/GUIDE_DEBUG_cn.md](docs/GUIDE_DEBUG_cn.md) | 调试手册（中文） | 操作者 |
 | docs/GUIDE_INSTALLATION.md | 安装手册:Windows+WSL2+ROS2 从零搭建 | 技术人员 |
 | docs/PROTOCOLE_EXPERIMENTAL.md | 实验协议:设计/数据管道/统计分析 | 研究者/论文 |
 | docs/ARCHITECTURE_TECHNIQUE.md | 技术架构:数据流/双设备融合/fail-safe | 开发者 |

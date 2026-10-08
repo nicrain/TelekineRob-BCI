@@ -1,6 +1,6 @@
 # ARCHITECTURE_TECHNIQUE
 
-> 技术架构 — 中文源文(将翻译为法语)。规矩:中文叙述只翻技术标识符之外的部分;内部三方注解(CTO/programmer/reviewer)禁止入正文。术语与 docs/GLOSSAIRE.md 保持一致。架构事实以代码为准(`cmd_vel_fuser.py` / `eeg_control_node.py` / `blink_metric.py`)。
+> 技术架构（中文版）。2026-10-08 对照 launch、融合器、EEG 节点和校准代码核对。本文描述实现，不作为真机验收记录；后续将并入 `DOSSIER_TECHNIQUE_cn.md`。
 
 ## 1. 全栈数据流
 
@@ -51,25 +51,25 @@ LSL 流 → RawLslAdapter (pull_chunk → Welch PSD → 五个频段 band powers
 
 **融合语义。** `merge_twists`:输出 `linear.x` 取自 speed、`angular.z` 取自 steer,其余分量零;`build_command`:任何一路缺失/陈旧 → 整车零速。
 
-**fail-safe。** `watchdog_sec = 0.5`——任一输入超过 0.5 秒没有新帧即视为断流,整车零速;恢复后自动续跑。发布频率 `publish_hz = 20`。
+**fail-safe。** 融合器的 `watchdog_sec = 0.5` 针对接收的 partial Twist：任一路超过阈值没有新消息，就发布整车零速度命令。EEG 节点另有自己的数据新鲜度检查，双设备断流后停止发布 partial，随后由融合器判超时。两路消息恢复且仍处于运行状态时，融合器会自动恢复输出。发布频率 `publish_hz = 20`；这不是“从 EEG 断连到电机完全停住只需 0.5 秒”的实测保证。
 
 **数据流动 vs 真断流(D4)。** 分析帧按 hop 节奏(~2Hz)到达,`_tick` 以 20Hz 运行——帧间空隙**不是断流**,节点持续回放保持 partial 20Hz 让 fuser 输入新鲜;只有**真断流**(超 watchdog 无新帧)才触发零速静默。
 
-**Role 映射**(`_intents_to_twist`,默认 `max_forward_speed=0.05`、`turn_angular_speed=0.8`):
+**Role 映射**（`_intents_to_twist`；节点声明默认 `max_forward_speed=0.05`、`turn_angular_speed=0.8`，参数文件可覆盖，不能当成交付电脑实值）：
 - `speed` → `linear.x = max_forward_speed × speed_intent`、`angular.z = 0`
 - `steering` → `linear.x = 0`、`angular.z = -steer_direction × turn_angular_speed × |steer_intent − 0.5|`
 
 ## 4. 参数文件与校准回写
 
-**参数文件。** 每设备独立:`eeg_control_node.params.yaml`(speed)/ `eeg_control_node.eeg2.params.yaml`(steering),含 `input`、`policy`、`eeg_device`、`lsl_source_id`、`calibrate`、`calib_offset`、`calib_scale`、`role`、`max_forward_speed`、`turn_angular_speed`、`blink_holdoff_frames`、`blink_confirm_frames`、`line_mode`。
+**参数文件。** 按节点 / 配置行独立：`eeg_control_node.params.yaml` 对应第一路，`eeg_control_node.eeg2.params.yaml` 对应第二路。它们不固定绑定 speed、steering 或某一物理设备；角色与设备由界面和配置选择。文件包含 `input`、`policy`、`lsl_source_id`、`calibrate`、`calib_offset`、`calib_scale`、`role`、运动参数和眨眼参数等。
 
 **校准流**(`calibrate=true`):
-1. 30 秒收集指标样本 → 计算 `p5` / `p50`(`np.percentile` 5 / 50)
+1. 收到第一帧可用于校准的数据后采集 30 秒指标；至少 50 个样本才计算 `p5` / `p50`（`np.percentile` 5 / 50）。不足时中止，仅清除 `calibrate`，不生成新阈值。
 2. `calib_offset = p5`、`calib_scale = max(p50 − p5, 0.001)`
 3. 写回 YAML:`calib_offset` / `calib_scale` 更新、`calibrate` 置回 `false`
-4. 重建 policy(带新的 offset/scale)
+4. 调用 `policy.set_calibration()` 原位更新 offset/scale，保留 EMA 状态，不重建实例。
 
-校准参考 `p50 = calib_offset + calib_scale` 同时传给眨眼检测器作上冲基线钳制参考(§5)。
+节点创建时，读取 `calib_offset + calib_scale` 作为眨眼检测器的 p50 参考（§5）。当前 `_finish_calibration()` 更新策略，但不更新已创建检测器的该参考；按用户手册校准后 Stop / Start，新的节点会读取保存的校准结果。
 
 ## 5. 眨眼转向检测
 

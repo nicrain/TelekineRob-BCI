@@ -1,8 +1,12 @@
 # GUIDE_DEVELOPPEUR
 
-> 开发者指南 — 中文源文(将翻译为法语)。规矩:中文叙述只翻技术标识符之外的部分;内部三方注解(CTO/programmer/reviewer)禁止入正文。术语与 docs/GLOSSAIRE.md 保持一致。改编自 `thymio_control/docs/THYMIO_CONTROL_CODE_GUIDE_ZH.md`(底稿不动,等收尾单归档)。
+> 现有开发者指南（中文版）。2026-10-08 已核对下列启动、测试和校准说明；这不代表已完成 Windows + WSL 真机验收。完整安装、部署与交接内容将在后续合并到 `GUIDE_DEVELOPPEUR_cn.md`。
+
+相关文档：[安装部署](GUIDE_INSTALLATION.md) · [技术架构](ARCHITECTURE_TECHNIQUE.md) · [用户操作手册（中文）](MANUEL_OPERATEUR_cn.md) · [用户排障手册（中文）](GUIDE_DEBUG_cn.md)。
 
 ## 1. 包结构
+
+以下目录相对于仓库内的 `thymio_control/` 包，不是整个仓库根目录。
 
 ```
 launch/               experiment_core.launch.py(统一入口)
@@ -36,17 +40,32 @@ LSL 流 (Windows bridge)
 | `scripts/cmd_vel_fuser.py` | 双设备融合:订阅 `/eeg_cmd_vel/speed` + `/eeg_cmd_vel/steering`,watchdog=0.5s 缺失/陈旧 → 整车零速,发 `/cmd_vel` |
 | `thymio_control/pipeline.py` | `POLICIES` = {ei, tbr, alpha};`build_adapter`(仅 lsl);`build_pipeline` → (adapter, processor, policy) |
 | `processors/band_power.py` | `StreamingBandPowerExtractor`,Welch PSD 五个频段 |
-| `processors/blink_metric.py` | `MetricBlinkDetector` 瞬态眨眼(见 ARCHITECTURE_TECHNIQUE §5) |
+| `processors/blink_metric.py` | `MetricBlinkDetector` 瞬态眨眼，见[眨眼转向检测](ARCHITECTURE_TECHNIQUE.md#5-眨眼转向检测) |
 | `policies/*` | `EiPolicy`(β/(α+θ))、`TbrPolicy`(θ/β)、`AlphaPolicy`(α 功率);支持 offset/scale 校准参数与 EMA 平滑 |
 
 **输入模式。** eeg 节点仅支持 `lsl`;Web GUI `keyboard` 模式为独立 teleop 路径(经 `/ws/teleop` → RosBridge → `/cmd_vel`)。
 
 ## 3. 运行测试
 
-- **全量**:`pytest`——`pytest.ini` `testpaths = thymio_control/test thymio_control/lsl_test windows_launcher/tests`。
-- **thymio_control 单测**:`pytest thymio_control/test/test_*.py -v`。
-- **lsl_test 离线验证**:`thymio_control/lsl_test/`(dummy 双流、EDF 回放、流式提取)。依赖 `pylsl` / `pyedflib` 未安装时相关测试自动 skip。
-- 控制服务逻辑不依赖 Windows:`pytest windows_launcher/tests`(wsl/usbipd 走 fake executor)。
+在 WSL 的仓库根目录激活 `.venv`；依赖来自根目录 `requirements.txt`。以下是不同套件的入口，不是测试通过记录。
+
+```bash
+source .venv/bin/activate
+python -m pytest thymio_control/test windows_launcher/tests -v
+python -m pytest thymio_control/lsl_test -v
+```
+
+后端测试导入 `app.*`，从后端目录运行，继续使用同一个仓库根 venv：
+
+```bash
+cd web_gui/backend
+../../.venv/bin/python -m pytest app -v
+```
+
+- 仓库根直接执行 `python -m pytest` 只发现 `pytest.ini` 中的三个目录：`thymio_control/test`、`thymio_control/lsl_test`、`windows_launcher/tests`，**不包含后端测试**。
+- `lsl_test` 包含 dummy 双流、EDF 回放和流式提取验证；缺少可选依赖或样本文件时，部分测试会 skip。skip 不等于通过。
+- launcher 逻辑测试用 fake executor 代替 `wsl` / `usbipd` 等命令；通过这些测试不证明 Windows USB、蓝牙或 WSL 网络可用。
+- 前端构建另在 `web_gui/frontend` 执行 `npm ci`、`npm run build`；构建成功不代替真机界面和控制验收。
 
 ## 4. 扩展(新增 metric/策略、新增设备)
 
@@ -54,14 +73,14 @@ LSL 流 (Windows bridge)
 1. 在 `thymio_control/policies/` 新增策略类(参照 `TbrPolicy` 模式:实现 `compute_intents`、支持 `offset`/`scale` 校准参数与 EMA 平滑)。
 2. 在 `thymio_control/pipeline.py` 的 `POLICIES` 注册:`{..., "新名": NewPolicy}`。
 3. 参数文件 `eeg_control_node.params.yaml` 设 `policy: <新名>`。
-4. 校准:30s 采集 → p5/p50 → 写回 `calib_offset`/`calib_scale` → 重建 policy。
+4. 校准：收到数据后采集 30s → p5/p50 → 写回 `calib_offset`/`calib_scale` → 调用 `policy.set_calibration()` 原位更新参数，保留 EMA 状态，不重建策略实例。
 
 **EMA 平滑参数(`ema_alpha`)。**
 - 三个策略 `policies/tbr.py`、`policies/ei.py`、`policies/alpha.py` 都有类属性 `ema_alpha: float = 0.35`。
 - 作用:对原始指标(α 功率 / θ/β 比值)先做指数移动平均,再归一化——`smoothed = ema_alpha × 新值 + (1 − ema_alpha) × 上次平滑值`;0.35 = 新数据信 35%、历史信 65%。
 - 效果:单帧波动不突跳,控制更稳;代价是反应略慢。第一帧无历史,直接取原始值(`_primed` 标志)。
 - 调参:调大 → 更跟手、更抖;调小 → 更平滑、更钝;0.35 为当前中间偏稳取值。
-- 注明:`ei` 已不用于实验,`alpha` / `tbr` 在用。
+- 代码仍注册 `ei`、`alpha`、`tbr` 三种策略。交付时采用哪些指标需要确认，不能从仓库保存的某次运行参数推断当前研究方案。
 
 **新增设备。**
 - 在 `thymio_control/device_profiles.py` 注册表登记设备(如 `hybrid-black` 8 通道、`bci-core-4` 4 通道);`RawLslAdapter` 从 LSL StreamInfo 自动读取通道数与采样率。
@@ -71,8 +90,10 @@ LSL 流 (Windows bridge)
 - **代码文件零字面中文**(`.md` 除外),含测试断言——必须出现中文时用 unicode 转义(`\uXXXX`,正则 pattern 里同样生效)。
 - 命名与注释沿既有风格:纯函数可测、阈值集中为命名常量、注释写明"分析假设"。
 
-**易踩坑(照搬改编自底稿 §7)。**
-1. **LSL 连接挂起(无波形/校准卡 preparing)**:WSL2 未禁用 eth0 的 IPv6 → liblsl 选中不可达的 IPv6 link-local 地址。需执行 `sysctl net.ipv6.conf.eth0.disable_ipv6=1`(持久化见根 README「WSL2 网络配置」)。
+**常见开发问题。**
+
+1. **LSL 连接挂起（无波形 / 校准卡 Preparing）**：先确认 Windows 桥有数据、`lsl_source_id` 对应正确。当前部署曾遇到 WSL 的 IPv6 地址选择问题；按[网络配置](GUIDE_INSTALLATION.md#4-网络配置)检查，不把禁用 IPv6 当成所有连接故障的通用处理。
 2. `use_teleop=true` 时 EEG 节点不启动 → 设 `use_teleop:=false`。
-3. 校准后值没更新 → 需 clean rebuild(`rm -rf install/build thymio_control`)。
-4. 前端 YAML 读不到最新值 → 确保 `npm run dev` 重建前端、backend 重启。
+3. **校准后值未更新**：先停止控制，检查 ROS 日志中的 `CALIB:`、样本不足 / 写文件失败信息，以及对应设备参数文件的 `calib_offset`、`calib_scale` 和 `calibrate`。当前代码会原位更新策略，并尝试写回源码及安装目录，不需要为校准结果重新编译，更不能删除 `thymio_control/` 源码目录。
+4. **网页配置与 YAML 不一致**：查看 `/api/config` 返回的 `source_files`，确认正在运行的后端来自预期仓库，并检查实际配置文件。不要把重新构建前端当成 YAML 更新方法。
+5. **启动了错误版本**：Windows 的 launcher 和桥从 WSL 当前检出文件同步，流程不执行 Git fetch / pull。Windows 的本地 `config.json` 不参与覆盖；launcher 自身的已运行进程要在退出并重新打开后才加载同步后的代码。
