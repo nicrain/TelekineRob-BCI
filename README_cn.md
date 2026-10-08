@@ -30,6 +30,8 @@ TelekineRob-BCI 是一个基于 EEG 的 Thymio 机器人控制平台。系统将
 
 本项目两台 EEG 默认使用电脑集成蓝牙，不使用 Hybrid Black 附带的 USB 蓝牙适配器；Thymio 的 USB Dongle 是另一种设备，真机控制仍需要它。当前桥使用每种型号固定的 source_id，不支持把任意两台同型号 EEG 直接作为两路独立设备。
 
+下一阶段主要需求是支持**两台同型号 g.tec EEG**，分别承担 Speed 与 Steering，并保留现有单设备和混合型号模式。这是尚未实现、尚未完成真机验证的开发目标，见[需求与验收条件](docs/DOSSIER_TECHNIQUE_cn.md#25-下一阶段主要需求同型号双-gtec)和[新实习生实施路线](docs/GUIDE_DEVELOPPEUR_cn.md#75-首要开发任务同型号双-gtec-集成)。
+
 ## 系统架构
 
 ```text
@@ -210,3 +212,5 @@ python -m pytest thymio_control/lsl_test -v
 ## 第三方组件
 
 仓库包含 ROS Thymio / Aseba 等第三方源码，其许可证与声明保留在对应目录，例如 [ros-thymio 的 LICENSE](src/ros-thymio/LICENSE)。g.tec SDK 需单独准备，不随仓库 pip 清单提供；各组件的授权信息不应混作整个项目的一份统一许可。
+
+项目的两份 Hybrid Black API licence 均由 Lucas 申请，相关授权信息由 Lucas 掌握；产品名称、适用范围及第二份激活状态由他或现场接手人员核实，见[授权交接说明](docs/GUIDE_DEVELOPPEUR_cn.md#24-hybrid-black-api-授权交接)。完整授权密钥不写入仓库。
