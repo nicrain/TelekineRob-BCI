@@ -1,6 +1,6 @@
 # GUIDE_DEVELOPPEUR
 
-> 现有开发者指南（中文版）。2026-10-08 已核对下列启动、测试和校准说明；这不代表已完成 Windows + WSL 真机验收。完整安装、部署与交接内容将在后续合并到 `GUIDE_DEVELOPPEUR_cn.md`。
+> 旧开发者指南（中文版，保留作参考）。完整安装、调试、修改与测试、更新、恢复和交接清单已整合到[中文版开发者交接手册](GUIDE_DEVELOPPEUR_cn.md)，后续以该手册为准。本文件不代表已完成 Windows + WSL 真机验收。
 
 相关文档：[安装部署](GUIDE_INSTALLATION.md) · [技术架构](ARCHITECTURE_TECHNIQUE.md) · [用户操作手册（中文）](MANUEL_OPERATEUR_cn.md) · [用户排障手册（中文）](GUIDE_DEBUG_cn.md)。
 
