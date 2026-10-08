@@ -1,5 +1,7 @@
 # Windows 总控页面（System Control）
 
+[返回中文项目总览](../README_cn.md)。本文是模块专项参考；完整安装、更新与恢复入口见[中文版开发者交接手册](../docs/GUIDE_DEVELOPPEUR_cn.md)。
+
 Windows 侧总控台：**双击图标 → 网页 → 点按钮起系统/连设备/看状态**，
 Headband 例外：Connect打开 VS Code，由操作者选对 venv、点右上角三角形运行按钮，断开时按 Ctrl+C。日常操作以[中文操作手册](../docs/MANUEL_OPERATEUR_cn.md)和[中文排障手册](../docs/GUIDE_DEBUG_cn.md)为准；本页面向部署和维护。
 
