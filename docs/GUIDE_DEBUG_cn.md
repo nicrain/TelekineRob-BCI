@@ -1,14 +1,21 @@
-# GUIDE_DEBUG
+# TelekineRob-BCI 简单操作与排障手册（中文版）
 
-[Version française](GUIDE_DEBUG.md)
+[法语版（待同步本次修订）](GUIDE_DEBUG.md)
 
 > 简单操作与排障清单。先检查电脑和设备，再通过总控页面（System Control）和实验网页启动实验。总控页面就是双击 `launcher.bat` 后打开的页面，用于启动系统、连接设备和重启网页服务。
+> 适用于已安装好的实验电脑；2026-10-08 对照当前代码与已确认使用流程修订。按钮保持英文，日常排障不需要安装软件、修改程序或重新创建 Python 环境。
 
-快速跳转：[实验前检查](#1-每次实验前检查) · [正常操作](#2-正常操作) · [EEG 连接与断开](#eeg-设备的连接与断开) · [问题排查](#3-出现小问题时) · [新 Thymio Dongle](#4-第-7-项怎么做检查并共享新的-thymio-dongle)
+快速跳转：[先停车](#排查前先停车) · [实验前检查](#1-每次实验前检查) · [正常操作](#2-正常操作) · [EEG 连接与断开](#eeg-设备的连接与断开) · [EEG 没有数据](#a-校准卡在-preparing--启动后没有波形) · [Thymio / Keyboard 测试](#b-thymio-没有动作) · [系统 / 网页问题](#c-总控页面的系统状态不是绿色--网页打不开) · [校准 / 按钮问题](#d-校准提示没有新数值--按钮不能点击) · [新 Thymio Dongle](#4-第-7-项怎么做检查并共享新的-thymio-dongle)
+
+### 排查前先停车
+
+先点**实验网页顶部的 Stop**，确认机器人实际停下，再重新连接、拔插 Dongle 或重启网页。若网页无响应或机器人仍在动，在能够安全操作的情况下关闭 Thymio 电源，再排查。
+
+刷新 / 关闭网页不等于停车。断流时即使程序有保护，也要确认实际停车；系统仍在运行时，设备数据恢复后可能重新产生动作。
 
 ## 1. 每次实验前检查
 
-启动前先检查蓝牙、电量和 USB 口；角色选择在实验网页打开后检查。
+启动前先检查蓝牙、电量和 USB 口；角色选择在实验网页打开后检查。只检查本次使用的设备；仿真不需要真实 Thymio、Dongle 或共享步骤。
 
 | 检查项 | 怎样确认 | 不通过时 |
 |---|---|---|
@@ -31,13 +38,13 @@
 
 1. 在 Windows 双击 `launcher.bat`。
 2. 在总控页面（System Control）点 **Start System**，等状态变成 **Running**（绿色）。
-3. 按下面的[连接与断开说明](#eeg-设备的连接与断开)连接 EEG 设备；Thymio 在总控页面点 **Connect**。等待所需设备状态变为绿色。
+3. 按下面的[连接与断开说明](#eeg-设备的连接与断开)连接 EEG 设备；使用真实机器人时，Thymio 在总控页面点 **Connect**。等待所需设备显示绿色 **Connected**。
 4. 在实验网页的 **01 — Input Source** 中按[检查项第 5 项](#1-每次实验前检查)设置 Role；启用的每行 **Device** 选 **EEG**，**Brand** 选实际使用的设备型号，**Metric** 选本次实验的指标。在 **02 — Output Target** 中，真机选 **Thymio**，仿真选 **Thymio Simu**。
-5. 点设备的 **Calibrate**。先显示 **Preparing…**，收到数据后开始 30 秒倒计时。双 EEG 时，第一台校准完成后，再校准第二台。
+5. 点设备的 **Calibrate**，无需先点顶部 Start。先显示 **Preparing…**，收到数据后开始 30 秒倒计时；期间不移动头戴。双 EEG 时，第一台校准完成后，再校准第二台。中途取消或出现提示时，按[校准问题](#d-校准提示没有新数值--按钮不能点击)处理。
 6. 校准完成后，若顶部仍显示 **Running…**，先点 **Stop**；再点顶部 **Start** 启动 EEG 控制。
-7. 结束时先点实验网页顶部的 **Stop**。使用 Headband 时，按下面的[断开步骤](#eeg-设备的连接与断开)中断桥接脚本；最后在总控页面点 **Stop System**。
+7. 结束时先点实验网页顶部的 **Stop** 并确认停车。使用 Headband 时，按下面的[断开步骤](#eeg-设备的连接与断开)中断桥接脚本；最后在总控页面点 **Stop System**，等待 Stopped 后点 **Exit Launcher**。完整收尾见[操作手册](MANUEL_OPERATEUR_cn.md#7-停止系统)。
 
-总控页面的 **Start System / Stop System** 用于启停整套系统；实验网页顶部的 **Start / Stop** 用于启停实验控制。设备变绿表示连接成功，分析图在校准或点 **Start** 后更新。
+总控页面的 **Start System / Stop System** 用于启停整套系统；实验网页顶部的 **Start / Stop** 用于启停实验控制。系统 Running 表示网页服务准备好，不表示机器人正在控制。EEG 绿色表示检测到设备数据；Thymio 绿色表示 Dongle 已能被系统访问，仍需通过动作确认。分析图在校准或点 **Start** 后更新，**仅连接时没有图表属于正常情况**。
 
 使用中不要拔 USB Dongle、关闭 Bluetooth、移动设备或拔掉电脑充电器。详细使用流程见[操作手册](MANUEL_OPERATEUR_cn.md)。
 
@@ -59,48 +66,75 @@
 
 总控页面的 **Disconnect** 或 **Stop System** 不会替你中断 VS Code 中的 Headband 桥接脚本。
 
+需要重新运行时，先在原脚本终端 Ctrl+C，确认旧脚本已停止，再点 ▶；不要连续点击运行按钮启动多份脚本。
+
 **Hybrid Black：在总控页面直接点 Connect / Disconnect 即可。** 连接时点 **Connect**，断开时先停止实验，再点 **Disconnect**，无需在 VS Code 中手动运行或中断脚本。
 
 ### 在 VS Code 中选择 venv
 
 1. 在 Windows 的 VS Code 中打开 Headband 桥接脚本 `gpype_lsl_bridge.py`。
 2. 按 **Ctrl+Shift+P**，输入并选择 **Python: Select Interpreter**。
-3. 在列表中选择实验使用的现有 **venv** 环境(当前为 c:\Users\Robot\Desktop\gpype_test\venv\Scripts\python.exe)，并在窗口底部确认当前显示的是这个环境。
+3. 在列表中选择实验使用的现有 **venv** 环境，并在窗口底部确认当前环境。现有实验电脑记录的解释器路径为 `C:\Users\Robot\Desktop\gpype_test\venv\Scripts\python.exe`；换电脑后按实际交接记录选择，不照搬这条路径。
 4. 如果脚本已经在运行，先在其终端按 **Ctrl+C**，再用新选择的环境重新运行。
+
+不要点 **Create Environment** 重新创建环境。若现有环境找不到、Python 命令没有出现或脚本立即报错，保留提示；不要在未确认环境前反复运行或自行安装缺少的模块。
 
 选择和运行方式见 [VS Code 官方说明](https://code.visualstudio.com/docs/python/environments#select-an-environment)及[脚本运行说明](https://code.visualstudio.com/docs/python/run)。
 
 ## 3. 出现小问题时
 
-重新连接设备前，先点实验网页顶部的 **Stop** 停止控制。
+先按[停车步骤](#排查前先停车)停止控制，再选与现象对应的一节。每完成一步检查状态是否恢复，不要同时改多处设置。
 
 ### A. 校准卡在 Preparing / 启动后没有波形
 
+如果只是连接了设备，还没有点 Calibrate 或顶部 Start，没有分析图属正常情况；先按[正常操作](#2-正常操作)继续。
+
 1. 按[实验前检查](#1-每次实验前检查)检查电脑的蓝牙模块、设备电量和电脑充电器是否已连接，再检查 Role 和 Brand；使用 Headband 时，还要检查[VS Code 的 venv](#在-vs-code-中选择-venv)。
 2. 点实验网页顶部的 **Stop**，再按[连接与断开步骤](#eeg-设备的连接与断开)重新连接对应设备。Headband 需要在 VS Code 中中断脚本后重新运行；Hybrid Black 使用总控页面的 **Disconnect / Connect**。等待设备变绿。
-3. 回网页重新点 **Calibrate**。
+3. 回网页确认启用行的 **Device = EEG**、**Brand** 与实际设备一致，重新点 **Calibrate**。双 EEG 逐台校准，结束后 Stop / Start 正式运行。
+
+设备已绿但仍没有图表时，不只看颜色判断成功；保存页面提示，按[问题仍未恢复](#5-问题仍未恢复时)记录实际现象。
 
 ### B. Thymio 没有动作
 
 1. 先点实验网页顶部的 **Stop**，确认 Thymio 已开机，Dongle 在指定 USB 口；若使用新的 / 其他的 Thymio，按[第 4 节](#4-第-7-项怎么做检查并共享新的-thymio-dongle)检查共享状态。
-2. 在总控页面中确认 **Thymio** 是绿色；不是绿色时，先 **Disconnect** 再 **Connect**。
+2. 在总控页面中确认 **Thymio** 是绿色。需要重新连接且显示 **Disconnect** 时，先点它再点 **Connect**；只有 **Connect** 时直接点 Connect。
 3. 检查 **02 — Output Target** 是否选择了真机 **Thymio**，以及 Role 是否符合[检查项第 5 项](#1-每次实验前检查)。
 4. 重新点实验网页顶部的 **Start**。
 5. **如果仍没有动作，用 Keyboard 单独测试 Thymio（不使用 EEG）：**
 
    - 先点顶部 **Stop**。在 **01 — Input Source** 中，第一行 **Role** 选 **Speed**、**Device** 选 **Keyboard**，第二行 **Role** 选 **None**，只保留一个角色；**02 — Output Target** 保持 **Thymio**。
-   - 点顶部 **Start**，在 **03 — Teleop Controls** 中用鼠标按住前进或转向按钮，观察 Thymio 是否移动；松开按钮即停止。
+   - 点顶部 **Start**，在 **03 — Teleop Controls** 中确认显示 **WS connected**，用鼠标短暂按住前进或转向按钮，观察 Thymio 是否移动。虽然选项名是 Keyboard，这里使用的是网页按钮，不需要按电脑键盘方向键。
+   - 松开按钮时程序会发送停止命令，确认机器人实际停下；需要时点面板中间的 **■** 或网页顶部 **Stop**。若显示 **WS disconnected**，先不要测试运动，按[网页问题](#c-总控页面的系统状态不是绿色--网页打不开)恢复。
    - 如果能够移动，说明 Thymio 的连接和基本控制正常，接下来按[EEG 排查步骤](#a-校准卡在-preparing--启动后没有波形)检查 EEG；如果仍不能移动，继续检查 Dongle、共享状态和配对。
    - 测试结束后点顶部 **Stop**，将 **Device** 改回 **EEG**，恢复本次使用的角色与设备选择，再校准并启动 EEG 控制。
 
 如果怀疑 Thymio 和 Dongle 没有配对，可按[检查项第 4 项的官方配对说明](https://www.thymio.org/fr/faq/comment-configurer-lappairage-du-thymio-sans-fil-avec-son-dongle/)尝试重新配对。
 
-如果机器人有异常动作，立即点实验网页顶部的 **Stop**，再点总控页面的 **Stop System**。
+如果机器人有异常动作，按[停车步骤](#排查前先停车)处理。Keyboard 测试能区分基本机器人链路和 EEG 问题，但一次能动不代表所有停止 / 断网场景都已通过。
 
 ### C. 总控页面的系统状态不是绿色 / 网页打不开
 
-1. 若显示 **Starting…**，等待启动完成；若显示 **Stopped** 或 **Error**，点 **Start System** 重试。
-2. 若系统已为绿色 **Running** 但实验网页不显示，先点 **↻ Refresh**；仍不显示时点 **Restart Web**，等待页面重载。
+1. 先停止控制并确认机器人停下；实验网页打不开或 Stop 无响应时，先按[停车步骤](#排查前先停车)处理，不直接刷新来停车。
+2. 若显示 **Starting… / Stopping…**，等待完成，不连续点击；显示 **Stopped** 时点 **Start System**。若为 **Error**，先看底部提示，用 **View Log** 查看信息，再重试一次 Start System。
+3. 系统已为绿色 **Running** 但实验网页不显示时，点 **↻ Refresh**；仍不显示时点 **Restart Web**，等待页面重载。也可用 **Open in new tab** 检查网页是否能单独打开。
+4. 网页恢复后重新确认 Role、Device、Brand、Metric 与 Output Target，再按[正常操作](#2-正常操作)校准和启动。不要因为页面重新出现就认为之前的控制状态也正确恢复。
+
+重复失败时保留提示与日志，不连续重启系统。电脑充电器主要与 EEG 蓝牙供电有关，不是系统状态变绿的修复步骤。
+
+### D. 校准提示没有新数值 / 按钮不能点击
+
+1. Role、Brand、Metric、Calibrate 等不能点击时，先看顶部是否为 **Running… / Preparing… / Calibrating…**。运行或校准期间部分设置会锁住；需要调整时先点 **Stop**。
+2. 更换佩戴者、设备或指标，或者中途 Stop 取消校准后，重新逐台校准，不直接使用中断的结果。
+3. 若显示 **Calibration produced no new values (see node log)**，先 Stop，检查设备是否持续传数据，按[EEG 排查](#a-校准卡在-preparing--启动后没有波形)恢复后再校准一次。倒计时结束、数字没有变化，都不能单独确认本次校准成功；重复出现时保留完整提示。
+4. 若 Start 时提示 **not calibrated. Start anyway?**，点取消，先完成校准。日常操作不需要手动改 **min / max** 数字来绕过提示。
+
+### E. 设备断流 / 状态变灰或 Failed
+
+1. 先点网页顶部 **Stop** 并确认停车，尤其双 EEG 不要只等待一台设备自己恢复。
+2. 按[实验前检查](#1-每次实验前检查)确认开机、电量、电脑充电器与集成蓝牙；Headband 再确认原脚本是否仍在运行、是否报错。
+3. 按[连接与断开步骤](#eeg-设备的连接与断开)重新连接对应设备。Headband 先 Ctrl+C 再 ▶；Hybrid Black 能点 Disconnect 时先断开再 Connect，只有 Connect 时直接点它。
+4. 确认设备重新传数据、角色和品牌仍正确后，再校准 / Start。不要把状态变绿当成可以在未确认停车的情况下继续实验。
 
 ## 4. 第 7 项怎么做：检查并共享新的 Thymio Dongle
 
@@ -150,4 +184,17 @@
 3. 再次找到 **BUSID `1-1`** 这一行。它的 **STATE** 应变成 **Shared**，这就说明设置成功。
 4. 回到总控页面点 Thymio 的 **Connect**。
 
+若命令报错、编号仍未出现，或状态没有变成 Shared，先保留完整提示，不继续反复 bind，也不要改成另一行的编号。共享成功只表示 Dongle 可以交给 Linux 使用；Thymio 本身是否能动，仍按[Keyboard 单独测试](#b-thymio-没有动作)确认。
+
 状态与命令说明参考 [usbipd-win 官方文档](https://github.com/dorssel/usbipd-win/wiki/WSL-support)。
+
+## 5. 问题仍未恢复时
+
+保持控制停止，保留以下少量信息，方便再次复现与定位，不需要阅读程序源码：
+
+- 出现问题的步骤，以及页面上的完整提示 / 截图。
+- System State、三个设备状态，以及本次实际使用的设备、Role 和 Output Target。
+- 使用 Headband 时，VS Code 所选解释器与脚本终端最后的报错；系统 / 网页问题保留 View Log 的相关内容。
+- 新 Dongle 问题保留 `usbipd list` 中 `1-1` 的状态或命令报错。
+
+不要为了消除提示而改程序、删除文件、重建 venv 或手动更换 USB 编号。暂时不用系统时，按[停止与收尾步骤](MANUEL_OPERATEUR_cn.md#7-停止系统)关闭，别只关浏览器。
