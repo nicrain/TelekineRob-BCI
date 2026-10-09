@@ -213,4 +213,4 @@ python -m pytest thymio_control/lsl_test -v
 
 仓库包含 ROS Thymio / Aseba 等第三方源码，其许可证与声明保留在对应目录，例如 [ros-thymio 的 LICENSE](src/ros-thymio/LICENSE)。g.tec SDK 需单独准备，不随仓库 pip 清单提供；各组件的授权信息不应混作整个项目的一份统一许可。
 
-项目的两份 Hybrid Black API licence 均由 Lucas 申请，相关授权信息由 Lucas 掌握；产品名称、适用范围及第二份激活状态由他或现场接手人员核实，见[授权交接说明](docs/GUIDE_DEVELOPPEUR_cn.md#24-hybrid-black-api-授权交接)。完整授权密钥不写入仓库。
+项目的两份 Hybrid Black API licence 均由 Lucas 申请，相关授权信息由 Lucas 掌握。用户确认：第一份已在原项目电脑激活，第二份未激活；需要部署 / 迁移时，产品详情和许可条件向 Lucas 获取，见[授权交接说明](docs/GUIDE_DEVELOPPEUR_cn.md#24-hybrid-black-api-授权交接)。完整授权密钥不写入仓库。

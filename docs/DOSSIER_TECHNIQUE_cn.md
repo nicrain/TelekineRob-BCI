@@ -6,8 +6,8 @@
 
 | 文档信息 | 内容 |
 |---|---|
-| 版本 / 日期 | 中文交接初版 v0.1 / 2026-10-08 |
-| 实现基线 | `main`，提交 `d2558f5`；本文是该基线上的新增文档 |
+| 版本 / 日期 | 中文交接稿 v0.2 / 2026-10-09 |
+| 实现基线 | 本轮代码核对为 `main` 的 `ad5d9d5`；新增需求与当前实现分开说明 |
 | 读者 | 项目负责人、接手开发者、需要了解系统边界的使用者 |
 | 适用环境 | 项目目标环境为 Windows + WSL2，Ubuntu 24.04、ROS2 Kilted；不是对所有系统版本的兼容性保证 |
 | 验证状态 | 已对照代码；相关30项单元测试已通过；目标电脑部署和真机验收尚待记录 |
@@ -200,7 +200,7 @@ EEG中的Steering单独控制时是原地转向。双设备融合时可以同时
 | RF-NEXT-05 信号与控制正确 | 设备身份变化不关闭型号所需滤波；确认采样率、通道与单位；角色互换后仍只由对应设备驱动速度 / 转向 | Hybrid 当前额外滤波按流名称判断；身份与型号不可混为一谈；保留部分命令话题及现有融合语义 |
 | RF-NEXT-06 安全与兼容 | 任一路断流保留融合器零速度保护；单设备、混合型号、校准和停止流程回归通过 | 0.5s 软件阈值不是整机停车保证；仍 Running 时恢复可能续动，须实测并记录，不得关闭保护来通过验收 |
 
-授权资产与当前 API / Suite 版本是不同信息。用户确认两份 Hybrid Black API licence 均由 Lucas 申请、相关信息由他掌握；一份已在原项目电脑激活，第二份状态未确认。这不能证明一份授权对应一台 EEG，或已允许所有双设备并发方式。原实习生已结束实习且无法访问现场设备；由 Lucas 或现场接手人员补充，具体见[授权交接](GUIDE_DEVELOPPEUR_cn.md#24-hybrid-black-api-授权交接)。
+授权资产与当前 API / Suite 版本是不同信息。用户确认两份 Hybrid Black API licence 均由 Lucas 申请、相关信息由他掌握；第一份已在原项目电脑激活，第二份未激活。这不能证明一份授权对应一台 EEG，或已允许所有双设备并发方式。原实习生已结束实习、没有运行环境，无法查询实际 SDK 版本；部署 / 迁移前由现场接手人员记录版本，授权产品详情向 Lucas 获取，不作为中文版定稿的前置条件，具体见[授权交接](GUIDE_DEVELOPPEUR_cn.md#24-hybrid-black-api-授权交接)。
 
 新实习生的阶段任务、代码入口、最小验证和回归清单集中在[开发者第 7.5 节](GUIDE_DEVELOPPEUR_cn.md#75-首要开发任务同型号双-gtec-集成)，不在本档案重复维护实现步骤。RF-NEXT 验收结果与当前 RF 基线分开登记；没有通过真实双设备测试时，只能报告软件验证进展。
 
@@ -240,7 +240,7 @@ WSL / Ubuntu
 |---|---|---|
 | Windows总控 | [launcher_server.py](../windows_launcher/launcher_server.py) | 浏览器不能直接执行wsl、usbipd、Python；本地控制服务负责执行与状态管理 |
 | Headband桥 | [gpype_lsl_bridge.py](../gtec_bridge/gpype_lsl_bridge.py) | SDK运行在Windows；当前由IDE启动，重建数据管线以恢复部分断流 |
-| Hybrid桥 | [unicornpy_lsl_bridge.py](../gtec_bridge/unicornpy_lsl_bridge.py) | 用UnicornPy采集并发LSL；launcher托管进程，采集异常后重连 |
+| Hybrid桥 | [unicornpy_lsl_bridge.py](../gtec_bridge/unicornpy_lsl_bridge.py) | 用UnicornPy采集并发布LSL；launcher托管进程，采集异常后重连 |
 | 数据适配器 | [lsl_raw.py](../thymio_control/thymio_control/adapters/lsl_raw.py) | 统一read_frame接口，读取StreamInfo；不能据此宣称支持所有LSL设备 |
 | 信号处理 | [band_power.py](../thymio_control/thymio_control/processors/band_power.py)、[enrich.py](../thymio_control/thymio_control/processors/enrich.py) | 流式PSD、单位转换和特征计算与ROS解耦，便于测试 |
 | 控制策略 | [pipeline.py](../thymio_control/thymio_control/pipeline.py)、policies | 用注册表选择Alpha / TBR / EI，保留各路校准及平滑状态 |
@@ -252,6 +252,8 @@ WSL / Ubuntu
 | 前端 | [App.jsx](../web_gui/frontend/src/App.jsx)、[api.js](../web_gui/frontend/src/api.js) | 展示按角色分路数据、逐路校准和控制；不是信号计算核心 |
 
 策略和适配器分离便于单测与扩展，但新策略还需要更新模型可选值、配置、界面映射和测试，不能只在注册表加一项就认为整栈接入完成。
+
+第三方 ROS-Aseba / ROS-Thymio 源码以本项目跟踪版本为部署依据，不直接替换为上游最新分支。已核对的差异包括内嵌 Aseba 头文件显式加入 `<cstdint>`、界面语言标签修改，以及 Thymio 的 GZ 仿真插件 / 参数和 launch 改动；不笼统称为性能优化。固定来源、逐文件差异及尚未正确传递的 `use_sim_time` 限制见[开发者第 5.5 节](GUIDE_DEVELOPPEUR_cn.md#55-第三方源码与本项目修改)，本次未执行 C++ / ROS 全量构建。
 
 ### 3.3 启动与状态设计
 
@@ -286,11 +288,13 @@ Start / Stop请求携带 `dry_run`；其模型默认true，但当前前端正常
 
 ### 3.4 设备连接设计
 
-**Headband。** 仓库设置 `connect_mode=open_in_ide`：打开同步后的脚本，后台等待LSL样本；操作者在Windows VS Code选venv并点三角形按钮。当前等待超时为120s，不表示120s内一定连上。SDK / API工作流来自用户确认，具体授权版本待记录。
+**Headband。** 仓库设置 `connect_mode=open_in_ide`：打开同步后的脚本，后台等待LSL样本；操作者在Windows VS Code选venv并点三角形按钮。当前等待超时为120s，不表示120s内一定连上。当前项目保留人工运行 / Ctrl+C 工作流；g.Pype [官方 FAQ](https://gpype.gtec.at/content/5_faq/index.html)说明个人 / 教学用途在 IDE 内免费使用、商业部署需要 Runtime，VS Code 并非唯一允许的 IDE，也不是 API 技术上不能代码连接。安装版本与适用条款见[开发者 SDK 说明](GUIDE_DEVELOPPEUR_cn.md#38-sdk-使用边界与连接方式)。
 
 Headband脚本建立 `BCICore8(channel_count=4)` → 0.5–45Hz带通 → 48–52Hz带阻 → LSLSender。使用BCICore8类名不代表采集8个通道。桥的看门狗针对数据停滞执行管线重建与重试，与机器人停车watchdog不是同一个计时器。
 
 **Hybrid Black。** `connect_mode=spawn`运行UnicornPy桥，只发送8个EEG通道，source_id固定为 `gtec_hybrid_black`。初次采集失败会退出；采集过程中某些设备异常会触发退避重连。不能把局部异常恢复逻辑理解为任何蓝牙 / SDK故障均可自动恢复。
+
+UnicornPy [官方 API](https://github.com/unicorn-bi/Unicorn-Hybrid-Black-Windows-APIs/blob/main/python-api/unicorn-python-api-reference.md)可按序列号连接、开始 / 停止采集及释放连接，不要求 IDE 人工执行，因此项目由总控托管桥。两份项目授权的信息向 Lucas 获取；实际安装及 licence 不随 Linux 镜像迁移。原电脑选择集成蓝牙来自现场使用经验，厂商 Suite 手册推荐提供的适配器；这一区别及换电脑验证见[开发者第 3.8 节](GUIDE_DEVELOPPEUR_cn.md#38-sdk-使用边界与连接方式)。
 
 **EEG状态探测。** launcher用该设备的 `python_cmd` 运行LSL探针；因此VS Code脚本运行成功但探针解释器缺pylsl时，仍可能不显示Connected。桥进程存在 / 流存在而没有样本不作为绿色依据。
 
@@ -309,7 +313,7 @@ Headband脚本建立 `BCICore8(channel_count=4)` → 0.5–45Hz带通 → 48–5
 
 运行时通道数与采样率来自StreamInfo，不以档案数值代替实际检查。source_id为空时适配器退回按type=EEG发现并选第一条流，双设备不能依赖这一方式来保证正确绑定。
 
-**预处理。** Headband在Windows桥中滤波；Hybrid Black在WSL适配器中补带通与带阻。当前补滤波判断依赖流名 `gtec_hybrid_black`，不只是source_id；改流名或接入新桥时须重新检查处理链，避免漏滤波或重复滤波。
+**预处理。** Headband在Windows桥直接调用 gpype 的带通（0.5–45Hz）与带阻（48–52Hz）节点，接口见[g.Pype SDK 参考](https://gpype.gtec.at/content/7_sdk_reference/index.html)。Hybrid 的 Windows 桥不调用这套滤波；核对的[UnicornPy 公开参考](https://github.com/unicorn-bi/Unicorn-Hybrid-Black-Windows-APIs/blob/main/python-api/unicorn-python-api-reference.md)未提供相应接口，因此WSL适配器使用流式 `StreamingPreFilter` 补相同截止频率的滤波，默认 4 阶 Butterworth 设计与 SOS 实现。这不说明硬件完全无处理，也不证明两种实现的响应 / 延迟完全相同。当前补滤波判断依赖流名 `gtec_hybrid_black`，不只是source_id；改流名或接入新桥时须重新检查处理链，避免漏滤波或重复滤波。具体代码及验证入口见[开发者第 5.4 节](GUIDE_DEVELOPPEUR_cn.md#54-两类-eeg-的预滤波实现)。
 
 **PSD与单位。** 默认滑动窗口1s、步长0.5s，使用Welch PSD计算各通道频带功率：delta 1–4、theta 4–8、alpha 8–13、beta 13–30、gamma 30–100Hz。频段定义不说明预处理后仍保留全部高频信息；带通上限45Hz已限制高频内容。
 
@@ -586,7 +590,7 @@ API名称中的system并不意味着它与Windows的start-system是一套作用�
 | 网页服务健康不等于ROS / EEG有效 | 某些状态可能误导定位 | 对照数据、ROS错误和实际运动，不只看颜色 |
 | 真实命令默认开、网络访问缺完整权限体系 | 非可信客户端可能控制或修改配置 | 核对监听 / 代理路径和访问范围，未审查前不对互联网开放 |
 | 保存的配置可能是某次运行残留 | 默认角色、指标和速度不一定适合交付 | 负责人确定交付基线，备份实际配置 |
-| SDK与环境不在pip声明中完整覆盖 | clone仓库不能直接恢复设备桥 | 单独交接SDK、授权、解释器和版本 |
+| SDK与环境不在pip声明中完整覆盖 | clone仓库或导入WSL不能直接恢复Windows设备桥 | 优先评估[WSL整体迁移](GUIDE_DEVELOPPEUR_cn.md#93-推荐迁移方式导出与导入整套-wsl)，Windows SDK、授权、解释器、蓝牙及USB仍单独配置 |
 | 数据及日志缺统一生命周期管理 | 信息泄露、误删或恢复缺资料 | 确定权限、交付范围和备份方案 |
 
 这些条目是交接风险和已观察实现边界，不构成本次运行代码修复任务；历史review列表仍需逐条核实，本文不宣称软件没有其他问题。
@@ -598,10 +602,12 @@ API名称中的system并不意味着它与Windows的start-system是一套作用�
 | 实际Windows config.json、WSL发行版、项目 / 同步路径、解释器路径 | 开发者交接手册的当前部署章节 |
 | Windows / Ubuntu / Python / ROS / Gazebo / Aseba / usbipd / Node与SDK实值 | 开发者手册的版本、安装和恢复章节 |
 | SDK安装来源、授权恢复及第三方代码来源 / 许可证 | 开发者手册的依赖与交接清单 |
-| 两份 Hybrid Black API licence 的产品、适用范围与第二份激活状态 | Lucas 掌握授权信息；由他或现场接手人员补充[授权交接记录](GUIDE_DEVELOPPEUR_cn.md#24-hybrid-black-api-授权交接)，不要求已离岗实习生访问原电脑 |
+| 两份 Hybrid Black API licence 的产品详情及适用范围 | Lucas 掌握授权信息；用户确认第一份已激活、第二份未激活。需要部署 / 迁移时向 Lucas 获取详情，见[授权交接记录](GUIDE_DEVELOPPEUR_cn.md#24-hybrid-black-api-授权交接) |
 | launcher入口和指定USB口照片、实际界面截图 | 用户手册、排障手册、部署说明 |
 | 默认指标、品牌 / 角色、速度、真机 / 仿真安排 | 本文产品配置与开发者部署基线 |
 | 完整真机、故障停止与恢复、用户 / 开发者演练记录 | 本文验收状态及开发者交接清单 |
 | 数据交付范围、权限、备份位置及恢复结果 | 开发者手册；敏感账号 / token另行受控交接 |
 
 上述信息缺失时，已实现功能仍可描述，但文档不能标为“完全验收交付”。[开发者中文版](GUIDE_DEVELOPPEUR_cn.md)负责具体安装、操作命令、日志定位、修改与测试路线，本文件保持产品与设计职责。
+
+这里的现场信息由接手人员 / 现场使用者在部署或验收时登记，不要求已结束实习、没有运行环境的原实习生查询；缺少现场实值不妨碍中文版定稿，但不能虚构版本或已完成的真机验收。

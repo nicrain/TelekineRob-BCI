@@ -3,7 +3,7 @@
 [返回中文项目总览](../README_cn.md)
 
 > 面向接手项目的新实习生 / 开发者，整合部署、代码导读、调试、修改验证和恢复。
-> 编写日期：2026-10-08；实现核对基线：`main` 的 `bb71122`。这个提交号用于说明核对范围，不代表之后的最新版本。
+> 编写日期：2026-10-08；补充核对日期：2026-10-09；本轮实现核对基线：`main` 的 `ad5d9d5`。这个提交号用于说明核对范围，不代表之后的最新版本。
 > 本文基于仓库代码与已确认使用流程；新电脑重装、Windows + WSL 网络和真机验收尚未在本次文档工作中执行。交付电脑实值与验收结果分别填入第 2、10 节。
 
 ## 交接索引
@@ -26,6 +26,7 @@
 - **接手开发者**：先读[项目 README](../README_cn.md)了解系统，再按[接手路线](#1-接手路线)运行现有系统；结合[技术档案](DOSSIER_TECHNIQUE_cn.md)与本手册理解和修改代码。
 - **下一阶段主要开发任务**：[同型号双 g.tec 集成](#75-首要开发任务同型号双-gtec-集成)。该节说明代码现状、限制、实施顺序和验收，不能视为已实现功能。
 - **授权资料入口**：两份 Hybrid Black API licence 均由 Lucas 申请，向他获取必要信息；详见[授权交接](#24-hybrid-black-api-授权交接)。
+- **部署与维护入口**：[官方资料](#37-官方资料与依赖来源) · [SDK 使用边界](#38-sdk-使用边界与连接方式) · [滤波实现](#54-两类-eeg-的预滤波实现) · [第三方源码修改](#55-第三方源码与本项目修改) · [整套 WSL 迁移](#93-推荐迁移方式导出与导入整套-wsl)。
 
 ### 整理状态与交付记录入口
 
@@ -81,13 +82,15 @@
 | Ubuntu / ROS | 项目基线 Ubuntu 24.04 / ROS2 Kilted | 待填写：实际发行版名、系统版本与 ROS 包版本 |
 | WSL Python | 基线 Python 3.12；仓库根 `.venv` | 待填写：版本、解释器实际路径、`rclpy` 导入结果 |
 | Windows Python | launcher 模板与两台设备的 `python_cmd` 为 `python` | 待填写：launcher / 各桥 / 探针 / VS Code 各自解释器及位数 |
-| SDK | Headband 用 `gpype`；Hybrid Black 用 `UnicornPy` | 待填写：版本、安装包来源、授权及恢复方式 |
+| SDK | Headband 用 `gpype`；Hybrid Black 用 `UnicornPy` | 现场接手人员部署 / 迁移前记录版本及安装来源；原实习生无环境可查询，授权资料向 Lucas 获取 |
 | Node / npm | 前端使用 Vite 5、React 18；有 npm lockfile | 待填写：已验证版本，不直接改成最新版 |
 | USB 与机器人 | usbipd-win；Thymio Dongle 默认 BUSID `1-1`；Linux 路径 `/dev/ttyACM0` | 待填写：usbipd 版本、指定 USB 口照片、Thymio / Dongle 对应关系 |
 | Gazebo / Aseba | 仿真使用 ROS Gazebo 包；真机依赖仓库内 ROS Thymio / Aseba 驱动 | 待填写：构建依赖、实际版本、仿真是否作为交付项 |
 | 网络与数据 | 端口、配置与日志入口见下文 | 待填写：允许访问的客户端、数据范围、备份位置 |
 
 以下只读命令用于收集基线，不用于替代设备验收。输出若包含用户名、设备名或内网地址，按交接范围保存；账号凭据与 token 不写进公开仓库。
+
+本节现场版本 / 路径由接手人员在原电脑查询。原实习生已结束实习、没有可查询的运行环境，不需要补这些实值；保留“现场待核对”不影响中文版定稿。部署、迁移或版本升级时再以实际电脑为准登记。
 
 Windows PowerShell：
 
@@ -140,7 +143,7 @@ Windows 的 `python --version` 仅代表当前终端默认解释器；还要用�
 
 ### 2.4 Hybrid Black API 授权交接
 
-**已确认的项目信息（用户提供，不等于本次现场授权审计）：** 项目申请 / 购买了两份 Hybrid Black API licence，两份均由博士生 Lucas 申请，相关授权信息由 Lucas 掌握。其中一份已在原项目 Windows 电脑激活；第二份的激活状态、所在电脑及两份的完整产品信息尚未核实。原实习生已结束实习，无法访问部门设备或 Windows 电脑，不再承担现场查询。
+**已确认的项目信息（用户提供）：** 项目申请 / 购买了两份 Hybrid Black API licence，两份均由博士生 Lucas 申请，相关授权信息由 Lucas 掌握。用户确认其中第一份已在原项目 Windows 电脑激活，**第二份未激活**。两份授权的具体产品详情及适用条款需要使用时向 Lucas 获取。原实习生已结束实习，没有运行环境，无法访问部门设备或 Windows 电脑，不承担现场查询。
 
 接手开发者首先向 Lucas 获取产品名称 / Product ID、适用条款和凭据获取方式；Lucas 或现场接手人员再核对电脑上的状态。完整 licence key、购买邮件和账号信息只经受控渠道交接，不放入 Git、日志或公开截图。
 
@@ -148,8 +151,8 @@ Windows 的 `python --version` 仅代表当前终端默认解释器；还要用�
 |---|---|
 | 两份授权分别对应的产品名称、Product ID 与适用范围 | Lucas 的购买 / 授权邮件；待登记，不能只写泛称“UnicornPy” |
 | 第一份授权的激活产品、有效期及所在电脑 | 用户确认在原项目电脑激活；Lucas / 接手者查看该电脑的 Licenses 页复核 |
-| 第二份授权的状态及所在电脑 | 向 Lucas 查询；若曾在另一电脑激活，在对应电脑核对；暂不能确认时保留“待确认”，不推断为未使用 |
-| 软件版本 | 现场分别记录 Unicorn Suite 与 UnicornPy API 版本，不当作授权产品版本 |
+| 第二份授权的状态 | 用户确认未激活；不再列为未知状态。以后确需使用时向 Lucas 获取授权资料并按适用流程激活 |
+| 软件版本 | 由现场接手人员在部署 / 迁移前分别记录 Unicorn Suite 与 UnicornPy API 版本；不要求原实习生查询，也不当作授权产品版本 |
 | 新电脑迁移及同机双设备并发的许可条件 | Lucas 的实际购买条款；不明确时向厂商确认，不从“有两份”推导“一台 EEG 一份” |
 
 官方说明在 **Unicorn Suite Hybrid Black → Licenses** 中查看授权状态，激活时使用购买邮件中的 Product ID、License key 和 License Email；停用也在此页面操作。这里的交接核对只查看，**不要为了验证而停用现有授权**。若确需迁移，先与 Lucas 确认许可条件和停机安排，再按适用版本的厂商流程执行。[官方授权说明](https://github.com/unicorn-bi/Unicorn-Suite-Hybrid-Black-User-Manual/blob/main/UnicornSuite.md#licensing)
@@ -170,7 +173,7 @@ python -c "import sys, UnicornPy; print(sys.executable); print(UnicornPy.GetApiV
 
 1. 准备 WSL2 与 Ubuntu 24.04；登记注册发行版名。不要因为新安装默认版本变化，就替换项目已验证的 Ubuntu / ROS 组合。
 2. 安装 usbipd-win 并检查命令可用。USB 共享不是 WSL 内置能力；安装及权限要求参考 [Microsoft USB 连接文档](https://learn.microsoft.com/en-us/windows/wsl/connect-usb)。官方文档的 BUSID 是示例，本项目仍使用 `1-1`。
-3. 准备 Python / Pythonw 与 VS Code，确认 `code` 命令可用。按 g.tec 随设备提供的 SDK 资料恢复 `gpype`、`UnicornPy` 和所需驱动 / 授权；Windows Python 版本、位数及 `.pyd` 兼容性须匹配 SDK。
+3. 准备 Python / Pythonw 与 VS Code，确认 `code` 命令可用。按 g.tec 随设备提供的 SDK 资料恢复 `gpype`、`UnicornPy` 和所需驱动 / 授权；Windows Python 版本、位数及 `.pyd` 兼容性须匹配 SDK。资料入口见[第 3.7 节](#37-官方资料与依赖来源)，API 使用及连接边界见[第 3.8 节](#38-sdk-使用边界与连接方式)。
 4. 分别检查桥和探针使用的 Python。根 `requirements.txt` 不包含两个厂商 SDK，也不是 Windows 两个桥的完整安装清单。
 5. 先用内置蓝牙和已配对设备复现现有桥；不要同时运行同一设备的多个桥，也不要自动替换 SDK 版本来试错。
 
@@ -238,7 +241,7 @@ ros2 pkg executables thymio_control
 
 ### 3.4 WSL Python 与前端环境
 
-WSL Bash，在仓库根创建项目环境。已有 `.venv` 时先核对，不覆盖；新电脑重新创建，不复制旧电脑的 venv：
+WSL Bash，在仓库根创建项目环境。以下用于从源码重新安装：已有 `.venv` 时先核对，不覆盖；重建时重新创建，不单独跨电脑复制 venv。若采用[整套 WSL 导入](#93-推荐迁移方式导出与导入整套-wsl)，其中 Linux 环境可以随镜像保留，先验证，不要求无条件删除 / 重建：
 
 ```bash
 python3 -m venv .venv
@@ -289,6 +292,38 @@ launcher 会尝试更新 Windows 的 5173 端口转发；失败并不必然阻�
 | `EXPERIMENT_DATA_DIR` | 仓库下 `experiment_data` | 研究数据目录；不属于操作者日常必学流程 |
 
 仅在经过确认的可信网络范围使用。不能因为后端只监听 loopback、设置了 token 或开启 dry-run，就认为所有控制 / 配置接口受到完整保护。具体代码边界和代理风险见[技术档案的网络边界](DOSSIER_TECHNIQUE_cn.md#312-网络命令与数据边界)。互联网部署不在当前交付承诺内。
+
+### 3.7 官方资料与依赖来源
+
+以下为 2026-10-09 核对的厂商 / 维护者资料入口，用于安装、API 查询和维护。在线页面会更新，页面版本不等于原电脑已安装版本；先登记现有可运行环境，再按对应版本恢复，不照着最新示例直接升级。
+
+| 设备 / 组件 | 官方或上游入口 | 本项目如何使用 |
+|---|---|---|
+| Headband | [BCI Core-4 产品](https://www.gtec.at/product/unicorn-bci-core-4-headband/)、[g.Pype GitHub](https://github.com/gtec-medical-engineering/gpype)、[文档首页](https://gpype.gtec.at/index.html)、[培训与示例](https://gpype.gtec.at/content/2_gpype_training/index.html)、[SDK 参考](https://gpype.gtec.at/content/7_sdk_reference/index.html) | 查询 SDK 安装 / 采集 / 滤波接口；项目连接用 gpype 桥，不直接把官方展示程序当作本项目入口 |
+| g.Pype 使用条件 | [官方 FAQ](https://gpype.gtec.at/content/5_faq/index.html)、[GNCL 许可文本](https://github.com/gtec-medical-engineering/gpype/blob/main/LICENSE-GNCL.txt) | 核对 IDE 内个人 / 教学使用与 Runtime 部署的边界；项目保留 VS Code 手动流程 |
+| Hybrid Black | [产品](https://www.gtec.at/product/unicorn-hybrid-black-bci-platform/)、[Windows APIs GitHub](https://github.com/unicorn-bi/Unicorn-Hybrid-Black-Windows-APIs)、[Python API 安装与使用](https://github.com/unicorn-bi/Unicorn-Hybrid-Black-Windows-APIs/blob/main/python-api/unicorn-python-api.md)、[Python API 参考](https://github.com/unicorn-bi/Unicorn-Hybrid-Black-Windows-APIs/blob/main/python-api/unicorn-python-api-reference.md) | 查询 UnicornPy 库路径、Python / 二进制兼容性、设备发现、序列号连接与采集；桥只向 LSL 转发 8 个 EEG 通道 |
+| Unicorn Suite Hybrid Black | [安装、蓝牙、授权和配对手册](https://github.com/unicorn-bi/Unicorn-Suite-Hybrid-Black-User-Manual/blob/main/UnicornSuite.md)、[维护者安装包发布页](https://github.com/unicorn-bi/Unicorn-Suite-Hybrid-Black-User-Manual/releases) | Windows 驱动 / API 准备与 licence 管理；用 Lucas 的实际授权信息，不把任意 Suite 应用授权当作 Python API 授权 |
+| Thymio | [官网（法语）](https://www.thymio.org/fr/)、[Thymio Suite 下载](https://www.thymio.org/fr/telecharger-thymio-suite/)、[编程与使用资料](https://www.thymio.org/fr/produits/programmer-avec-thymio-suite/)、[无线 Dongle 配对](https://www.thymio.org/fr/faq/comment-configurer-lappairage-du-thymio-sans-fil-avec-son-dongle/) | 查设备维护、厂商工具安装与必要时的配对；本项目日常动作由 ROS 驱动发送，不要求在 Thymio Suite 内启动控制 |
+| ROS2 Kilted | [版本文档](https://docs.ros.org/en/kilted/)、[Ubuntu 安装](https://docs.ros.org/en/kilted/Installation/Ubuntu-Install-Debs.html)、[同一官方安装文档源码](https://github.com/ros2/ros2_documentation/blob/kilted/source/Installation/Ubuntu-Install-Debs.rst) | Ubuntu 24.04 / ROS2 基础安装、colcon 与 ROS 调试；网页访问被反爬拦截时可读官方源码，不切换 ROS 发行版来绕过 |
+| ROS-Aseba / asebaros | [jeguzzi/ros-aseba](https://github.com/jeguzzi/ros-aseba)、[维护者文档](https://jeguzzi.github.io/ros-aseba/) | `asebaros` 提供通用 ROS ↔ Aseba 网络接口；本项目在 `src/ros-aseba` 保留源码及嵌套 Aseba / Dashel 依赖 |
+| ROS-Thymio | [jeguzzi/ros-thymio](https://github.com/jeguzzi/ros-thymio)、[同一维护者文档](https://jeguzzi.github.io/ros-aseba/) | 在 asebaros 之上提供 Thymio 驱动、消息和模型；本项目使用 `src/ros-thymio` 中的 ROS 包，通过 colcon 构建，不另行 pip 安装 |
+| Windows / WSL / USB | [WSL 命令](https://learn.microsoft.com/en-us/windows/wsl/basic-commands)、[导入发行版](https://learn.microsoft.com/en-us/windows/wsl/use-custom-distro)、[USB 接入 WSL](https://learn.microsoft.com/en-us/windows/wsl/connect-usb) | 导出 / 导入 Linux 环境及 usbipd 操作；本项目 BUSID 和路径约定以实际配置与手册为准 |
+
+ROS-Aseba / ROS-Thymio 的上游分支及旧教程含 ROS1 历史内容，不是 Thymio 厂商直接发布的本项目驱动。安装优先使用本项目跟踪的源码和固定版本；来源与修改见[第 5.5 节](#55-第三方源码与本项目修改)。官方资料用于了解接口，不能替代本项目的配置、构建、停止和验收步骤。
+
+### 3.8 SDK 使用边界与连接方式
+
+**Headband / g.Pype。** [官方 FAQ](https://gpype.gtec.at/content/5_faq/index.html)说明个人及教学用途可在 IDE 内免费使用，商业部署需要 g.Pype Runtime；具体还需遵守对应版本的[GNCL 条款](https://github.com/gtec-medical-engineering/gpype/blob/main/LICENSE-GNCL.txt)。VS Code 是本项目选用的 IDE，不是官方唯一允许的 IDE。不要把这一使用条件解释成“API 技术上不能通过代码连接”——桥本身就在调用 API；本项目采取的是操作者在 VS Code 点击 **▶**、终端 **Ctrl+C** 的人工运行 / 中断流程。没有另行确认部署方式和授权前，不改成后台自动启动。
+
+原电脑 Headband venv 的已记录路径为 `C:\Users\Robot\Desktop\gpype_test\venv\Scripts\python.exe`，操作步骤见[排障手册](GUIDE_DEBUG_cn.md#在-vs-code-中选择-venv)。现场用该解释器执行 `python -m pip show gpype`（实际命令须替换解释器路径）登记已安装版本；本轮在线文档显示 v4.0.0，不能据此断言原电脑也是该版本。现有桥使用 `BCICore8(channel_count=4)`，新文档接口或类名变化时先查兼容性，不顺便重写 / 升级。
+
+**Hybrid Black / UnicornPy。** [官方 Python API 说明](https://github.com/unicorn-bi/Unicorn-Hybrid-Black-Windows-APIs/blob/main/python-api/unicorn-python-api.md)要求授权后加载库。本项目已有两份申请 / 购买的 API licence，详情由 Lucas 提供，见[第 2.4 节](#24-hybrid-black-api-授权交接)；不要由此推广为所有 g.tec API 都收费或每台 EEG 必须单独占用一份授权。
+
+Windows 上先按对应版本 Suite / DevTools 安装资料准备驱动和 Unicorn Python API，确认 `UnicornPy.pyd` 所在库目录可被实际解释器加载（官方说明使用 `PYTHONPATH`），Python 版本、位数及本机库依赖匹配。官方 GitHub 的说明 / 示例不是可直接替代已授权安装包的一套完整运行环境；仅 `pip install` 根依赖清单无法完成部署。环境就绪后按[第 3.1 节](#31-windows-前置条件)导入检查，再确认 API 版本。
+
+UnicornPy 支持代码按序列号创建 `Unicorn(serial)`、开始 / 读取 / 停止采集，并在对象释放时断开；不需要在 IDE 中人工执行才允许连接。[官方 API 参考](https://github.com/unicorn-bi/Unicorn-Hybrid-Black-Windows-APIs/blob/main/python-api/unicorn-python-api-reference.md)。本项目因此由 System Control 的 Connect / Disconnect 托管桥进程。连接具体设备和独立重连仍有[同型号双设备限制](#752-当前代码的限制与修改入口)，不能把 API 支持序列号选择当成项目已经实现。
+
+**蓝牙选择。** Headband 和 Hybrid Black 在原项目电脑上均用集成蓝牙；用户确认 Hybrid 附带 USB 蓝牙曾频繁断连，集成蓝牙在该电脑上表现更稳定，因此延续这一基线。与此不同，[厂商 Suite 手册](https://github.com/unicorn-bi/Unicorn-Suite-Hybrid-Black-User-Manual/blob/main/UnicornSuite.md#bluetooth-configuration)推荐随设备提供的适配器。两者分别是项目现场经验和厂商推荐，不写成同一个“官方要求”；换电脑或同时接两台设备时重新验证稳定性，不保证任意集成蓝牙都适用。Thymio USB Dongle 不属于这个蓝牙选择。
 
 ## 4. 启动与开发调试
 
@@ -404,6 +439,51 @@ Windows 桥 → LSL → RawLslAdapter / Welch → enrich_features → Policy →
 第二份 EEG 文件对应第二条设备配置，不固定等于 Hybrid Black 或 Steering。关闭第二角色以 `run_eeg2` 等配置为准，不要求删除第二份 YAML。
 
 校准在首帧到达后计时 30 秒，至少 50 个有效指标样本；策略参数原位更新，保留 EMA。新校准不会立即刷新已建立的眨眼检测器参考，因此正式运行前 Stop / Start。源码与安装参数不一致时，先查写入结果和路径；不要通过删除整个 `thymio_control/` 目录解决。
+
+### 5.4 两类 EEG 的预滤波实现
+
+两路都在 Welch 功率计算之前做本项目的初级滤波，但位置不同：
+
+| 设备 | 本项目实际处理路径 | 代码与依据 |
+|---|---|---|
+| Headband | Windows：采集 → gpype `Bandpass(0.5, 45 Hz)` → `Bandstop(48, 52 Hz)` → LSL；Linux 不再补同一套预滤波 | [桥的 `GpypeBridge.build()`](../gtec_bridge/gpype_lsl_bridge.py)明确调用 SDK 滤波节点；[g.Pype SDK 参考](https://gpype.gtec.at/content/7_sdk_reference/index.html)和[滤波教程](https://gpype.gtec.at/content/2_gpype_training/season2_easy_drifting/s2e1_filtering.html)提供接口说明 |
+| Hybrid Black | Windows：UnicornPy 采集 → 8 个 EEG 通道 LSL；WSL：`StreamingPreFilter` → Welch | [Unicorn 桥](../gtec_bridge/unicornpy_lsl_bridge.py)未调用软件滤波；[适配器](../thymio_control/thymio_control/adapters/lsl_raw.py)为该流创建[滤波器](../thymio_control/thymio_control/processors/band_power.py)，默认 4 阶 Butterworth 设计、SOS 流式实现，带通 0.5–45 Hz、带阻 48–52 Hz |
+
+本轮核对的[UnicornPy 公开 API 参考](https://github.com/unicorn-bi/Unicorn-Hybrid-Black-Windows-APIs/blob/main/python-api/unicorn-python-api-reference.md)没有提供上述带通 / 带阻滤波接口，故本项目在 Linux 中补软件预滤波。这不证明设备固件完全没有信号处理，也不表示其他 g.tec 软件无法滤波。准确描述是“当前桥未做这套滤波，WSL 负责补齐”。
+
+两路使用相同截止频率不意味着滤波阶数、频率响应或处理延迟完全一致；Headband 的 SDK 实现以安装版本为准。Linux 滤波器保留分块之间的状态、按通道处理；不能把每个数据块都当成独立信号反复初始化。0.5–45 Hz 带通和约 50 Hz 的抑制不是完整的伪迹剔除流程，也不能证明真实 EEG 控制质量；策略中的 EMA 是控制指标平滑，不替代原始信号预滤波。
+
+维护时尤其检查：当前 Linux 是否补滤波取决于 **流名称** `gtec_hybrid_black`，不是仅看 source_id；换桥、改名称或增加同型号实例时，防止漏滤波 / 重复滤波。单位从流元数据读取，缺失时回退 µV 并警告；Hybrid 桥当前缺 `source_unit`，需根据实际 SDK 配置和数据核实，而非按曲线外观猜测。完整 PSD / 单位定义见[技术档案第 3.5 节](DOSSIER_TECHNIQUE_cn.md#35-eeg信号处理设计)。
+
+可用[预滤波测试](../thymio_control/test/test_pre_filter.py)核对直流抑制、50 Hz 抑制、10 Hz 保留、流式连续性、多通道和 reset；[频带测试](../thymio_control/test/test_band_power.py)核对后续计算。这些是软件数值测试，不验证 Windows SDK 的实际滤波响应或蓝牙链路。
+
+### 5.5 第三方源码与本项目修改
+
+`src/ros-aseba`、`src/ros-thymio` 已在本项目提交 `12c093c` 转成普通 Git 跟踪目录，嵌套依赖也随源码保留；不是部署时自动从上游取最新版的子模块。部分目录保留 `.gitmodules` 是来源线索，不说明现在仍应执行递归子模块更新。
+
+2026-10-09 将当前跟踪文件与历史子模块指向的固定上游版本逐文件比较；嵌套版本取自该 ros-aseba 上游 Git 树，而非凭最新分支推测：
+
+| 本项目目录 / 组件 | 对比的上游版本 | 范围内结果 |
+|---|---|---|
+| `src/ros-aseba`（不含下面的嵌套目录） | [jeguzzi/ros-aseba @ 94acaba](https://github.com/jeguzzi/ros-aseba/tree/94acaba803d748b84fce62ab0527d1348b28be12) | 166 个文件相同，无内容修改 |
+| `src/ros-aseba/asebaros/aseba`（不含其 dashel / enki 嵌套目录） | [aseba-community/aseba @ 3c14f0c](https://github.com/aseba-community/aseba/tree/3c14f0cb9510c60502821bfd7adb22e795540479) | 1147 个相同、3 个不同 |
+| `src/ros-aseba/asebaros/dashel` | [aseba-community/dashel @ 1a8d36e](https://github.com/aseba-community/dashel/tree/1a8d36e7fe48ce0f4fd292f5b64b2a0a880953da) | 99 个文件相同，无内容修改 |
+| `src/ros-thymio` | [jeguzzi/ros-thymio @ d996f49](https://github.com/jeguzzi/ros-thymio/tree/d996f4994feb5332c42a2b58c2c2c17fed0c938d) | 44 个相同、5 个不同 |
+
+范围内没有新增或缺失文件；这些计数不包含排除的嵌套依赖，不能当作全部第三方组件的兼容性 / 安全审计。本轮没有执行 ROS / C++ 全量构建或真实驱动验证。
+
+| 实际不同的文件 | 已确认的差异及维护含义 |
+|---|---|
+| [Aseba `TargetDescription.h`](../src/ros-aseba/asebaros/aseba/aseba/common/msg/TargetDescription.h) | 增加 `#include <cstdint>`；该头声明使用 `uint16_t`。这是显式提供整数类型声明的编译兼容性修正，不是采集性能优化。换上游后核对是否仍需保留，并在目标编译器构建 |
+| [Aseba `DashelTarget.cpp`](../src/ros-aseba/asebaros/aseba/aseba/clients/studio/DashelTarget.cpp)、[`challenge.cpp`](../src/ros-aseba/asebaros/aseba/aseba/targets/challenge/challenge.cpp) | 中文语言选项标签由“汉语”改为“Chinois”，语言代码仍为 `zh`；只是界面文字，不是 ROS 通信修复 |
+| [Thymio `base.urdf.xacro`](../src/ros-thymio/thymio_description/urdf/base.urdf.xacro) | 旧 Gazebo ROS 差速 / joint-state 插件替换为 GZ Sim DiffDrive，删除旧 ground-truth 插件块；属于仿真适配，不能承诺旧传感器 / ground-truth 功能全部保留 |
+| [Thymio `imu.urdf.xacro`](../src/ros-thymio/thymio_description/urdf/imu.urdf.xacro)、[`proximity_sensor.urdf.xacro`](../src/ros-thymio/thymio_description/urdf/proximity_sensor.urdf.xacro) | 移除对应旧 `gazebo_ros` 传感器插件块，不能据此称现代 GZ 已发布这些 ROS 传感器话题 |
+| [Thymio `wheel.urdf.xacro`](../src/ros-thymio/thymio_description/urdf/wheel.urdf.xacro) | 轮关节 effort 限制由 0 改为 10；是仿真模型参数，不是实际电机命令的统一上限 |
+| [Thymio `model.launch.py`](../src/ros-thymio/thymio_description/launch/model.launch.py) | 输出由 screen 改为 log，增加 `use_sim_time` 参数声明；但传给节点的值仍硬编码 `True`，声明值未实际用于节点。保留为待核验限制，不写成参数传递已修好；项目提交 `d377c77` 可定位这次修改 |
+
+因此，“asebaros 官方库有一点小问题”应具体指其内嵌 Aseba 的头文件修正，不能笼统说 ROS-Aseba 全部经过性能优化。上游本身是维护者 fork：旧 `master` / 教程包含 ROS1 内容，项目使用的 ROS2 代码和 GZ 适配须按上述固定版本理解。
+
+迁移时优先保留本项目整个 `src/`，不要直接用上游最新分支覆盖。确需更新时，先独立比较版本、保留或重做必要补丁，再构建并验证 Thymio 真机、仿真、话题与时钟行为；保留 [ROS-Aseba LICENCE](../src/ros-aseba/LICENCE)、[ROS-Thymio LICENSE](../src/ros-thymio/LICENSE)、[Aseba 许可](../src/ros-aseba/asebaros/aseba/license.txt)和[Dashel 许可](../src/ros-aseba/asebaros/dashel/license)，不将不同组件合并声明为同一许可。
 
 ## 6. 分层排障与日志
 
@@ -697,7 +777,7 @@ git rev-parse HEAD
 | SDK、驱动、授权恢复信息 | 不包含在 pip / Git 完整依赖中 | 两份 Hybrid API licence 向 Lucas 获取信息；按[授权交接](#24-hybrid-black-api-授权交接)及机构 / 厂商要求受控保存 |
 | 系统与依赖版本 | 浮动依赖和不同 ABI 可能无法复现 | WSL 与各 Windows 环境的版本清单，前端 lockfile |
 | 必要研究数据 / 日志 | 不一定能重新生成；可能含参与者信息 | 明确范围、权限、备份位置与保留期限 |
-| WSL 导出（可选） | 为恢复现有环境提供另一路径 | 停机窗口制作；不能替代 Windows SDK / 配置备份 |
+| WSL 整体导出（迁移优先考虑） | 保留原有 Linux 软件、工作区与配置，降低从头重建成本 | 由现场人员在停机窗口制作；按[第 9.3 节](#93-推荐迁移方式导出与导入整套-wsl)验证恢复，不能替代 Windows SDK / 配置备份 |
 
 可读取并保存 `python -m pip freeze`、`npm ls --depth=0` 及必要 ROS / 系统包版本。它们记录当前环境，不保证每个包都能从公开源恢复，也不能替代 SDK 安装来源与授权说明。
 
@@ -706,14 +786,70 @@ git rev-parse HEAD
 ### 9.2 恢复步骤
 
 1. 在新目录 / 受控环境恢复已记录的源码版本，不覆盖尚未备份的工作区。
-2. 按[环境重建](#3-环境安装与重建)恢复 ROS、Python、前端和 Windows SDK；新建 venv，不跨电脑直接复制。
+2. Linux 优先评估[整套 WSL 导入](#93-推荐迁移方式导出与导入整套-wsl)；没有可用镜像或需要干净安装时按[环境重建](#3-环境安装与重建)恢复。干净安装重新建 venv，不单独复制；完整导入时先检查保留环境。Windows SDK / Python 环境始终单独准备。
 3. 恢复 Windows 实际配置，并按新电脑修改路径、发行版名、解释器和嵌入命令；不是盲目替换为模板。
 4. 恢复三个 YAML，对照角色、source_id、运动参数与校准条件；必要时重新对真人校准，不能使用合成流校准值。
 5. 重建工作区，核对安装路径；恢复 USB 共享与网络访问范围。
 6. 先本地网页、再 Keyboard 单独机器人测试、再单 EEG、再双 EEG，最后验证停止、断流 / 恢复与网络故障。
 7. 写下恢复耗时、缺失资料、实际版本、验收结果；没有完成这些步骤的备份只能标为“已保存，未验证恢复”。
 
-需要 WSL 整体导出时，按已安装 WSL 的帮助与机构备份流程使用 `wsl --export`，登记发行版名与目标备份文件。导出前停止相关工作；涉及 shutdown / terminate 会中断 WSL 任务。本文不提供自动覆盖 / 删除发行版的恢复脚本。
+以上是通用恢复顺序，下面给出整套 WSL 迁移的具体入口。命令仅供现场人员执行，本轮未在 Windows 电脑上导出 / 导入任何环境。
+
+### 9.3 推荐迁移方式：导出与导入整套 WSL
+
+有原电脑可访问且机构允许备份时，建议先导出已能运行的 WSL 发行版，将归档复制到新电脑后导入。它保存 Linux 文件系统内的 ROS、源码、配置、依赖、用户目录和其中的 venv；不是只复制仓库，也不是只复制虚拟环境。命令依据 [Microsoft WSL 基本命令](https://learn.microsoft.com/en-us/windows/wsl/basic-commands#export-a-distribution)与[发行版导入说明](https://learn.microsoft.com/en-us/windows/wsl/use-custom-distro)。
+
+**不能随 Linux 导出一起恢复的内容：** Windows 上的 g.tec Suite / API / licence、Windows Python / venv、VS Code、蓝牙配对、usbipd 工具与共享设置、Windows launcher 副本 / 本地 JSON、防火墙 / 端口转发、主机 `.wslconfig`，以及 `/mnt/c` 等挂载的 Windows 文件。分别按[第 3 节](#3-环境安装与重建)配置并受控备份；不认为 Linux tar 包含这些主机资料。
+
+#### 9.3.1 原电脑导出（现场人员）
+
+先按[停止顺序](#41-正常启动与停止)停车、停服务并手动结束 Headband 桥；保存其他 WSL 任务。用 `wsl -l -v` 查**注册发行版名**，不是填“WSL2”或 Ubuntu 系统版本。准备一个有足够空间的备份目录，下面示例目录 `D:\BCI-transfer` 必须已存在；盘符、名称与日期按实际修改。
+
+Windows PowerShell；替换占位符后逐段执行，任何失败都停止，不继续把旧文件当作新备份：
+
+```powershell
+wsl -l -v
+$sourceDistro = "<原电脑查到的发行版名>"
+$backupFile = "D:\BCI-transfer\TelekineRob-WSL-20261009.tar"
+if (Test-Path -LiteralPath $backupFile) { throw "备份文件已存在，请换一个新文件名" }
+wsl --terminate $sourceDistro
+if ($LASTEXITCODE -ne 0) { throw "停止发行版失败，先查明原因" }
+wsl --export $sourceDistro $backupFile
+if ($LASTEXITCODE -ne 0) { throw "导出失败，不能使用此备份" }
+Get-Item -LiteralPath $backupFile
+Get-FileHash -LiteralPath $backupFile -Algorithm SHA256
+```
+
+`--terminate` 只停止指定发行版，但其中所有任务仍会中断；不使用 `--shutdown` 误停其他发行版。导出记录包括实际发行版名、Linux 用户 / 路径、架构、源码 commit / 未提交改动、版本与校验值。归档可能包含账号凭据、SSH 文件、个人数据和日志，按机构权限保存，不提交 Git 或公开网盘。
+
+#### 9.3.2 新电脑导入与 Linux 检查
+
+新电脑先准备 WSL2，确认 CPU 架构与原 Linux 环境兼容；不同架构应走[从源码重建](#3-环境安装与重建)，不要假设重建 venv 就能运行原镜像。将 tar 文件通过受控渠道复制过来，计算 SHA256 并与原机记录比较。选择**未注册的新发行版名**和**专用空安装目录**；示例 `TelekineRob-BCI` 只是注册名称，可按实际修改，不覆盖已有 Ubuntu。以下路径须存在且符合这个要求，失败时保留原环境，不用删除旧发行版来重试。
+
+Windows PowerShell：
+
+```powershell
+wsl -l -v
+Get-FileHash -LiteralPath "D:\BCI-transfer\TelekineRob-WSL-20261009.tar" -Algorithm SHA256
+wsl --import "TelekineRob-BCI" "D:\WSL\TelekineRob-BCI" "D:\BCI-transfer\TelekineRob-WSL-20261009.tar" --version 2
+if ($LASTEXITCODE -ne 0) { throw "导入失败，先查明原因" }
+wsl -l -v
+wsl -d "TelekineRob-BCI" -u "<原Linux用户名>" -- whoami
+```
+
+确认新条目的 VERSION 为 2，Linux 用户、仓库路径和文件权限正确。导入发行版可能默认以 root 启动；根据实际 `/etc/wsl.conf` 保留已有内容，必要时设置 `[user]` 的 `default=<原Linux用户名>`，用户必须已存在；按[Microsoft 导入说明](https://learn.microsoft.com/en-us/windows/wsl/use-custom-distro#add-wsl-specific-components-like-a-default-user)重启该发行版后，用不带 `-u` 的 `wsl -d "TelekineRob-BCI" -- whoami` 验证默认用户。不要不加检查地用 root 启动 launcher，造成权限 / 路径差异。
+
+进入该发行版的实际仓库后，执行[第 2.1 节只读登记](#21-项目基线与交付电脑)与[第 3.4 节导入检查](#34-wsl-python-与前端环境)，检查 systemd、ROS 环境、`.venv`、Node / npm 及 install 指向。完整 Linux 镜像保持相同架构、路径和依赖时原 venv 可能继续可用，不必先重建；解释器 / 路径失效或本机库缺失时再按第 3 节恢复。Windows venv 则不能因此复用。必要时重新 colcon 构建，保留[第三方源码修改](#55-第三方源码与本项目修改)。
+
+#### 9.3.3 新电脑 Windows 独立配置与验收
+
+1. 按[SDK 安装入口与使用条件](#37-官方资料与依赖来源)准备 g.tec 软件、API、驱动及各 Windows Python 环境；向 Lucas 核实授权迁移，不因已经导入 WSL 就认定 UnicornPy 已授权。
+2. 安装 VS Code、usbipd-win，配对 EEG，检查集成蓝牙及电源管理。原电脑的稳定性经验需要在新电脑复验；Thymio / Dongle 仍按既有配对和指定口流程处理。
+3. 重新部署 Windows launcher，备份并修改本地 JSON：`wsl.distro`、WSL 仓库路径、`sync.src_wsl_root`、Windows 同步目标、设备解释器、`open_cmd`，以及 attach / verify / 服务命令中所有嵌入的发行版名和路径。只改 `wsl.distro` 不足以迁移；当前模板多处写着 `Ubuntu`。
+4. 检查新电脑实际 USB BUSID；当前运行配置仍约定 `1-1`，先插指定口并重新插拔检查。若新电脑确实无法保持这个编号，由开发者统一验证 / 更新 attach、detach 与手册，不让操作者任意选另一个设备；首次共享依[排障步骤](GUIDE_DEBUG_cn.md#4-第-7-项怎么做检查并共享新的-thymio-dongle)。
+5. 重新核对网络、端口转发和防火墙允许范围，按[通用恢复步骤](#92-恢复步骤)从网页、Keyboard、单 EEG、混合双 EEG到停止 / 断流逐层验证；同型号双设备只有完成第 7.5 节开发后才另行验收。
+
+新电脑运行验证前不删除原电脑 / 原发行版，也不把“tar 导出成功”当成“系统迁移已完成”。原实习生无法访问现场，导出、安装、授权迁移和实际结果由 Lucas / 现场接手人员执行登记；本手册提供路线，不伪造已执行证明。
 
 ## 10. 交付清单与接手验收
 
@@ -722,7 +858,7 @@ git rev-parse HEAD
 - [ ] 源码访问权限、确认的运行 commit、未提交改动处理结果。
 - [ ] [交接索引](#交接索引)中的五类正式文档已审阅，语言版本与对应关系明确。旧安装 / 开发文档仅作参考，避免多份“正式安装指南”并行维护。
 - [ ] 第 2 节部署表已填写，包含 Windows 本地 JSON、WSL 路径与所有实际解释器。
-- [ ] SDK、驱动、授权恢复渠道、依赖版本与第三方来源 / 许可证资料可获取；两份 Hybrid API licence 已向 Lucas 核对，未知状态明确登记。
+- [ ] SDK、驱动、授权恢复渠道、依赖版本与第三方来源 / 许可证资料可获取；两份 Hybrid API licence 的资料由 Lucas 提供，用户确认第一份已激活、第二份未激活。
 - [ ] Headband / Hybrid Black / Thymio / Dongle / 充电器齐全，指定 USB 口照片和配对关系明确。
 - [ ] 已确认的默认设备、角色、指标、速度、真机 / 仿真安排与 YAML 备份。
 - [ ] 必要数据、日志、备份位置及访问权限明确；敏感账号 / token 在受控渠道交接，不写进公开文档。
