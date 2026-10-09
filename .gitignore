@@ -47,6 +47,6 @@ windows_launcher/last_url.txt
 windows_launcher/launcher_server.log
 windows_launcher/bridge_*.log
 
-# E5 regenerable analysis output (raw session data stays tracked — CTO log channel)
-experiment_data/analysis/
+# Developer validation data is runtime output, not source deliverables
+/experiment_data/
 

@@ -53,7 +53,7 @@ npm run dev
 | `WEB_GUI_PORT` | `8010` | 绑定端口 |
 | `WEB_GUI_FRONTEND_ORIGIN` | `http://127.0.0.1:5173` | CORS + WebSocket 的 origin 白名单。本地 Vite origin 恒放行；launcher 模板设为 `"*"`，放宽 origin 校验，不是授权机制 |
 | `WEB_GUI_CONTROL_TOKEN` | *(空)* | 部分控制接口的 token：`/api/system/start`、`/api/system/stop`（Bearer）与 `/ws/teleop`（`?token=`）。为空时无需 token；不覆盖全部 API，也不能仅按后端绑定地址判断实际访问范围 |
-| `EXPERIMENT_DATA_DIR` | `<repo>/experiment_data` | 开发者研究验证数据目录，每 session一个文件夹。当前 `.gitignore` 只排除其 `analysis/` 子目录，不排除整个 `experiment_data/`；交付前需检查跟踪的数据及其访问范围。 |
+| `EXPERIMENT_DATA_DIR` | `<repo>/experiment_data` | 开发者研究验证数据目录，每 session 一个文件夹。历史数据已从当前工作区移除；整个默认目录已加入 `.gitignore`，不作为源码交付内容。收集功能仍可生成新数据；其他输出位置须单独检查权限与忽略规则。 |
 
 局域网配置先核对监听、代理、端口转发、origin 和实际授权路径，不把添加 token 当成所有接口均受保护。当前不提供已经安全验收的互联网部署方案。
 

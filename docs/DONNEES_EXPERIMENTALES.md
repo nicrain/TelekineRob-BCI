@@ -3,6 +3,8 @@
 > 实验数据 — 中文源文(将翻译为法语)。规矩:中文叙述只翻技术标识符之外的部分;内部三方注解(CTO/programmer/reviewer)禁止入正文。术语与 docs/GLOSSAIRE.md 保持一致。
 > 列名一律以 `web_gui/backend/app/experiment.py`(E1)与 `experiment_export.py`(E5)的列常量为准。
 
+> 当前状态：历史 `experiment_data/` 已按项目负责人要求从当前工作区移除，整个目录已加入 `.gitignore`。本文保留数据格式和旧验证流程供开发参考，不表示仓库仍附带旧 session / archive 数据；网页第 4 部分的收集功能尚未禁用或删除。
+
 ## 1. 目录约定
 
 - 根目录 `experiment_data/`(默认;`EXPERIMENT_DATA_DIR` 可覆盖)。
