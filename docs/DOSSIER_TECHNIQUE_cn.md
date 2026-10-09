@@ -1,6 +1,6 @@
 # TelekineRob-BCI 技术档案（中文版）
 
-[返回中文项目总览](../README_cn.md)
+[返回中文项目总览](../README_cn.md) · [法语版](DOSSIER_TECHNIQUE.md)
 
 产品说明 · 技术需求 · 系统设计
 

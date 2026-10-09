@@ -1,6 +1,6 @@
 # TelekineRob-BCI 开发手册（中文版）
 
-[返回中文项目总览](../README_cn.md)
+[返回中文项目总览](../README_cn.md) · [法语版](GUIDE_DEVELOPPEUR.md)
 
 > 面向项目开发人员，说明环境搭建、代码定位、开发调试、修改与测试，以及更新、备份和恢复。
 

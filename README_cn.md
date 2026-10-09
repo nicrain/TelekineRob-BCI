@@ -1,5 +1,7 @@
 # TelekineRob-BCI
 
+[中文](README_cn.md) · [Français](README.md)
+
 [操作手册](docs/MANUEL_OPERATEUR_cn.md) · [排障手册](docs/GUIDE_DEBUG_cn.md) · [技术档案](docs/DOSSIER_TECHNIQUE_cn.md) · [开发手册](docs/GUIDE_DEVELOPPEUR_cn.md)
 
 TelekineRob-BCI 是一个基于 EEG（脑电）的 Thymio 机器人控制平台。系统将 g.tec 设备采集的数据通过 LSL（Lab Streaming Layer，数据流传输库）传入 ROS2（机器人软件框架），计算频带功率与控制指标，再生成机器人运动命令；网页提供设备连接、校准、实时分析和控制界面。
