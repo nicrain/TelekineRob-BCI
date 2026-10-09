@@ -70,7 +70,9 @@ TelekineRob-BCI将g.tec设备采集的EEG数据转换成Thymio机器人的运动
 | 页面 / 入口 | 职责 | 状态的含义 |
 |---|---|---|
 | `launcher.bat`打开的System Control | 起停WSL与网页服务、连接设备、显示连接状态、日志与网页恢复 | Running主要表示网页服务准备好，不表示EEG正在控制机器人 |
-| 主区域的Thymio EEG Control | 选择输入、角色、指标、输出，校准、观察指标，Start / Stop控制 | 顶部运行状态表示控制管线状态，不替代设备 / 数据链路检查 |
+| 主区域的Thymio EEG Control | 选择输入、角色、指标、输出，校准、观察指标，Start / Stop控制 | 顶部Running是前端本地运行标记，不持续探测ROS进程健康，也不替代设备 / 数据链路检查 |
+
+前端顶部状态与后端 `running` 标记都不是ROS子进程的持续健康监测；Start / Stop请求失败或子进程退出时，不能只凭按钮状态判断控制已启动或停止。实际运行需结合节点、话题数据和机器人响应确认，诊断方法见[开发手册的ROS检查](GUIDE_DEVELOPPEUR_cn.md#63-wsl网页与-ros-检查)。
 
 正常流程为：
 

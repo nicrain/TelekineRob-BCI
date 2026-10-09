@@ -121,7 +121,7 @@ python -c "import sys; print(sys.executable); import rclpy, pylsl, numpy, scipy,
 
 #### 方式一：通过 System Control 自动启动
 
-适用于已完成[Windows launcher 首次部署](docs/GUIDE_DEVELOPPEUR_cn.md#35-windows-launcher-首次部署)的电脑。双击 Windows 本地的 `windows_launcher/launcher.bat` 打开总控页面，点击 **Start System**。总控会自动启动 WSL 中的后端和前端，并在主区域显示控制网页，无需手动在终端使用命令启动网页服务。
+适用于已完成[Windows launcher 首次部署](docs/GUIDE_DEVELOPPEUR_cn.md#35-windows-launcher-首次部署)的电脑。双击 Windows 本地的 `windows_launcher/launcher.bat` 打开总控页面：系统为 **Stopped** 时点击 **Start System**，等待 **Running**；已经 Running 时直接继续，不点 **Restart System**。总控会自动启动 WSL 中的后端和前端，并在主区域显示控制网页，无需手动在终端使用命令启动网页服务。
 
 #### 方式二：用两个 WSL 终端手动启动
 
