@@ -1,6 +1,6 @@
 # Windows 总控页面（System Control）
 
-[返回中文项目总览](../README_cn.md)。本文是模块专项参考；完整安装、更新与恢复入口见[中文版开发者交接手册](../docs/GUIDE_DEVELOPPEUR_cn.md)。
+[返回中文项目总览](../README_cn.md)。本文是模块专项参考；完整安装、更新与恢复入口见[中文版开发手册](../docs/GUIDE_DEVELOPPEUR_cn.md)。
 
 Windows 侧总控台：**双击图标 → 网页 → 点按钮起系统/连设备/看状态**，
 Headband 例外：Connect打开 VS Code，由操作者选对 venv、点右上角三角形运行按钮，断开时按 Ctrl+C。日常操作以[中文操作手册](../docs/MANUEL_OPERATEUR_cn.md)和[中文排障手册](../docs/GUIDE_DEBUG_cn.md)为准；本页面向部署和维护。
@@ -66,7 +66,7 @@ windows_launcher/
 
 ## 真机验收（待在交付电脑逐项执行）
 
-以下勾选项是验证要求，不是本次已经验证的记录。`docs/O2_LAUNCHER.md` 中的批次记录仅供历史参考。
+以下勾选项是验证要求，不是本次已经验证的记录。[旧总控设计与批次记录](../docs/archived/O2_LAUNCHER.md)仅供历史参考。
 
 - [ ] 双击图标 → 总控页打开，设备按钮全灰、不可点
 - [ ] 点「启动系统」→ Ubuntu 起、检测通过、桥文件同步、前后端起、

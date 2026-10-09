@@ -1,96 +1,85 @@
-# TelekineRob-BCI 开发者交接手册（中文版）
+# TelekineRob-BCI 开发手册（中文版）
 
 [返回中文项目总览](../README_cn.md)
 
-> 面向接手项目的新实习生 / 开发者，整合部署、代码导读、调试、修改验证和恢复。
-> 编写日期：2026-10-08；补充核对日期：2026-10-09；本轮实现核对基线：`main` 的 `ad5d9d5`。这个提交号用于说明核对范围，不代表之后的最新版本。
-> 本文基于仓库代码与已确认使用流程；新电脑重装、Windows + WSL 网络和真机验收尚未在本次文档工作中执行。交付电脑实值与验收结果分别填入第 2、10 节。
+> 面向项目开发人员，说明环境搭建、代码定位、开发调试、修改与测试，以及更新、备份和恢复。
 
-## 交接索引
+## 项目文档导航
 
-项目交接资料按五类组织，入口集中在这里，不另设交接索引文件。README 介绍项目与上手方法；本手册负责接手路线、部署登记、维护及交付记录，不要求非技术操作者学习全部开发命令。
+本手册说明如何开发和维护系统；产品定义、需求、算法和接口以技术档案为准，日常操作与常见问题分别查操作手册、排障手册。
 
 ### 五类正式文档
 
-| 文档 | 主要读者 | 内容与用途 |
-|---|---|---|
-| [项目 README（中文版）](../README_cn.md) | 所有读者 | 项目简介、功能、硬件与架构、环境要求、快速开始、配置和测试入口 |
-| [技术档案（中文版）](DOSSIER_TECHNIQUE_cn.md) | 新开发者、项目负责人 | 合并产品说明、技术需求与系统设计；说明算法、接口、实现限制与验证依据 |
-| [操作手册（中文版）](MANUEL_OPERATEUR_cn.md) | 非计算机专业操作者 | 已安装电脑上的准备、连接、校准、运行与停止 |
-| [排障手册（中文版）](GUIDE_DEBUG_cn.md) | 操作者、新开发者 | 蓝牙、EEG 桥、Thymio、USB 共享和网页的常见问题与恢复步骤 |
-| [开发者交接手册（本文件）](#1-接手路线) | 接手的新实习生 / 开发者 | 部署重建、代码导读、开发调试、测试、更新、备份恢复与交付清单 |
+| 文档 | 开发时的参考用途 |
+|---|---|
+| [项目 README（中文版）](../README_cn.md) | 项目概览、环境要求与快速开始 |
+| [技术档案（中文版）](DOSSIER_TECHNIQUE_cn.md) | 产品定义、需求、设计、算法、接口与验收依据 |
+| [操作手册（中文版）](MANUEL_OPERATEUR_cn.md) | 复现现有用户操作流程，检查修改是否影响日常使用 |
+| [排障手册（中文版）](GUIDE_DEBUG_cn.md) | 排除常见硬件与连接问题，再进入代码诊断 |
+| [开发手册（本文件）](#1-开发上手路线) | 环境搭建、代码导读、开发调试、测试、更新、备份与恢复 |
 
 ### 建议阅读顺序
 
-- **操作者**：先按[操作手册](MANUEL_OPERATEUR_cn.md)使用；遇到问题查[排障手册](GUIDE_DEBUG_cn.md)。不必先阅读技术档案或部署命令。
-- **接手开发者**：先读[项目 README](../README_cn.md)了解系统，再按[接手路线](#1-接手路线)运行现有系统；结合[技术档案](DOSSIER_TECHNIQUE_cn.md)与本手册理解和修改代码。
-- **下一阶段主要开发任务**：[同型号双 g.tec 集成](#75-首要开发任务同型号双-gtec-集成)。该节说明代码现状、限制、实施顺序和验收，不能视为已实现功能。
-- **授权资料入口**：两份 Hybrid Black API licence 均由 Lucas 申请，向他获取必要信息；详见[授权交接](#24-hybrid-black-api-授权交接)。
+- **开发人员**：先读[项目 README](../README_cn.md)了解系统，再按[开发上手路线](#1-开发上手路线)运行现有系统；结合[技术档案](DOSSIER_TECHNIQUE_cn.md)与本手册理解和修改代码。
+- **下一阶段主要开发任务**：[同型号双 g.tec 集成](#75-首要开发任务同型号双-gtec-集成)。该节说明当前代码限制、实施步骤和回归场景，不是已实现功能。
+- **授权资料入口**：[Hybrid Black API 授权](#hybrid-black-api-授权)。
 - **部署与维护入口**：[官方资料](#37-官方资料与依赖来源) · [SDK 使用边界](#38-sdk-使用边界与连接方式) · [滤波实现](#54-两类-eeg-的预滤波实现) · [第三方源码修改](#55-第三方源码与本项目修改) · [整套 WSL 迁移](#93-推荐迁移方式导出与导入整套-wsl)。
 
-### 整理状态与交付记录入口
+系统验证范围与验收要求见[技术档案第 4 章](DOSSIER_TECHNIQUE_cn.md#4-验收与验证状态)，已知限制见[第 5.1 节](DOSSIER_TECHNIQUE_cn.md#51-当前限制及优先验证事项)。
 
-五类中文版已编写，当前仍在审阅整理。`README.md` 暂时删除；确认中文版后，再生成章节与内容对应的法语版。已有法语[操作手册](MANUEL_OPERATEUR.md)和[排障手册](GUIDE_DEBUG.md)保留，尚未同步本轮中文版调整，不视为最终对应版本。
-
-- 实际电脑的配置、路径与解释器：[第 2 节部署登记](#2-当前部署登记)，由接手人员在电脑上核对；不把仓库模板当作实机记录。
-- 已做验证的范围与系统限制：[技术档案第 4 节](DOSSIER_TECHNIQUE_cn.md#4-验收与交付状态)，区分代码核对、单元测试与真机验证。
-- 源码以外需要保存的资料：[第 9 节备份与恢复](#9-备份与恢复)。
-- 交付资料及实际使用、接手演练的记录：[第 10 节交付清单与接手验收](#10-交付清单与接手验收)。
-
-文档编写完成不代表目标电脑验证已完成；实际结果在上述对应章节登记，不在此重复维护一份验收表。旧安装、开发、设计和研究文档保留作参考，正式操作与维护优先使用这五类文档。
+开发验证的数据格式说明另见[专题参考资料](reference/DONNEES_EXPERIMENTALES.md)，实际字段以代码为准。[归档目录](archived/)保留旧指南、设计历史及研究计划，不作为现行开发步骤或需求清单。
 
 ## 阅读导航
 
-- [1. 接手路线](#1-接手路线)：先运行现有系统，再理解和修改。
-- [2. 当前部署登记](#2-当前部署登记)：交付电脑、版本、路径、配置与权限。
+- [1. 开发上手路线](#1-开发上手路线)：先运行现有系统，再理解和修改。
+- [2. 开发环境与本地配置](#2-开发环境与本地配置)：环境基线、版本检查、路径与配置。
 - [3. 环境安装与重建](#3-环境安装与重建)：Windows 与 WSL 分开准备。
 - [4. 启动与开发调试](#4-启动与开发调试)：正常启动、分开启动网页、离线双流。
 - [5. 代码与配置导读](#5-代码与配置导读)：修改应该落在哪一层。
 - [6. 分层排障与日志](#6-分层排障与日志)：从设备逐层查到机器人。
 - [7. 修改与测试](#7-修改与测试)：现有测试、验证范围、安全边界及[同型号双设备首要任务](#75-首要开发任务同型号双-gtec-集成)。
 - [8. 更新与发布](#8-更新与发布)：Git、构建、Windows 同步的不同边界。
-- [9. 备份与恢复](#9-备份与恢复)：源码之外还需要交接什么。
-- [10. 交付清单与接手验收](#10-交付清单与接手验收)：可填写的完成记录。
+- [9. 备份与恢复](#9-备份与恢复)：配置、依赖与整套 WSL 环境的备份、恢复和迁移。
 
-命令块标明执行环境。Windows PowerShell 命令不能直接放进 WSL Bash；`<…>` 是必须替换的占位符，不要原样执行。安装、校准、网页保存配置、更新及恢复都会改变状态，先停止控制并备份。本文列出的是操作入口，不是已执行成功的证明。
+命令块标明执行环境。Windows PowerShell 命令不能直接放进 WSL Bash；`<…>` 是必须替换的占位符，不要原样执行。安装、校准、网页保存配置、更新及恢复都会改变状态，先停止控制并备份相关配置。
 
-## 1. 接手路线
+## 1. 开发上手路线
 
-按以下顺序接手，不必先读完所有历史文档。
+首次参与开发时，按以下顺序熟悉系统，不必先读完所有历史文档。
 
-1. 与现场使用者 / 项目负责人确认硬件、指定 USB 口、启动快捷方式和实际配置，填写[部署登记](#2-当前部署登记)。原实习生已离岗、无法访问设备，现场核对由接手人员完成；授权资料向 Lucas 获取。先保留可运行基线。
+1. 按[环境与配置检查](#2-开发环境与本地配置)确认实际解释器、路径、硬件和指定 USB 口，备份现有配置；设备 SDK 与授权准备见[第 3 节](#3-环境安装与重建)。
 2. 按[操作手册](MANUEL_OPERATEUR_cn.md)完成一次启动、Keyboard 单独测试 Thymio、EEG 连接、校准、运行和停止；遇到常见问题先按[用户排障手册](GUIDE_DEBUG_cn.md)。
 3. 阅读[技术档案的系统设计](DOSSIER_TECHNIQUE_cn.md#3-系统设计)，沿[代码导读](#5-代码与配置导读)追踪一个设备从 LSL 到 `/cmd_vel` 的路径。
 4. 在开发环境运行[分层测试](#7-修改与测试)，理解纯逻辑、模拟服务和真机验证的区别。
-5. 完成一个范围明确的小修改，补充相关验证；与项目负责人复核后，再按[更新流程](#8-更新与发布)部署。同型号双设备是之后的首要任务，按[实施路线](#75-首要开发任务同型号双-gtec-集成)先验证 SDK，不直接修改现有运行电脑。
-6. 实际演练备份恢复，填写[交付清单](#10-交付清单与接手验收)。能启动原电脑，不等于能恢复一台新电脑。
+5. 在开发副本完成一个范围明确的小修改，补充相关验证，再按[更新流程](#8-更新与发布)部署。同型号双设备按[实施路线](#75-首要开发任务同型号双-gtec-集成)先验证 SDK，不直接在现有运行电脑上试错。
+6. 熟悉[备份与恢复](#9-备份与恢复)，在独立环境验证恢复流程，避免覆盖正在使用的系统。
 
-接手前应认识的三个区别：
+开发前应认识的三个区别：
 
 - **System Control 与实验控制网页不同**：前者管理系统、设备桥和 USB；后者选择角色 / 输出、校准、Start / Stop 和 Teleop。
 - **连接与控制不同**：EEG 绿色表示探针收到新鲜样本；图表要在校准或控制管线运行时才更新。Thymio 绿色主要表示 `/dev/ttyACM0` 可见，不证明机器人已经响应。
-- **代码与运行配置不同**：网页保存、校准会改 YAML；Windows 本地 `config.json` 不随同步覆盖。交付前必须记录经过确认的配置，而不是沿用仓库中某次运行残留。
+- **代码与运行配置不同**：网页保存、校准会改 YAML；Windows 本地 `config.json` 不随同步覆盖。开发测试前备份实际配置，结束后不要把测试参数留在运行环境中。
 
-## 2. 当前部署登记
+## 2. 开发环境与本地配置
 
-### 2.1 项目基线与交付电脑
+### 2.1 环境基线与检查
 
-| 项目 | 仓库可确认的信息 | 交付电脑实值 / 证据 |
+以下是项目环境基线及检查要点，不是某台电脑的完整安装记录。部署、迁移或升级前，核对实际版本与路径，不将模板直接当作本地配置。
+
+| 项目 | 环境基线 / 当前入口 | 检查要点 |
 |---|---|---|
-| 源码与分支 | `https://github.com/nicrain/TelekineRob-BCI.git`；目前文档工作在 `main` | 待填写：运行提交、是否存在本地修改、访问权限 |
-| Windows / WSL | 目标工作流为 Windows + WSL2 | 待填写：Windows 版本、WSL 版本、网络模式 |
-| Ubuntu / ROS | 项目基线 Ubuntu 24.04 / ROS2 Kilted | 待填写：实际发行版名、系统版本与 ROS 包版本 |
-| WSL Python | 基线 Python 3.12；仓库根 `.venv` | 待填写：版本、解释器实际路径、`rclpy` 导入结果 |
-| Windows Python | launcher 模板与两台设备的 `python_cmd` 为 `python` | 待填写：launcher / 各桥 / 探针 / VS Code 各自解释器及位数 |
-| SDK | Headband 用 `gpype`；Hybrid Black 用 `UnicornPy` | 现场接手人员部署 / 迁移前记录版本及安装来源；原实习生无环境可查询，授权资料向 Lucas 获取 |
-| Node / npm | 前端使用 Vite 5、React 18；有 npm lockfile | 待填写：已验证版本，不直接改成最新版 |
-| USB 与机器人 | usbipd-win；Thymio Dongle 默认 BUSID `1-1`；Linux 路径 `/dev/ttyACM0` | 待填写：usbipd 版本、指定 USB 口照片、Thymio / Dongle 对应关系 |
-| Gazebo / Aseba | 仿真使用 ROS Gazebo 包；真机依赖仓库内 ROS Thymio / Aseba 驱动 | 待填写：构建依赖、实际版本、仿真是否作为交付项 |
-| 网络与数据 | 端口、配置与日志入口见下文 | 待填写：允许访问的客户端、数据范围、备份位置 |
+| 源码与分支 | [项目仓库](https://github.com/nicrain/TelekineRob-BCI)，部署入口为 `main` | 用 Git 检查实际分支、commit 和本地修改 |
+| Windows / WSL | Windows + WSL2 | 检查 WSL 版本、注册发行版名与网络模式 |
+| Ubuntu / ROS | Ubuntu 24.04 / ROS2 Kilted | 检查系统版本和 `ROS_DISTRO`；不要混用其他 ROS 发行版 |
+| WSL Python | Python 3.12；仓库根 `.venv` | 检查解释器路径与 ROS Python 兼容性，执行[导入检查](#34-wsl-python-与前端环境) |
+| Windows Python | launcher 模板与两台设备的 `python_cmd` 为 `python` | 分别检查 launcher、桥、探针和 VS Code 实际解释器；SDK 二进制须匹配版本与位数 |
+| SDK | Headband 用 `gpype`；Hybrid Black 用 `UnicornPy` | [第 3.1 节](#31-windows-前置条件)查询版本，[第 3.8 节](#38-sdk-使用边界与连接方式)说明安装与授权边界 |
+| Node / npm | 前端使用 Vite 5、React 18；有 npm lockfile | 检查现有版本，按 lockfile 安装，不无条件升级 |
+| USB 与机器人 | usbipd-win；BUSID `1-1`；`/dev/ttyACM0` | 检查指定 USB 口、Shared / Attached 状态与串口权限 |
+| Gazebo / Aseba | 仿真用 ROS Gazebo 包；真机用仓库内 ROS Thymio / Aseba 驱动 | 核对构建依赖及实际使用的驱动版本，保留[第三方修改](#55-第三方源码与本项目修改) |
+| 网络与数据 | [网络设置](#36-网络与访问范围)、[日志](#64-日志位置与故障记录)、[备份](#9-备份与恢复) | 确认实际访问路径、日志位置及数据保存范围 |
 
-以下只读命令用于收集基线，不用于替代设备验收。输出若包含用户名、设备名或内网地址，按交接范围保存；账号凭据与 token 不写进公开仓库。
-
-本节现场版本 / 路径由接手人员在原电脑查询。原实习生已结束实习、没有可查询的运行环境，不需要补这些实值；保留“现场待核对”不影响中文版定稿。部署、迁移或版本升级时再以实际电脑为准登记。
+以下命令用于只读检查环境。分享输出前去除不必要的用户名、设备名或内网地址；账号凭据与 token 不写进公开仓库。
 
 Windows PowerShell：
 
@@ -116,7 +105,7 @@ source /opt/ros/kilted/setup.bash
 printenv ROS_DISTRO
 ```
 
-Windows 的 `python --version` 仅代表当前终端默认解释器；还要用配置中每一个实际 `python_cmd` 检查。Headband 在 VS Code 选中的解释器要单独登记。
+Windows 的 `python --version` 仅代表当前终端默认解释器；还要用配置中每一个实际 `python_cmd` 检查。Headband 在 VS Code 选中的解释器也要单独核对。
 
 ### 2.2 路径与配置模板
 
@@ -133,37 +122,12 @@ Windows 的 `python --version` 仅代表当前终端默认解释器；还要用�
 
 `config.json` 的字段和占位符解析见[launcher 配置说明](../windows_launcher/README.md)。手改 JSON 时注意 Windows 路径中的反斜杠需要转义。该文件包含可执行命令，只允许可信维护者修改。
 
-### 2.3 硬件与默认使用约定
+### 2.3 硬件部署约定
 
-- Headband 与 Hybrid Black 均使用电脑自带集成蓝牙。Hybrid Black 官方 USB 蓝牙模块在本项目使用中经常断连，默认不使用；它不是 Thymio 的 USB Dongle。
-- 在 Windows 设备管理器检查集成蓝牙模块，警告时先禁用再启用。设备充好电；电脑连充电器使用，主要为降低蓝牙供电 / 省电影响，不是网页绿色状态的充分条件。
-- 每对 Thymio / Dongle 通常已经配对，不要例行重配。仅在怀疑配对异常时，按[用户排障手册](GUIDE_DEBUG_cn.md)检查和重新配对。
-- 当前约定使用指定 USB 口、BUSID `1-1`。没有 `1-1` 时先重新插拔该口的 Dongle；不引导操作者随意换 BUSID。若更换电脑导致编号无法保持，开发者要验证并统一更新本地连接命令、断开命令、检查流程与两份用户手册。
-- 标准组合是 1 个 EEG 对应 1 个角色、另一个 None；2 个 EEG 分配 Speed 与 Steering。角色不是固定绑定某个品牌。
+- 原项目电脑的 Headband 与 Hybrid Black 默认使用集成蓝牙；换电脑或增加设备时须重新验证连接稳定性。选择依据见[第 3.8 节](#38-sdk-使用边界与连接方式)。
+- Thymio Dongle 使用指定 USB 口，当前配置的 BUSID 为 `1-1`。迁移后若确实无法保持该编号，开发者须统一核对并更新连接、断开、设备检查命令及相关用户手册。
 
-### 2.4 Hybrid Black API 授权交接
-
-**已确认的项目信息（用户提供）：** 项目申请 / 购买了两份 Hybrid Black API licence，两份均由博士生 Lucas 申请，相关授权信息由 Lucas 掌握。用户确认其中第一份已在原项目 Windows 电脑激活，**第二份未激活**。两份授权的具体产品详情及适用条款需要使用时向 Lucas 获取。原实习生已结束实习，没有运行环境，无法访问部门设备或 Windows 电脑，不承担现场查询。
-
-接手开发者首先向 Lucas 获取产品名称 / Product ID、适用条款和凭据获取方式；Lucas 或现场接手人员再核对电脑上的状态。完整 licence key、购买邮件和账号信息只经受控渠道交接，不放入 Git、日志或公开截图。
-
-| 需补充的信息 | 信息来源 / 当前状态 |
-|---|---|
-| 两份授权分别对应的产品名称、Product ID 与适用范围 | Lucas 的购买 / 授权邮件；待登记，不能只写泛称“UnicornPy” |
-| 第一份授权的激活产品、有效期及所在电脑 | 用户确认在原项目电脑激活；Lucas / 接手者查看该电脑的 Licenses 页复核 |
-| 第二份授权的状态 | 用户确认未激活；不再列为未知状态。以后确需使用时向 Lucas 获取授权资料并按适用流程激活 |
-| 软件版本 | 由现场接手人员在部署 / 迁移前分别记录 Unicorn Suite 与 UnicornPy API 版本；不要求原实习生查询，也不当作授权产品版本 |
-| 新电脑迁移及同机双设备并发的许可条件 | Lucas 的实际购买条款；不明确时向厂商确认，不从“有两份”推导“一台 EEG 一份” |
-
-官方说明在 **Unicorn Suite Hybrid Black → Licenses** 中查看授权状态，激活时使用购买邮件中的 Product ID、License key 和 License Email；停用也在此页面操作。这里的交接核对只查看，**不要为了验证而停用现有授权**。若确需迁移，先与 Lucas 确认许可条件和停机安排，再按适用版本的厂商流程执行。[官方授权说明](https://github.com/unicorn-bi/Unicorn-Suite-Hybrid-Black-User-Manual/blob/main/UnicornSuite.md#licensing)
-
-现场接手人员可在 Hybrid 桥实际使用的 Python 环境查询 API 版本；以下为 Windows PowerShell，只读取版本，不连接 EEG：
-
-```powershell
-python -c "import sys, UnicornPy; print(sys.executable); print(UnicornPy.GetApiVersion())"
-```
-
-`python` 必须是已登记的 Hybrid 解释器，路径写法见[Windows 前置条件](#31-windows-前置条件)。SDK 导入需要环境和授权就绪；导入失败先诊断，不停用授权来试错。`GetApiVersion()` 来自[官方 API 说明](https://github.com/unicorn-bi/Unicorn-Hybrid-Black-Windows-APIs/blob/main/python-api/unicorn-python-api.md#setting-up-a-project-using-visual-studio-2022)，它不能证明第二份授权状态或双设备并发许可。现场信息未补齐不妨碍完成代码交接，但部署 / 双设备真机验证时必须明确这些边界。
+设备准备、连接和角色选择见[操作手册](MANUEL_OPERATEUR_cn.md)；蓝牙异常、配对和新 Dongle 共享问题见[排障手册](GUIDE_DEBUG_cn.md)。
 
 ## 3. 环境安装与重建
 
@@ -186,6 +150,20 @@ python -c "import pylsl; import numpy; import UnicornPy; print('Hybrid imports O
 ```
 
 两个设备可以使用不同环境，导入检查也应分别执行。路径含空格时，PowerShell 使用 `& "C:\实际路径\python.exe" ...`；不要把这个 PowerShell 写法直接填入 launcher 的 `python_cmd`，其执行规则见[配置实现](../windows_launcher/config.py)与[命令实现](../windows_launcher/commands.py)。
+
+在 Headband 桥实际使用的 Python 环境中，查询已安装的 g.Pype 版本（Windows PowerShell）：
+
+```powershell
+python -m pip show gpype
+```
+
+在 Hybrid 桥实际使用的 Python 环境中，查询解释器路径与 API 版本（Windows PowerShell，不连接 EEG）：
+
+```powershell
+python -c "import sys, UnicornPy; print(sys.executable); print(UnicornPy.GetApiVersion())"
+```
+
+分别登记 Unicorn Suite 与 UnicornPy API 版本，不将软件版本当作授权产品信息。`GetApiVersion()` 只查询 API 版本，不能证明授权状态或双设备并发许可；授权核对见[第 3.8 节](#hybrid-black-api-授权)。导入失败先诊断环境，不停用授权来试错。
 
 ### 3.2 WSL 与 ROS 前置条件
 
@@ -235,9 +213,9 @@ ros2 pkg prefix thymio_control
 ros2 pkg executables thymio_control
 ```
 
-首次构建包含 `src/` 的 Thymio / Aseba 等依赖，不仅是 `thymio_control`。后两条应能找到本工作区的包及 `eeg_control_node.py`、`cmd_vel_fuser.py`。若构建失败，保留完整错误和构建日志，解决依赖后重试；当前手册不宣称在空白电脑上已验证所有第三方构建步骤。
+首次构建包含 `src/` 的 Thymio / Aseba 等依赖，不仅是 `thymio_control`。后两条应能找到本工作区的包及 `eeg_control_node.py`、`cmd_vel_fuser.py`。若构建失败，保留完整错误和构建日志，解决依赖后重试。
 
-构建用系统 ROS 对应的 Python，不让其他版本的 Python / Conda 环境抢占解释器。特别不要把文档核对电脑上的 Python 版本误当成目标 ROS 的兼容版本。
+构建用系统 ROS 对应的 Python，不让其他版本的 Python / Conda 环境抢占解释器。
 
 ### 3.4 WSL Python 与前端环境
 
@@ -270,10 +248,10 @@ npm run build
 2. 编辑 Windows 那份 `windows_launcher/config.json`，同步源、目标、WSL 仓库、发行版名与所有嵌入命令中的发行版名必须对应。检查 `devices.thymio.attach_cmd` 和 `verify_cmd`，不是只改 `wsl.distro`。
 3. 为两个设备分别配置可用的 `python_cmd`；Headband 的 VS Code 环境和探针解释器都要有对应依赖。`open_in_ide` 不会替操作者选择 Python 环境。
 4. 检查 `web.backend_cmd` 的 ROS、install 和 venv 路径，及 `frontend_cmd` 的 npm 可用性。
-5. 对新 Dongle 按[共享检查流程](GUIDE_DEBUG_cn.md#4-第-7-项怎么做检查并共享新的-thymio-dongle)处理。管理员 PowerShell 用 `usbipd list` 查看 `1-1`；只有 Not shared 才执行 `usbipd bind --busid 1-1`，再确认 Shared。
-6. 双击 launcher，按[操作手册](MANUEL_OPERATEUR_cn.md)启动与验收；把实际配置副本受控备份。
+5. 配置 Thymio 连接前，确认指定口的 Dongle（BUSID `1-1`）已允许共享；新 Dongle 的首次共享及状态检查见[排障手册](GUIDE_DEBUG_cn.md#4-第-7-项怎么做检查并共享新的-thymio-dongle)。
+6. 双击 launcher，按[操作手册](MANUEL_OPERATEUR_cn.md)检查启动与设备连接；备份实际配置。后续分层检查见[第 6 节](#6-分层排障与日志)。
 
-共享是使 Windows USB 设备可供 Linux / WSL 使用；Shared 还不等于已接入。System Control 的 Thymio Connect 按当前配置对 `1-1` 执行 attach，使状态成为 Attached，再检查 `/dev/ttyACM0`。正常情况下不需要操作者重复手动 attach。
+Thymio 的 `attach_cmd` 将 BUSID `1-1` 的 USB 设备从 Shared 接入 WSL（Attached），`verify_cmd` 检查 `/dev/ttyACM0`。修改端口或发行版配置时，两条命令须一起核对。
 
 每次 Start System 同步 WSL 的 `windows_launcher/`（排除 `config.json`）与 `gtec_bridge/` 到 Windows。它不安装 SDK、不安装依赖、不构建 ROS、不执行 Git pull，也不替换机器本地配置。
 
@@ -281,7 +259,7 @@ npm run build
 
 先确保同一电脑的本地访问能工作，再考虑局域网。仓库默认 launcher 监听 `127.0.0.1:8020`，后端监听 `127.0.0.1:8010`，Vite 前端监听 `0.0.0.0:5173` 并代理后端的 `/api`、`/ws`。
 
-launcher 会尝试更新 Windows 的 5173 端口转发；失败并不必然阻止 System State 进入 Running。交付电脑实际使用 NAT 还是其他网络模式、端口转发 / 防火墙权限，都要登记；不要把这台电脑的网络处理办法推广为所有 WSL 配置。
+launcher 会尝试更新 Windows 的 5173 端口转发；失败并不必然阻止 System State 进入 Running。先检查实际 WSL 网络模式、端口转发和防火墙规则，不要把一台电脑的网络处理办法推广为所有 WSL 配置。
 
 | 后端变量 | 当前默认 / 模板 | 注意事项 |
 |---|---|---|
@@ -289,13 +267,12 @@ launcher 会尝试更新 Windows 的 5173 端口转发；失败并不必然阻�
 | `WEB_GUI_FRONTEND_ORIGIN` | 后端默认本地 origin；launcher 模板设为 `*` | `*` 放宽 origin 校验，不是授权机制 |
 | `WEB_GUI_CONTROL_TOKEN` | 默认空 | 部分控制接口支持 token，但不构成全站权限体系 |
 | `WEB_GUI_ALLOW_REAL_COMMANDS` | 默认 `true` | 设 `false` 限制进程启动 / 清理；不阻断直接 Teleop 发布 |
-| `EXPERIMENT_DATA_DIR` | 仓库下 `experiment_data` | 研究数据目录；不属于操作者日常必学流程 |
 
-仅在经过确认的可信网络范围使用。不能因为后端只监听 loopback、设置了 token 或开启 dry-run，就认为所有控制 / 配置接口受到完整保护。具体代码边界和代理风险见[技术档案的网络边界](DOSSIER_TECHNIQUE_cn.md#312-网络命令与数据边界)。互联网部署不在当前交付承诺内。
+仅在经过确认的可信网络范围使用。不能因为后端只监听 loopback、设置了 token 或开启 dry-run，就认为所有控制 / 配置接口受到完整保护。具体代码边界和代理风险见[技术档案的网络边界](DOSSIER_TECHNIQUE_cn.md#312-网络命令与数据边界)，不要直接将当前系统作为互联网公开控制服务部署。
 
 ### 3.7 官方资料与依赖来源
 
-以下为 2026-10-09 核对的厂商 / 维护者资料入口，用于安装、API 查询和维护。在线页面会更新，页面版本不等于原电脑已安装版本；先登记现有可运行环境，再按对应版本恢复，不照着最新示例直接升级。
+以下为厂商 / 维护者资料入口，用于安装、API 查询和维护。在线页面会更新，页面版本不等于本机已安装版本；先检查现有可运行环境，再按对应版本恢复，不照着最新示例直接升级。
 
 | 设备 / 组件 | 官方或上游入口 | 本项目如何使用 |
 |---|---|---|
@@ -304,7 +281,7 @@ launcher 会尝试更新 Windows 的 5173 端口转发；失败并不必然阻�
 | Hybrid Black | [产品](https://www.gtec.at/product/unicorn-hybrid-black-bci-platform/)、[Windows APIs GitHub](https://github.com/unicorn-bi/Unicorn-Hybrid-Black-Windows-APIs)、[Python API 安装与使用](https://github.com/unicorn-bi/Unicorn-Hybrid-Black-Windows-APIs/blob/main/python-api/unicorn-python-api.md)、[Python API 参考](https://github.com/unicorn-bi/Unicorn-Hybrid-Black-Windows-APIs/blob/main/python-api/unicorn-python-api-reference.md) | 查询 UnicornPy 库路径、Python / 二进制兼容性、设备发现、序列号连接与采集；桥只向 LSL 转发 8 个 EEG 通道 |
 | Unicorn Suite Hybrid Black | [安装、蓝牙、授权和配对手册](https://github.com/unicorn-bi/Unicorn-Suite-Hybrid-Black-User-Manual/blob/main/UnicornSuite.md)、[维护者安装包发布页](https://github.com/unicorn-bi/Unicorn-Suite-Hybrid-Black-User-Manual/releases) | Windows 驱动 / API 准备与 licence 管理；用 Lucas 的实际授权信息，不把任意 Suite 应用授权当作 Python API 授权 |
 | Thymio | [官网（法语）](https://www.thymio.org/fr/)、[Thymio Suite 下载](https://www.thymio.org/fr/telecharger-thymio-suite/)、[编程与使用资料](https://www.thymio.org/fr/produits/programmer-avec-thymio-suite/)、[无线 Dongle 配对](https://www.thymio.org/fr/faq/comment-configurer-lappairage-du-thymio-sans-fil-avec-son-dongle/) | 查设备维护、厂商工具安装与必要时的配对；本项目日常动作由 ROS 驱动发送，不要求在 Thymio Suite 内启动控制 |
-| ROS2 Kilted | [版本文档](https://docs.ros.org/en/kilted/)、[Ubuntu 安装](https://docs.ros.org/en/kilted/Installation/Ubuntu-Install-Debs.html)、[同一官方安装文档源码](https://github.com/ros2/ros2_documentation/blob/kilted/source/Installation/Ubuntu-Install-Debs.rst) | Ubuntu 24.04 / ROS2 基础安装、colcon 与 ROS 调试；网页访问被反爬拦截时可读官方源码，不切换 ROS 发行版来绕过 |
+| ROS2 Kilted | [版本文档](https://docs.ros.org/en/kilted/)、[Ubuntu 安装](https://docs.ros.org/en/kilted/Installation/Ubuntu-Install-Debs.html)、[同一官方安装文档源码](https://github.com/ros2/ros2_documentation/blob/kilted/source/Installation/Ubuntu-Install-Debs.rst) | Ubuntu 24.04 / ROS2 基础安装、colcon 与 ROS 调试；按项目指定发行版准备环境 |
 | ROS-Aseba / asebaros | [jeguzzi/ros-aseba](https://github.com/jeguzzi/ros-aseba)、[维护者文档](https://jeguzzi.github.io/ros-aseba/) | `asebaros` 提供通用 ROS ↔ Aseba 网络接口；本项目在 `src/ros-aseba` 保留源码及嵌套 Aseba / Dashel 依赖 |
 | ROS-Thymio | [jeguzzi/ros-thymio](https://github.com/jeguzzi/ros-thymio)、[同一维护者文档](https://jeguzzi.github.io/ros-aseba/) | 在 asebaros 之上提供 Thymio 驱动、消息和模型；本项目使用 `src/ros-thymio` 中的 ROS 包，通过 colcon 构建，不另行 pip 安装 |
 | Windows / WSL / USB | [WSL 命令](https://learn.microsoft.com/en-us/windows/wsl/basic-commands)、[导入发行版](https://learn.microsoft.com/en-us/windows/wsl/use-custom-distro)、[USB 接入 WSL](https://learn.microsoft.com/en-us/windows/wsl/connect-usb) | 导出 / 导入 Linux 环境及 usbipd 操作；本项目 BUSID 和路径约定以实际配置与手册为准 |
@@ -313,36 +290,46 @@ ROS-Aseba / ROS-Thymio 的上游分支及旧教程含 ROS1 历史内容，不是
 
 ### 3.8 SDK 使用边界与连接方式
 
-**Headband / g.Pype。** [官方 FAQ](https://gpype.gtec.at/content/5_faq/index.html)说明个人及教学用途可在 IDE 内免费使用，商业部署需要 g.Pype Runtime；具体还需遵守对应版本的[GNCL 条款](https://github.com/gtec-medical-engineering/gpype/blob/main/LICENSE-GNCL.txt)。VS Code 是本项目选用的 IDE，不是官方唯一允许的 IDE。不要把这一使用条件解释成“API 技术上不能通过代码连接”——桥本身就在调用 API；本项目采取的是操作者在 VS Code 点击 **▶**、终端 **Ctrl+C** 的人工运行 / 中断流程。没有另行确认部署方式和授权前，不改成后台自动启动。
+#### Headband / g.Pype
 
-原电脑 Headband venv 的已记录路径为 `C:\Users\Robot\Desktop\gpype_test\venv\Scripts\python.exe`，操作步骤见[排障手册](GUIDE_DEBUG_cn.md#在-vs-code-中选择-venv)。现场用该解释器执行 `python -m pip show gpype`（实际命令须替换解释器路径）登记已安装版本；本轮在线文档显示 v4.0.0，不能据此断言原电脑也是该版本。现有桥使用 `BCICore8(channel_count=4)`，新文档接口或类名变化时先查兼容性，不顺便重写 / 升级。
+[官方 FAQ](https://gpype.gtec.at/content/5_faq/index.html)说明个人及教学用途可在 IDE 内免费使用，商业部署需要 g.Pype Runtime；具体遵守对应版本的[GNCL 条款](https://github.com/gtec-medical-engineering/gpype/blob/main/LICENSE-GNCL.txt)。本项目保留 IDE 人工运行方式，变更部署方式前须核对适用许可。
 
-**Hybrid Black / UnicornPy。** [官方 Python API 说明](https://github.com/unicorn-bi/Unicorn-Hybrid-Black-Windows-APIs/blob/main/python-api/unicorn-python-api.md)要求授权后加载库。本项目已有两份申请 / 购买的 API licence，详情由 Lucas 提供，见[第 2.4 节](#24-hybrid-black-api-授权交接)；不要由此推广为所有 g.tec API 都收费或每台 EEG 必须单独占用一份授权。
+升级 SDK 前核对现有桥使用的接口和类名，不直接照新文档替换。版本查询见[第 3.1 节](#31-windows-前置条件)；现有 venv 路径及选择步骤只在[排障手册](GUIDE_DEBUG_cn.md#在-vs-code-中选择-venv)维护。
 
-Windows 上先按对应版本 Suite / DevTools 安装资料准备驱动和 Unicorn Python API，确认 `UnicornPy.pyd` 所在库目录可被实际解释器加载（官方说明使用 `PYTHONPATH`），Python 版本、位数及本机库依赖匹配。官方 GitHub 的说明 / 示例不是可直接替代已授权安装包的一套完整运行环境；仅 `pip install` 根依赖清单无法完成部署。环境就绪后按[第 3.1 节](#31-windows-前置条件)导入检查，再确认 API 版本。
+#### Hybrid Black / UnicornPy
 
-UnicornPy 支持代码按序列号创建 `Unicorn(serial)`、开始 / 读取 / 停止采集，并在对象释放时断开；不需要在 IDE 中人工执行才允许连接。[官方 API 参考](https://github.com/unicorn-bi/Unicorn-Hybrid-Black-Windows-APIs/blob/main/python-api/unicorn-python-api-reference.md)。本项目因此由 System Control 的 Connect / Disconnect 托管桥进程。连接具体设备和独立重连仍有[同型号双设备限制](#752-当前代码的限制与修改入口)，不能把 API 支持序列号选择当成项目已经实现。
+按对应版本的 Suite / DevTools 资料准备驱动和 Unicorn Python API，加载方式参考[官方安装说明](https://github.com/unicorn-bi/Unicorn-Hybrid-Black-Windows-APIs/blob/main/python-api/unicorn-python-api.md)。确认 `UnicornPy.pyd` 的库目录可被实际解释器加载（官方说明使用 `PYTHONPATH`），Python 版本、位数及本机库依赖匹配；仅安装仓库根依赖清单不能完成部署。导入检查和版本查询见[第 3.1 节](#31-windows-前置条件)。
 
-**蓝牙选择。** Headband 和 Hybrid Black 在原项目电脑上均用集成蓝牙；用户确认 Hybrid 附带 USB 蓝牙曾频繁断连，集成蓝牙在该电脑上表现更稳定，因此延续这一基线。与此不同，[厂商 Suite 手册](https://github.com/unicorn-bi/Unicorn-Suite-Hybrid-Black-User-Manual/blob/main/UnicornSuite.md#bluetooth-configuration)推荐随设备提供的适配器。两者分别是项目现场经验和厂商推荐，不写成同一个“官方要求”；换电脑或同时接两台设备时重新验证稳定性，不保证任意集成蓝牙都适用。Thymio USB Dongle 不属于这个蓝牙选择。
+连接与进程管理设计见[技术档案第 3.4 节](DOSSIER_TECHNIQUE_cn.md#34-设备连接设计)；同型号双设备的修改入口见[第 7.5.2 节](#752-当前代码的限制与修改入口)。
+
+##### Hybrid Black API 授权
+
+项目有两份 Hybrid Black API licence，均由 Lucas 申请，授权资料由他掌握；第一份已在原项目 Windows 电脑激活，**第二份未激活**。部署或迁移时向 Lucas 获取对应的产品信息、适用条款与凭据。不从“两份授权”推导“一台 EEG 必须一份”或已经允许同机双设备并发。
+
+在 **Unicorn Suite Hybrid Black → Licenses** 中查看授权状态；激活与停用按对应版本的[官方授权说明](https://github.com/unicorn-bi/Unicorn-Suite-Hybrid-Black-User-Manual/blob/main/UnicornSuite.md#licensing)操作。只核对状态时不要停用现有授权；迁移前与 Lucas 确认许可条件和停机安排。完整 licence key、购买邮件与账号信息仅经受控渠道交接，不放入 Git、日志或公开截图。
+
+#### 蓝牙选择
+
+原电脑使用集成蓝牙是基于现场连接稳定性的选择，与[厂商手册](https://github.com/unicorn-bi/Unicorn-Suite-Hybrid-Black-User-Manual/blob/main/UnicornSuite.md#bluetooth-configuration)推荐随设备提供的适配器不同。换电脑或增加设备时须重新验证，不假定所有集成蓝牙都适用。
 
 ## 4. 启动与开发调试
 
 ### 4.1 正常启动与停止
 
-交付电脑优先沿用户流程，不要同时手动启动第二套网页或 ROS 管线：
+正常启动、设备连接、校准、运行及收尾，按[操作手册](MANUEL_OPERATEUR_cn.md)执行。开发调试时注意以下进程管理边界：
 
-1. 启动 launcher，Start System。
-2. 按需连接 EEG 和 Thymio；Headband 打开 VS Code 后选对 venv，点右上角 ▶；Hybrid Black 由 Connect 启动。
-3. 在实验控制网页选择设备、角色、输出与指标，校准；校准结束后 Stop，再 Start 正式运行，使节点与眨眼参考读取新配置。
-4. 结束时先网页顶部 Stop，再在 Headband 的 VS Code 终端 Ctrl+C，必要时 Disconnect，然后 Stop System / Exit Launcher。
-
-Stop System 默认会终止配置中的整个 WSL 发行版，影响其其他任务；VS Code 启动的 Headband 不属于 launcher 管理的子进程。Restart Web 也不应代替网页 Stop：重启前先停止控制，之后核对残留进程。
+- 已有网页服务或控制管线运行时，不要再从终端启动另一套相同服务／管线。
+- VS Code 启动的 Headband 脚本不由 launcher 管理，仍需人工中断。
+- Stop System 默认终止整个配置的 WSL 发行版；其中其他任务应先保存。
+- Restart Web 前先停止控制并确认停车；重启网页不代替 Stop。
 
 ### 4.2 分开启动前后端
 
 只在 launcher 没有管理这些服务时使用。以下后端命令会启动实际服务，真实命令默认开启；先确保真机未处于控制状态。
 
-WSL Bash 终端 A，从仓库根开始：
+后端与前端需要分别在两个终端中启动。两个终端都先进入项目根目录，再执行各自命令。
+
+#### 启动后端（WSL Bash 终端 A）
 
 ```bash
 source /opt/ros/kilted/setup.bash
@@ -352,14 +339,14 @@ cd web_gui/backend
 python -m app.main
 ```
 
-WSL Bash 终端 B，从仓库根开始：
+#### 启动前端（WSL Bash 终端 B）
 
 ```bash
 cd web_gui/frontend
 npm run dev -- --port 5173 --strictPort
 ```
 
-前端访问 `http://localhost:5173`。后端健康入口是 `http://localhost:8010/api/health`，不是 `/health`。`subscriber_ready` 为真仍需检查 `subscriber_error`；服务响应、ROS 就绪、收到 EEG 和机器人动作是不同验收项。
+前端访问 `http://localhost:5173`。后端健康入口是 `http://localhost:8010/api/health`，不是 `/health`。`subscriber_ready` 为真仍需检查 `subscriber_error`；服务响应、ROS 就绪、收到 EEG 和机器人动作需要分别检查。
 
 手动终端的 Ctrl+C 用于结束该进程；网页 Start 创建的控制管线先由网页 Stop 结束。不要只关浏览器来停车。
 
@@ -392,43 +379,31 @@ ros2 launch thymio_control experiment_core.launch.py use_sim:=true run_eeg:=true
 
 ## 5. 代码与配置导读
 
-### 5.1 从哪里开始读代码
+### 5.1 功能与代码定位
 
-| 层 / 路径 | 职责与阅读重点 |
+排查或调整某项功能时，可从下表定位代码。它是查找入口，不是新增需求或待修复问题清单，也不表示每次都要修改所列的全部文件。
+
+| 功能 / 排查目标 | 主要代码入口 |
 |---|---|
-| [windows_launcher/](../windows_launcher/) | `launcher.bat` 入口；`launcher_server.py` 系统生命周期；`state.py` 状态；`commands.py` 命令；`config.py` 配置；`lsl_probe.py` 新鲜样本检测 |
-| [gtec_bridge/](../gtec_bridge/) | Windows 设备 API → LSL；Headband 的重连 watchdog；Hybrid 的采集与重连；厂商依赖从这里排查 |
-| [experiment_core.launch.py](../thymio_control/launch/experiment_core.launch.py) | 真机 / 仿真、单 / 双 EEG、角色与话题；终端 teleop 与 EEG 启动条件 |
-| [pipeline.py](../thymio_control/thymio_control/pipeline.py) | LSL adapter、特征处理、`POLICIES` 注册，不是整个系统启动入口 |
-| [adapters/lsl_raw.py](../thymio_control/thymio_control/adapters/lsl_raw.py) | source_id 解析、StreamInfo、预滤波、窗口提取、单位 |
-| [processors/](../thymio_control/thymio_control/processors/) | Welch 频带功率、特征、指标眨眼检测；旧 `blink.py` 不等同当前 `blink_metric.py` 路径 |
-| [policies/](../thymio_control/thymio_control/policies/) | EI / TBR / Alpha、归一化、EMA、意图输出 |
-| [eeg_control_node.py](../thymio_control/scripts/eeg_control_node.py) | 20 Hz tick、角色运动映射、校准、分析 JSON、LED、断流处理 |
-| [cmd_vel_fuser.py](../thymio_control/scripts/cmd_vel_fuser.py) / [watchdog.py](../thymio_control/thymio_control/watchdog.py) | 双路融合与纯逻辑看门狗；缺失一路时不沿用旧动作 |
-| [web_gui/backend/app/](../web_gui/backend/app/) | `models.py` 数据校验；`config_store.py` YAML；`command_runner.py` ROS 进程；`signal_subscriber.py` ROS / WebSocket；`main.py` API |
-| [web_gui/frontend/src/](../web_gui/frontend/src/) | `App.jsx` 主流程；`api.js` API；组件、hooks 中角色 / 校准 / Teleop 逻辑 |
-| [src/](../src/) | ROS Thymio / Aseba 等第三方代码；先查来源和依赖，不为普通 UI 修改重构底层驱动 |
+| 总控启动、设备连接和状态显示 | [launcher_server.py](../windows_launcher/launcher_server.py)、[commands.py](../windows_launcher/commands.py)、[state.py](../windows_launcher/state.py)、[lsl_probe.py](../windows_launcher/lsl_probe.py) |
+| EEG 采集与重连 | [gpype_lsl_bridge.py](../gtec_bridge/gpype_lsl_bridge.py)、[unicornpy_lsl_bridge.py](../gtec_bridge/unicornpy_lsl_bridge.py) |
+| 滤波、频带功率和派生指标 | [lsl_raw.py](../thymio_control/thymio_control/adapters/lsl_raw.py)、[band_power.py](../thymio_control/thymio_control/processors/band_power.py)、[enrich.py](../thymio_control/thymio_control/processors/enrich.py) |
+| 控制策略与速度／转向映射 | [policies/](../thymio_control/thymio_control/policies/)、[pipeline.py](../thymio_control/thymio_control/pipeline.py)、[eeg_control_node.py](../thymio_control/scripts/eeg_control_node.py) |
+| 校准与眨眼检测 | [eeg_control_node.py](../thymio_control/scripts/eeg_control_node.py)、[calibration.py](../thymio_control/thymio_control/calibration.py)、[blink_metric.py](../thymio_control/thymio_control/processors/blink_metric.py)；涉及界面时再看[App.jsx](../web_gui/frontend/src/App.jsx) |
+| 双设备融合与断流保护 | [cmd_vel_fuser.py](../thymio_control/scripts/cmd_vel_fuser.py)、[watchdog.py](../thymio_control/thymio_control/watchdog.py)、[eeg_control_node.py](../thymio_control/scripts/eeg_control_node.py) |
+| 网页界面与参数保存 | [App.jsx](../web_gui/frontend/src/App.jsx)、[models.py](../web_gui/backend/app/models.py)、[config_store.py](../web_gui/backend/app/config_store.py) |
+| ROS 数据显示与网页遥控 | [signal_subscriber.py](../web_gui/backend/app/signal_subscriber.py)、[main.py](../web_gui/backend/app/main.py) |
+| 控制管线启动、真机／仿真切换 | [command_runner.py](../web_gui/backend/app/command_runner.py)、[experiment_core.launch.py](../thymio_control/launch/experiment_core.launch.py) |
 
-算法公式、滤波、采样、单位、运动映射与校准详见[技术档案 3.5～3.8 节](DOSSIER_TECHNIQUE_cn.md#35-eeg信号处理设计)，本手册不重复维护第二份算法定义。
+当前指标眨眼检测使用 `blink_metric.py`，不要与旧 `blink.py` 路径混淆。模块职责、算法和接口定义见[技术档案的系统设计](DOSSIER_TECHNIQUE_cn.md#3-系统设计)；第三方驱动维护见[第 5.5 节](#55-第三方源码与本项目修改)。
 
 ### 5.2 主链路与接口
 
-Windows 桥 → LSL → RawLslAdapter / Welch → enrich_features → Policy → EEG 节点意图 / Twist。单 EEG 直接发布最终速度；双 EEG 分别发布部分速度，由 fuser 合并：
+系统架构与数据流见[技术档案第 3.1 节](DOSSIER_TECHNIQUE_cn.md#31-系统总体设计)；ROS 话题、分析 JSON、HTTP 与 WebSocket 接口定义见[第 3.10 节](DOSSIER_TECHNIQUE_cn.md#310-接口与数据契约)。
 
-| 接口 | 语义 |
-|---|---|
-| `gtec_bci_core4` / `gtec_hybrid_black` | 按 source_id 绑定流；不是用户可见品牌文字 |
-| `/eeg_cmd_vel/speed` / `/eeg_cmd_vel/steering` | 双路部分 Twist，后缀是角色；不是 `/steer` |
-| `/cmd_vel` | 真机最终速度；仿真最终速度为 `/model/thymio/cmd_vel` |
-| `/eeg_analysis` / `/eeg_analysis/speed` / `/eeg_analysis/steering` | 单路 / 双路分析 JSON，后端订阅三条 |
-| `/ws/stream` | 最新分析快照 / 状态，不是无损原始 EEG 录像接口 |
-| `/ws/teleop` | 网页 Teleop → RosBridge → 最终速度 |
-| `/api/config` | 配置及源码文件位置；PUT 使用 `{"patch": {...}}` |
-| `/api/system/start` / `/api/system/stop` | 控制管线启动 / 停止；不是 Windows Start System / Stop System |
+调试实际运行链路时，按[本手册第 6.3 节](#63-wsl网页与-ros-检查)检查节点、话题、发布者、消息和运行参数，不能只根据保存的 YAML 判断当前运行状态。
 
-角色映射：Speed 控制前进，Steering 控制原地转向，眨眼切换转向方向。单设备并不自动兼任两种运动。
-
-网页 Keyboard 是鼠标 / 触摸 Teleop 按钮路径，不依赖 EEG。launch 的 `use_teleop=true` 则启动终端键盘节点并抑制 EEG；网页启动器固定传 `use_teleop=false`。两者不要混为同一个开关。
+网页 Keyboard 与终端键盘控制是两条不同的路径，不要混淆它们的启动开关，也不要同时启动多个运动命令来源。具体启动条件见[技术档案第 3.3 节](DOSSIER_TECHNIQUE_cn.md#33-启动与状态设计)。
 
 ### 5.3 三套配置边界
 
@@ -438,39 +413,33 @@ Windows 桥 → LSL → RawLslAdapter / Welch → enrich_features → Policy →
 
 第二份 EEG 文件对应第二条设备配置，不固定等于 Hybrid Black 或 Steering。关闭第二角色以 `run_eeg2` 等配置为准，不要求删除第二份 YAML。
 
-校准在首帧到达后计时 30 秒，至少 50 个有效指标样本；策略参数原位更新，保留 EMA。新校准不会立即刷新已建立的眨眼检测器参考，因此正式运行前 Stop / Start。源码与安装参数不一致时，先查写入结果和路径；不要通过删除整个 `thymio_control/` 目录解决。
+网页保存参数后，若实际运行未使用新值，先核对后端写入的源码文件、ROS launch 读取的安装目录文件，以及两者是否链接到同一文件，并检查保存日志。`GET /api/config` 返回的 `source_files` 只报告后端源码配置路径，不代表 ROS 实际读取的安装配置。
+
+自动校准的保存机制、参数生效方式及需要 Stop / Start 的具体情况，见[技术档案第 3.7 节](DOSSIER_TECHNIQUE_cn.md#37-校准设计)；完整配置读写关系见[第 3.9 节](DOSSIER_TECHNIQUE_cn.md#39-配置与持久化设计)。不要通过删除 `thymio_control/` 源码目录解决配置不一致问题。
 
 ### 5.4 两类 EEG 的预滤波实现
 
-两路都在 Welch 功率计算之前做本项目的初级滤波，但位置不同：
+滤波位置、截止频率、API 能力及两种实现的差异，见[技术档案第 3.5 节](DOSSIER_TECHNIQUE_cn.md#35-eeg信号处理设计)。本节保留代码维护与验证入口。
 
-| 设备 | 本项目实际处理路径 | 代码与依据 |
-|---|---|---|
-| Headband | Windows：采集 → gpype `Bandpass(0.5, 45 Hz)` → `Bandstop(48, 52 Hz)` → LSL；Linux 不再补同一套预滤波 | [桥的 `GpypeBridge.build()`](../gtec_bridge/gpype_lsl_bridge.py)明确调用 SDK 滤波节点；[g.Pype SDK 参考](https://gpype.gtec.at/content/7_sdk_reference/index.html)和[滤波教程](https://gpype.gtec.at/content/2_gpype_training/season2_easy_drifting/s2e1_filtering.html)提供接口说明 |
-| Hybrid Black | Windows：UnicornPy 采集 → 8 个 EEG 通道 LSL；WSL：`StreamingPreFilter` → Welch | [Unicorn 桥](../gtec_bridge/unicornpy_lsl_bridge.py)未调用软件滤波；[适配器](../thymio_control/thymio_control/adapters/lsl_raw.py)为该流创建[滤波器](../thymio_control/thymio_control/processors/band_power.py)，默认 4 阶 Butterworth 设计、SOS 流式实现，带通 0.5–45 Hz、带阻 48–52 Hz |
+- **代码入口**：Headband 的 SDK 滤波节点在[桥的 `GpypeBridge.build()`](../gtec_bridge/gpype_lsl_bridge.py)中连接；Linux 补滤波的启用逻辑在[适配器 `lsl_raw.py`](../thymio_control/thymio_control/adapters/lsl_raw.py)，实现为[`band_power.py` 中的 `StreamingPreFilter`](../thymio_control/thymio_control/processors/band_power.py)。
+- **设备标识变更**：当前 Hybrid 补滤波按流名称 `gtec_hybrid_black` 启用，不是按 `source_id`。改名称、换桥或增加同型号设备时，要检查是否漏滤波或重复滤波。
+- **流式状态**：保留各通道在连续数据块之间的滤波状态，不能每个数据块都重新初始化滤波器。
+- **单位检查**：[Hybrid 桥](../gtec_bridge/unicornpy_lsl_bridge.py)目前未写入 `source_unit`；适配器默认使用 µV 不代表单位已确认，须核实 SDK 输出与流元数据，不能按曲线外观猜测。
 
-本轮核对的[UnicornPy 公开 API 参考](https://github.com/unicorn-bi/Unicorn-Hybrid-Black-Windows-APIs/blob/main/python-api/unicorn-python-api-reference.md)没有提供上述带通 / 带阻滤波接口，故本项目在 Linux 中补软件预滤波。这不证明设备固件完全没有信号处理，也不表示其他 g.tec 软件无法滤波。准确描述是“当前桥未做这套滤波，WSL 负责补齐”。
-
-两路使用相同截止频率不意味着滤波阶数、频率响应或处理延迟完全一致；Headband 的 SDK 实现以安装版本为准。Linux 滤波器保留分块之间的状态、按通道处理；不能把每个数据块都当成独立信号反复初始化。0.5–45 Hz 带通和约 50 Hz 的抑制不是完整的伪迹剔除流程，也不能证明真实 EEG 控制质量；策略中的 EMA 是控制指标平滑，不替代原始信号预滤波。
-
-维护时尤其检查：当前 Linux 是否补滤波取决于 **流名称** `gtec_hybrid_black`，不是仅看 source_id；换桥、改名称或增加同型号实例时，防止漏滤波 / 重复滤波。单位从流元数据读取，缺失时回退 µV 并警告；Hybrid 桥当前缺 `source_unit`，需根据实际 SDK 配置和数据核实，而非按曲线外观猜测。完整 PSD / 单位定义见[技术档案第 3.5 节](DOSSIER_TECHNIQUE_cn.md#35-eeg信号处理设计)。
-
-可用[预滤波测试](../thymio_control/test/test_pre_filter.py)核对直流抑制、50 Hz 抑制、10 Hz 保留、流式连续性、多通道和 reset；[频带测试](../thymio_control/test/test_band_power.py)核对后续计算。这些是软件数值测试，不验证 Windows SDK 的实际滤波响应或蓝牙链路。
+修改后可用[预滤波测试](../thymio_control/test/test_pre_filter.py)核对直流抑制、50 Hz 抑制、10 Hz 保留、流式连续性、多通道和 reset；[频带功率测试](../thymio_control/test/test_band_power.py)核对后续计算。这些是软件数值测试，不能验证 Windows SDK 的实际滤波响应或蓝牙连接稳定性。
 
 ### 5.5 第三方源码与本项目修改
 
 `src/ros-aseba`、`src/ros-thymio` 已在本项目提交 `12c093c` 转成普通 Git 跟踪目录，嵌套依赖也随源码保留；不是部署时自动从上游取最新版的子模块。部分目录保留 `.gitmodules` 是来源线索，不说明现在仍应执行递归子模块更新。
 
-2026-10-09 将当前跟踪文件与历史子模块指向的固定上游版本逐文件比较；嵌套版本取自该 ros-aseba 上游 Git 树，而非凭最新分支推测：
+本项目第三方源码的固定上游版本如下；嵌套版本来自对应 ros-aseba 的上游 Git 树，不以最新分支代替：
 
-| 本项目目录 / 组件 | 对比的上游版本 | 范围内结果 |
-|---|---|---|
-| `src/ros-aseba`（不含下面的嵌套目录） | [jeguzzi/ros-aseba @ 94acaba](https://github.com/jeguzzi/ros-aseba/tree/94acaba803d748b84fce62ab0527d1348b28be12) | 166 个文件相同，无内容修改 |
-| `src/ros-aseba/asebaros/aseba`（不含其 dashel / enki 嵌套目录） | [aseba-community/aseba @ 3c14f0c](https://github.com/aseba-community/aseba/tree/3c14f0cb9510c60502821bfd7adb22e795540479) | 1147 个相同、3 个不同 |
-| `src/ros-aseba/asebaros/dashel` | [aseba-community/dashel @ 1a8d36e](https://github.com/aseba-community/dashel/tree/1a8d36e7fe48ce0f4fd292f5b64b2a0a880953da) | 99 个文件相同，无内容修改 |
-| `src/ros-thymio` | [jeguzzi/ros-thymio @ d996f49](https://github.com/jeguzzi/ros-thymio/tree/d996f4994feb5332c42a2b58c2c2c17fed0c938d) | 44 个相同、5 个不同 |
-
-范围内没有新增或缺失文件；这些计数不包含排除的嵌套依赖，不能当作全部第三方组件的兼容性 / 安全审计。本轮没有执行 ROS / C++ 全量构建或真实驱动验证。
+| 本项目目录 / 组件 | 固定上游版本 |
+|---|---|
+| `src/ros-aseba` | [jeguzzi/ros-aseba @ 94acaba](https://github.com/jeguzzi/ros-aseba/tree/94acaba803d748b84fce62ab0527d1348b28be12) |
+| `src/ros-aseba/asebaros/aseba` | [aseba-community/aseba @ 3c14f0c](https://github.com/aseba-community/aseba/tree/3c14f0cb9510c60502821bfd7adb22e795540479) |
+| `src/ros-aseba/asebaros/dashel` | [aseba-community/dashel @ 1a8d36e](https://github.com/aseba-community/dashel/tree/1a8d36e7fe48ce0f4fd292f5b64b2a0a880953da) |
+| `src/ros-thymio` | [jeguzzi/ros-thymio @ d996f49](https://github.com/jeguzzi/ros-thymio/tree/d996f4994feb5332c42a2b58c2c2c17fed0c938d) |
 
 | 实际不同的文件 | 已确认的差异及维护含义 |
 |---|---|
@@ -481,7 +450,7 @@ Windows 桥 → LSL → RawLslAdapter / Welch → enrich_features → Policy →
 | [Thymio `wheel.urdf.xacro`](../src/ros-thymio/thymio_description/urdf/wheel.urdf.xacro) | 轮关节 effort 限制由 0 改为 10；是仿真模型参数，不是实际电机命令的统一上限 |
 | [Thymio `model.launch.py`](../src/ros-thymio/thymio_description/launch/model.launch.py) | 输出由 screen 改为 log，增加 `use_sim_time` 参数声明；但传给节点的值仍硬编码 `True`，声明值未实际用于节点。保留为待核验限制，不写成参数传递已修好；项目提交 `d377c77` 可定位这次修改 |
 
-因此，“asebaros 官方库有一点小问题”应具体指其内嵌 Aseba 的头文件修正，不能笼统说 ROS-Aseba 全部经过性能优化。上游本身是维护者 fork：旧 `master` / 教程包含 ROS1 内容，项目使用的 ROS2 代码和 GZ 适配须按上述固定版本理解。
+维护时区分 Aseba 编译兼容性修正、界面文字调整和 Thymio 仿真适配，不将这些改动统一视为性能优化。旧 `master` / 教程包含 ROS1 内容，更新依赖时须核对 ROS2 与 GZ 兼容性。
 
 迁移时优先保留本项目整个 `src/`，不要直接用上游最新分支覆盖。确需更新时，先独立比较版本、保留或重做必要补丁，再构建并验证 Thymio 真机、仿真、话题与时钟行为；保留 [ROS-Aseba LICENCE](../src/ros-aseba/LICENCE)、[ROS-Thymio LICENSE](../src/ros-thymio/LICENSE)、[Aseba 许可](../src/ros-aseba/asebaros/aseba/license.txt)和[Dashel 许可](../src/ros-aseba/asebaros/dashel/license)，不将不同组件合并声明为同一许可。
 
@@ -504,7 +473,7 @@ Windows 桥 → LSL → RawLslAdapter / Welch → enrich_features → Policy →
 | 双 EEG 只一路有数据 / 不动 | 两 source_id、角色、两个 partial 话题与 fuser | 缺一路时 watchdog 零速可能是正确行为，不关闭保护来“让它动” |
 | 本机网页正常，其他电脑异常 | 5173 转发 / 防火墙、前端代理、WebSocket origin 与授权 | 先检查真实访问路径；不要直接关全部防火墙或放开所有后端端口 |
 
-用户能处理的问题继续沿[排障手册](GUIDE_DEBUG_cn.md)，开发者才进入以下命令与代码检查。
+常见硬件与连接恢复见[排障手册](GUIDE_DEBUG_cn.md)。以下检查用于进一步定位桥、LSL、ROS 和网页服务问题。
 
 ### 6.2 Windows LSL 与 USB 检查
 
@@ -579,7 +548,7 @@ ros2 pkg prefix thymio_control
 
 ### 7.1 现有测试入口
 
-使用 WSL 仓库根 `.venv`，先确认依赖。以下是执行入口，不是本次完整测试已通过的记录。
+使用 WSL 仓库根 `.venv`，先确认依赖。按修改范围选择测试，缺失依赖按环境安装说明处理。
 
 WSL Bash，仓库根：
 
@@ -606,7 +575,7 @@ cd web_gui/backend
 | 后端 tests | 模型、配置、runner、subscriber 等行为 | 全部真实 ROS 生命周期、物理执行 |
 | lsl_test | 合成流、EDF / 流式处理等开发验证 | 真实跨系统网络与真人 EEG 有效性 |
 | npm build | 前端可构建 | 界面交互正确、WebSocket 断网后停车 |
-| 目标电脑演练 | 真实部署与指定场景 | 未执行的其他场景或临床 / 科研有效性 |
+| 目标环境集成检查 | 实际环境下已执行场景的运行行为 | 未覆盖的环境、设备与故障场景 |
 
 有些测试缺少依赖或数据会 skip，skip 不是通过。`gtec_bridge/test_*.py` 含真实设备 / SDK 调试脚本，不是可在任意环境无风险运行的纯单元测试，不要为了“全覆盖”直接批量执行。
 
@@ -616,9 +585,7 @@ cd web_gui/backend
 python -m pytest thymio_control/test/test_watchdog.py thymio_control/test/test_cmd_vel_fuser.py thymio_control/test/test_calibration.py thymio_control/test/test_blink_metric.py -q
 ```
 
-这四个已有文件的 30 项测试在本轮前序文档核对中通过；详见[技术档案的验证口径](DOSSIER_TECHNIQUE_cn.md#41-验证口径)。它们不是整套测试报告，更不是真机验收。
-
-本手册编写时另在 2026-10-08 的 macOS 文档工作环境运行已有 `windows_launcher/tests/test_config.py`、`test_lsl_probe.py`（15 项），以及后端 `app/test_config_store.py`、`test_models.py`（15 项），均通过，用于复核文中配置和探针语义。检查了本地文档链接 / 章节锚点与 Bash 命令块语法；没有执行 Windows 部署、ROS 构建、SDK 导入或真机步骤。
+历史数据已移除，[test_verify_blink_clamp.py](../thymio_control/test/test_verify_blink_clamp.py)依赖的归档数据缺失时会跳过，不是当前可用的回放功能。系统实际验证范围与结果见[技术档案的验证口径](DOSSIER_TECHNIQUE_cn.md#41-验证口径)；每次代码修改后仍需重新执行相关测试。
 
 ### 7.2 小修改的标准流程
 
@@ -637,30 +604,30 @@ python -m pytest thymio_control/test/test_watchdog.py thymio_control/test/test_c
 | 新指标 / 新策略 | processors 特征、policy 与 `POLICIES` 注册、节点校准指标选择、后端 policy 校验、前端选项 / 显示、YAML、数值与校准测试 |
 | 改 EMA | 当前三个策略类的 `ema_alpha=0.35`；不是现有 YAML / UI 参数。调大更敏捷但更抖，调小更平滑但更慢；核对策略状态与回归测试 |
 | 新设备 | Windows API / SDK、桥与 StreamInfo、唯一 source_id、通道 / 采样率 / 单位、device_profiles、adapter 滤波选择、前后端品牌 / 角色映射、launcher 与探针 |
-| 改 USB / 电脑路径 | Windows 本地 JSON 中所有嵌入路径、attach / detach / verify 命令、ROS device、操作 / 排障手册及指定口照片 |
+| 改 USB / 电脑路径 | Windows 本地 JSON 中所有嵌入路径、attach / detach / verify 命令、ROS device，以及操作 / 排障手册中的路径与指定口说明 |
 | 改停止或断流 | 节点 watchdog、fuser、runner 清理、Windows bridge 生命周期、网页 / WebSocket 异常与真实驱动停车 |
 
-新增设备不仅是登记通道数：RawLslAdapter 会读取 StreamInfo，但 Hybrid 额外滤波选择还与流名称有关。单位应在桥的元数据中明确并实测；当前 Hybrid 桥缺少 `source_unit`，适配器回退到 µV 并告警，实际 SDK 单位仍是待核验项。同型号双设备不是一般扩展备注，而是[下一阶段首要任务](#75-首要开发任务同型号双-gtec-集成)；不能直接共用固定 source_id。
+新增设备时同时核对流身份、元数据和处理链，具体注意事项见[第 5.4 节](#54-两类-eeg-的预滤波实现)。同型号双设备的跨层修改按[第 7.5 节实施路线](#75-首要开发任务同型号双-gtec-集成)进行。
 
 ### 7.4 优先保留并验证的安全边界
 
-不要通过关闭保护掩盖问题。当前已识别的边界见[技术档案当前限制](DOSSIER_TECHNIQUE_cn.md#51-当前限制及优先验证事项)，接手时尤其复验：
+不要通过关闭保护掩盖问题。当前已识别的边界见[技术档案当前限制](DOSSIER_TECHNIQUE_cn.md#51-当前限制及优先验证事项)，修改相关功能时尤其检查：
 
-- 两级 watchdog 的 0.5 秒阈值不是整机实测停车保证；系统仍 Running 时数据恢复可能自动恢复动作。
-- 单设备校准后继续运行可能保留旧眨眼参考，正式运行前 Stop / Start。
+- EEG 节点与融合器分别检查数据新鲜度，当前默认阈值均为 0.5 秒，不是整机停车时限；修改后实测断流与恢复，注意仍 Running 时数据恢复可能续动。
+- Steering 使用 Alpha / TBR 时，自动校准不会刷新已创建眨眼检测器的上冲基线下限，Stop / Start 可重新读取。不要将此推广成所有校准值都须重启才生效；详见[校准设计](DOSSIER_TECHNIQUE_cn.md#校准结束后的控制状态)。
 - 浏览器 Teleop WebSocket 断开时，后端没有明确自动补发零速度；前端松手时补发 Stop 不等于断网急停。
 - dry-run / `WEB_GUI_ALLOW_REAL_COMMANDS=false` 不阻断直接 Teleop；做无硬件测试时仍需隔离真机输出。
 - 进程清理可能按名称匹配其他 ROS / 网页任务；Stop System 默认终止整个配置发行版。复用工作站前先确认其他任务。
 
-历史设计和 review 只是定位线索，不是当前缺陷清单或已修复证明；本次文档编写没有顺带修复这些运行代码。
+历史设计和 review 仅作定位线索；修改前仍需检查当前实现并复现问题。
 
 ### 7.5 首要开发任务：同型号双 g.tec 集成
 
-需求已确认，尚未实现 / 真机验证。正式范围与通过条件见[技术档案 RF-NEXT-01～06](DOSSIER_TECHNIQUE_cn.md#25-下一阶段主要需求同型号双-gtec)。本节是新实习生的开发路线，不是操作者当前可执行的功能教程。
+当前尚未实现同型号双设备集成，也未完成相应真机验证。正式范围与通过条件见[技术档案 RF-NEXT-01～06](DOSSIER_TECHNIQUE_cn.md#25-下一阶段主要需求同型号双-gtec)，以下说明代码修改入口、实施顺序与回归测试。
 
 #### 7.5.1 目标与可复用部分
 
-允许两台 Hybrid Black 或两台 Headband 同时接入同一电脑，分别负责 Speed、Steering，控制同一台 Thymio；保留原有单设备和混合型号模式。实现限定为两路，不需要为本任务搭建任意数量设备 / 多机器人平台，也不承诺原始 EEG 严格同步。
+目标组合、功能范围与兼容要求见[技术档案第 2.5 节](DOSSIER_TECHNIQUE_cn.md#25-下一阶段主要需求同型号双-gtec)。
 
 已有 ROS launch 能运行两套 EEG 节点，两条 YAML 分别保存校准；`cmd_vel_fuser` 按角色合并速度与转向，后端和图表也按角色路由。这些可以复用。主要缺口在 **Windows 具体设备选择 → 唯一 LSL 流 → 配置绑定 → 连接状态**，不是重新设计控制算法。
 
@@ -693,31 +660,27 @@ LSL 流名称与 source_id 是两个字段：保持型号名称而使用唯一 s
 
 校准目前属于第一 / 第二条配置，不能因此当作具体设备的永久校准。更换物理设备或改变校准条件后清除 / 重新验证旧结果；角色交换后核对设备、指标与校准仍对应正确。不需要为此新增数据库。旧固定 ID 的单设备 / 混合配置须有明确兼容或迁移步骤，备份后转换，不能在加载时静默猜错型号或覆盖 ID。
 
-#### 7.5.4 分阶段实施与交付物
+#### 7.5.4 分阶段实施与验证
 
-1. **保存基线并核实条件。** 向 Lucas 获取[授权信息](#24-hybrid-black-api-授权交接)，由现场人员登记 SDK / Python / Suite 版本、两台设备序列号。停止控制并备份配置，在开发副本测试，不直接升级现有 SDK 来试错。
-2. **先做 Windows 并发采集验证。** 不运行机器人控制，尝试按两个明确序列号同时采集；核实单进程 / 多进程可行性、API 限制、退出释放与重连。g.Pype [官方 FAQ](https://gpype.gtec.at/content/5_faq/index.html)说明可实例化多个采集源，但不是当前版本“两台 Headband 可独立启停”的保证。交付简短结果：版本、运行方式、两路身份和数据、持续时间、失败 / 限制；若厂商能力不满足，先说明阻碍，不伪装成已实现，也不自行替换 API / 工作流。
+1. **保存基线并核实条件。** 向 Lucas 获取[授权信息](#hybrid-black-api-授权)，核对 SDK / Python / Suite 版本及两台设备序列号。停止控制并备份配置，在开发副本测试，不直接升级现有 SDK 来试错。
+2. **先做 Windows 并发采集验证。** 不运行机器人控制，尝试按两个明确序列号同时采集；核实单进程 / 多进程可行性、API 限制、退出释放与重连。g.Pype [官方 FAQ](https://gpype.gtec.at/content/5_faq/index.html)说明可实例化多个采集源，但不是当前版本“两台 Headband 可独立启停”的保证。记录版本、运行方式、两路身份和数据、持续时间、失败 / 限制；若厂商能力不满足，先说明阻碍，不自行替换 API / 工作流。
 3. **实现按实例配置的桥。** 提供设备选择和唯一流身份，固定重连目标，保证各自资源释放、自检和日志；先验证两路 LSL，不依赖 ROS。Hybrid 可优先复用按入口托管独立进程的方式，前提是并发验证通过；Headband 的实例配置 / IDE 启动方式要清晰，不能要求操作者每次手改代码常量，也不默认改成后台自动启动。
 4. **贯通配置与 Linux。** 增加必要型号 / 序列号字段、重复身份校验及 YAML 写回；适配器、launcher 探针按明确身份匹配。处理重连残留流的过期 / 新鲜判断，若仍有多个冲突的有效流则明确报错，不能随便取第一条。核对每路滤波、采样率、通道和单位。
 5. **更新两个页面。** EEG 控制页面允许相同型号的不同设备，正确保存、重新加载、交换角色与逐台校准；System Control 提供对应实例入口和独立状态。断开一路只影响该路采集，机器人则按现有双路断流保护停车。
-6. **离线回归，再现场验收。** 扩展[双路合成流工具](../thymio_control/lsl_test/dummy_dual_streams.py)，产生同型号元数据、不同 ID 和可区分数值；补桥选择 / 重连、配置、探针、滤波和界面测试。再做真实双设备、ROS 与 Thymio 验证，记录结果，更新操作 / 排障手册和迁移说明后才部署。
+6. **离线回归，再真实设备验证。** 扩展[双路合成流工具](../thymio_control/lsl_test/dummy_dual_streams.py)，产生同型号元数据、不同 ID 和可区分数值；补桥选择 / 重连、配置、探针、滤波和界面测试。再做真实双设备、ROS 与 Thymio 验证，记录结果，更新操作 / 排障手册和迁移说明后才部署。
 
 前两阶段决定厂商环境是否可行，后四阶段解决本项目的集成。没有设备时可以实现并验证配置和模拟流路径，但不能把 Windows SDK 并发、蓝牙稳定性或真机停车标为已通过。
 
-#### 7.5.5 完成判据与回归场景
+#### 7.5.5 回归场景与结果记录
 
-按 RF-NEXT 编号登记 commit、环境 / 配置、步骤、期望、实测与证据；未测和失败明确记录。至少覆盖：
+完成标准按[技术档案 RF-NEXT-01～06](DOSSIER_TECHNIQUE_cn.md#25-下一阶段主要需求同型号双-gtec)核对；本节组织具体回归操作。按对应需求编号登记 commit、环境 / 配置、步骤、期望、实测与证据，明确记录未测和失败项。
 
-- 两路序列号和 ID 不同；用可区分的模拟数据及真机断开单台等操作确认来源，不能只看两条“不同的曲线”。
-- 单台分别连接，两台同时连接；页面刷新、配置保存、系统重启后型号、身份与角色不变。
-- 重复选择同一物理设备、重复 source_id、两条冲突的有效流均被拒绝；没有指定设备时不回退到另一台。
-- 断开 / 断电 A 时 B 仍采集，A 不被 B 的新鲜数据标绿；A 重连只连接 A，停止 A 不误杀 B 的进程。
-- 分别校准，A 的结果不覆盖 B；换设备不沿用另一台校准，角色互换后曲线和输出仍对应正确。
-- 两路型号所需滤波仍启用、单位与通道正确；速度只来自 Speed，转向只来自 Steering。
-- 任一路断流触发融合器零速度；实测停车与恢复，保留现有 Running 状态下可能续动的说明，不把阈值当硬件保证。
-- 原有单 Headband、单 Hybrid、混合型号双 EEG、仿真、Keyboard 单独测试和停止流程回归通过。
+- **身份与配置**：用可区分的模拟数据检查两路绑定，再以真机逐台断开等操作确认来源，不能只看两条曲线。测试重复物理设备、重复 source_id、冲突的有效流及指定设备缺失；保存配置、刷新页面和重启后重新核对型号、身份与角色。
+- **独立连接与重连**：分别连接 A、B，再同时连接；断开 / 断电、重连或停止 A，检查 B 的采集、设备绑定、状态及进程不被误影响。检查 A 的探针不会使用 B 的数据、重连仍指向 A，然后交换 A / B 重复测试。
+- **校准与角色交换**：分别校准两路，检查参数文件是否只更新对应一路；交换角色、保存并重新加载，核对设备、指标、校准、曲线和运动输出的对应关系。更换物理设备后，检查旧校准结果的清除 / 重新验证流程。
+- **控制与兼容回归**：核对各路滤波、采样率、通道、单位及角色融合输出；分别中断一路，实测停车与恢复，记录仍 Running 时是否续动。回归单 Headband、单 Hybrid、混合型号双 EEG、仿真、Keyboard 单独测试和停止流程。
 
-单元测试 / 模拟流验证与真实双设备验收分开报告；既有测试不能自动覆盖新增功能。RF-NEXT 的验收记录可附在本节，不混入[当前系统现场验收](#102-现场验收记录)冒充已交付基线。
+单元测试 / 模拟流验证与真实双设备测试分开记录；既有测试不能自动覆盖新增功能，软件阈值不能代替实测停车结果。正式通过条件见[技术档案第 2.5 节](DOSSIER_TECHNIQUE_cn.md#25-下一阶段主要需求同型号双-gtec)，未完成真实双设备测试时，不将该功能标为已验收。
 
 ## 8. 更新与发布
 
@@ -743,7 +706,7 @@ git pull --ff-only origin main
 git rev-parse HEAD
 ```
 
-分支分叉 / 冲突时停止部署并检查原因，不用强推解决。交付版本要记录实际 commit；测试环境可以单独分支开发，但运行版本须经过确认。
+分支分叉 / 冲突时停止部署并检查原因，不用强推解决。部署时记录实际 commit；开发改动先在独立分支测试，再更新运行环境。
 
 ### 8.2 根据变化执行必要步骤
 
@@ -761,9 +724,9 @@ git rev-parse HEAD
 
 ### 8.3 发布与提交检查
 
-提交源码和必要文档 / lockfile；运行配置是否纳入提交由交付基线决定。提交前看清暂存文件及 diff，不使用无差别 `git add .` 把实验数据和本地设置带入。
+提交源码和必要文档 / lockfile。共享默认配置与机器本地配置分开处理；确需更新版本控制中的 YAML 时，检查变更是否为预期默认值，而非某次测试或个人校准残留。提交前看清暂存文件及 diff，不使用无差别 `git add .` 把实验数据和本地设置带入。
 
-正式发布记录应包含：commit、依赖 / 配置迁移、测试范围与结果、真机是否验证、已知限制、回退方法。中文版先完成后再翻法语，两种语言必须对应同一确认后的实现，而非各自累积不同操作步骤。
+版本发布说明应包含：commit、依赖 / 配置迁移、测试范围与结果、真机是否验证、已知限制、回退方法。功能或操作发生变化时，同步更新对应文档及语言版本。
 
 ## 9. 备份与恢复
 
@@ -774,14 +737,14 @@ git rev-parse HEAD
 | 源码 commit 与未提交改动 | 只复制 Windows 桥不足以恢复整个项目 | Git 版本记录；必要本地改动独立保留 |
 | 实际 Windows `config.json` 与入口位置 | 机器本地路径 / 解释器不会由同步恢复 | 受控副本，与日期和电脑对应 |
 | 三个实际 YAML | 网页保存与校准会改运行配置 | 停止控制后复制；记录对应设备 / 角色 / 指标 |
-| SDK、驱动、授权恢复信息 | 不包含在 pip / Git 完整依赖中 | 两份 Hybrid API licence 向 Lucas 获取信息；按[授权交接](#24-hybrid-black-api-授权交接)及机构 / 厂商要求受控保存 |
+| SDK、驱动、授权恢复信息 | 不包含在 pip / Git 完整依赖中 | 向 Lucas 获取 Hybrid API licence 信息；按[授权说明](#hybrid-black-api-授权)及机构 / 厂商要求受控保存 |
 | 系统与依赖版本 | 浮动依赖和不同 ABI 可能无法复现 | WSL 与各 Windows 环境的版本清单，前端 lockfile |
-| 必要研究数据 / 日志 | 不一定能重新生成；可能含参与者信息 | 明确范围、权限、备份位置与保留期限 |
-| WSL 整体导出（迁移优先考虑） | 保留原有 Linux 软件、工作区与配置，降低从头重建成本 | 由现场人员在停机窗口制作；按[第 9.3 节](#93-推荐迁移方式导出与导入整套-wsl)验证恢复，不能替代 Windows SDK / 配置备份 |
+| 运行日志与需保留的分析数据 | 故障定位与数值验证可能需要原始文件 | 按实际输出路径备份，不将敏感数据提交 Git |
+| WSL 整体导出（迁移优先考虑） | 保留原有 Linux 软件、工作区与配置，降低从头重建成本 | 停止控制与相关服务后制作；按[第 9.3 节](#93-推荐迁移方式导出与导入整套-wsl)验证恢复，不能替代 Windows SDK / 配置备份 |
 
 可读取并保存 `python -m pip freeze`、`npm ls --depth=0` 及必要 ROS / 系统包版本。它们记录当前环境，不保证每个包都能从公开源恢复，也不能替代 SDK 安装来源与授权说明。
 
-按项目负责人要求，历史 `experiment_data/` 数据已从当前工作区移除，不再作为本次源码交付内容；整个目录已加入 `.gitignore`。网页第 4 部分的数据收集功能仍保留，仅用于开发人员验证系统，后续可考虑屏蔽或删除；使用该功能时仍会生成新数据。忽略规则不清除已有 Git 历史；后续新研究数据的保留、权限和交付范围须另行确认，不自行删除其他数据。
+分析数据默认写入仓库下 `experiment_data/`，可由后端环境变量 `EXPERIMENT_DATA_DIR` 指定其他位置；备份时以实际配置为准。历史数据已从当前工作区移除，但数据收集代码仍可生成新文件，功能范围见[README 使用注意](../README_cn.md#使用注意)。默认目录已加入 `.gitignore`，忽略规则不清除已有 Git 历史，也不覆盖自定义输出路径；自定义目录须单独检查权限和忽略规则。
 
 ### 9.2 恢复步骤
 
@@ -789,11 +752,11 @@ git rev-parse HEAD
 2. Linux 优先评估[整套 WSL 导入](#93-推荐迁移方式导出与导入整套-wsl)；没有可用镜像或需要干净安装时按[环境重建](#3-环境安装与重建)恢复。干净安装重新建 venv，不单独复制；完整导入时先检查保留环境。Windows SDK / Python 环境始终单独准备。
 3. 恢复 Windows 实际配置，并按新电脑修改路径、发行版名、解释器和嵌入命令；不是盲目替换为模板。
 4. 恢复三个 YAML，对照角色、source_id、运动参数与校准条件；必要时重新对真人校准，不能使用合成流校准值。
-5. 重建工作区，核对安装路径；恢复 USB 共享与网络访问范围。
+5. 核对工作区安装路径，必要时重新构建；恢复 USB 共享与网络访问范围。
 6. 先本地网页、再 Keyboard 单独机器人测试、再单 EEG、再双 EEG，最后验证停止、断流 / 恢复与网络故障。
-7. 写下恢复耗时、缺失资料、实际版本、验收结果；没有完成这些步骤的备份只能标为“已保存，未验证恢复”。
+7. 记录恢复使用的版本、配置、缺失依赖与运行检查结果，区分归档文件已保存和恢复流程已验证。
 
-以上是通用恢复顺序，下面给出整套 WSL 迁移的具体入口。命令仅供现场人员执行，本轮未在 Windows 电脑上导出 / 导入任何环境。
+以上是通用恢复顺序，下面给出整套 WSL 迁移的具体命令。
 
 ### 9.3 推荐迁移方式：导出与导入整套 WSL
 
@@ -801,7 +764,7 @@ git rev-parse HEAD
 
 **不能随 Linux 导出一起恢复的内容：** Windows 上的 g.tec Suite / API / licence、Windows Python / venv、VS Code、蓝牙配对、usbipd 工具与共享设置、Windows launcher 副本 / 本地 JSON、防火墙 / 端口转发、主机 `.wslconfig`，以及 `/mnt/c` 等挂载的 Windows 文件。分别按[第 3 节](#3-环境安装与重建)配置并受控备份；不认为 Linux tar 包含这些主机资料。
 
-#### 9.3.1 原电脑导出（现场人员）
+#### 9.3.1 原电脑导出
 
 先按[停止顺序](#41-正常启动与停止)停车、停服务并手动结束 Headband 桥；保存其他 WSL 任务。用 `wsl -l -v` 查**注册发行版名**，不是填“WSL2”或 Ubuntu 系统版本。准备一个有足够空间的备份目录，下面示例目录 `D:\BCI-transfer` 必须已存在；盘符、名称与日期按实际修改。
 
@@ -839,53 +802,12 @@ wsl -d "TelekineRob-BCI" -u "<原Linux用户名>" -- whoami
 
 确认新条目的 VERSION 为 2，Linux 用户、仓库路径和文件权限正确。导入发行版可能默认以 root 启动；根据实际 `/etc/wsl.conf` 保留已有内容，必要时设置 `[user]` 的 `default=<原Linux用户名>`，用户必须已存在；按[Microsoft 导入说明](https://learn.microsoft.com/en-us/windows/wsl/use-custom-distro#add-wsl-specific-components-like-a-default-user)重启该发行版后，用不带 `-u` 的 `wsl -d "TelekineRob-BCI" -- whoami` 验证默认用户。不要不加检查地用 root 启动 launcher，造成权限 / 路径差异。
 
-进入该发行版的实际仓库后，执行[第 2.1 节只读登记](#21-项目基线与交付电脑)与[第 3.4 节导入检查](#34-wsl-python-与前端环境)，检查 systemd、ROS 环境、`.venv`、Node / npm 及 install 指向。完整 Linux 镜像保持相同架构、路径和依赖时原 venv 可能继续可用，不必先重建；解释器 / 路径失效或本机库缺失时再按第 3 节恢复。Windows venv 则不能因此复用。必要时重新 colcon 构建，保留[第三方源码修改](#55-第三方源码与本项目修改)。
+进入该发行版的实际仓库后，执行[第 2.1 节环境检查](#21-环境基线与检查)与[第 3.4 节导入检查](#34-wsl-python-与前端环境)，检查 systemd、ROS 环境、`.venv`、Node / npm 及 install 指向。完整 Linux 镜像保持相同架构、路径和依赖时原 venv 可能继续可用，不必先重建；解释器 / 路径失效或本机库缺失时再按第 3 节恢复。Windows venv 则不能因此复用。必要时重新 colcon 构建，保留[第三方源码修改](#55-第三方源码与本项目修改)。
 
-#### 9.3.3 新电脑 Windows 独立配置与验收
+#### 9.3.3 新电脑 Windows 配置与运行检查
 
 1. 按[SDK 安装入口与使用条件](#37-官方资料与依赖来源)准备 g.tec 软件、API、驱动及各 Windows Python 环境；向 Lucas 核实授权迁移，不因已经导入 WSL 就认定 UnicornPy 已授权。
 2. 安装 VS Code、usbipd-win，配对 EEG，检查集成蓝牙及电源管理。原电脑的稳定性经验需要在新电脑复验；Thymio / Dongle 仍按既有配对和指定口流程处理。
 3. 重新部署 Windows launcher，备份并修改本地 JSON：`wsl.distro`、WSL 仓库路径、`sync.src_wsl_root`、Windows 同步目标、设备解释器、`open_cmd`，以及 attach / verify / 服务命令中所有嵌入的发行版名和路径。只改 `wsl.distro` 不足以迁移；当前模板多处写着 `Ubuntu`。
 4. 检查新电脑实际 USB BUSID；当前运行配置仍约定 `1-1`，先插指定口并重新插拔检查。若新电脑确实无法保持这个编号，由开发者统一验证 / 更新 attach、detach 与手册，不让操作者任意选另一个设备；首次共享依[排障步骤](GUIDE_DEBUG_cn.md#4-第-7-项怎么做检查并共享新的-thymio-dongle)。
-5. 重新核对网络、端口转发和防火墙允许范围，按[通用恢复步骤](#92-恢复步骤)从网页、Keyboard、单 EEG、混合双 EEG到停止 / 断流逐层验证；同型号双设备只有完成第 7.5 节开发后才另行验收。
-
-新电脑运行验证前不删除原电脑 / 原发行版，也不把“tar 导出成功”当成“系统迁移已完成”。原实习生无法访问现场，导出、安装、授权迁移和实际结果由 Lucas / 现场接手人员执行登记；本手册提供路线，不伪造已执行证明。
-
-## 10. 交付清单与接手验收
-
-### 10.1 交付资料
-
-- [ ] 源码访问权限、确认的运行 commit、未提交改动处理结果。
-- [ ] [交接索引](#交接索引)中的五类正式文档已审阅，语言版本与对应关系明确。旧安装 / 开发文档仅作参考，避免多份“正式安装指南”并行维护。
-- [ ] 第 2 节部署表已填写，包含 Windows 本地 JSON、WSL 路径与所有实际解释器。
-- [ ] SDK、驱动、授权恢复渠道、依赖版本与第三方来源 / 许可证资料可获取；两份 Hybrid API licence 的资料由 Lucas 提供，用户确认第一份已激活、第二份未激活。
-- [ ] Headband / Hybrid Black / Thymio / Dongle / 充电器齐全，指定 USB 口照片和配对关系明确。
-- [ ] 已确认的默认设备、角色、指标、速度、真机 / 仿真安排与 YAML 备份。
-- [ ] 必要数据、日志、备份位置及访问权限明确；敏感账号 / token 在受控渠道交接，不写进公开文档。
-- [ ] 操作者和接手开发者均能凭各自文档完成一轮演练，疑问已回写手册。
-
-### 10.2 现场验收记录
-
-每项记录实测结果、日期、执行人和证据位置；未执行写“未执行”，失败写原因与下一步，不因单元测试通过而勾选真机项。详细需求编号与场景见[技术档案验收](DOSSIER_TECHNIQUE_cn.md#42-目标电脑验收场景)。
-
-| 场景 | 应观察到的结果 | 状态 / 日期 / 执行人 / 证据 |
-|---|---|---|
-| 冷启动 | 正确 launcher 副本、WSL、同步及前后端可用 | 待执行 |
-| Headband | VS Code 正确解释器、手动 ▶ 运行、新鲜 LSL、Ctrl+C 后桥结束 | 待执行 |
-| Hybrid Black | Connect / Disconnect 管理桥，新鲜 LSL 和重连行为可观察 | 待执行 |
-| 新 Thymio Dongle | `1-1` 的 Not shared → Shared → Attached、`ttyACM0` 可见 | 待执行或注明已有共享基线 |
-| Keyboard 单独测试 | 单角色 Keyboard、另一 None、Thymio 输出可控，松手 / Stop 停车 | 待执行 |
-| 单 EEG | Speed / Steering 分别符合单角色运动语义 | 待执行 |
-| 双 EEG | 两设备 / 两角色、partial 话题及融合；缺一路处理正确 | 待执行 |
-| 校准 | 首帧后 30 秒、有效样本、正确文件写入，Stop / Start 后新值生效 | 待执行 |
-| 断流与恢复 | 记录真实停车延迟及恢复行为；确认 Running 时是否自动续动 | 待执行 |
-| 浏览器 / 网络异常 | 真机 Teleop / 控制异常下的停车行为经过实测，限制已告知 | 待执行 |
-| 停止与退出 | 控制、Hybrid、手动 Headband、网页服务的生命周期均确认，无意外残留 | 待执行 |
-| 更新与恢复 | JSON 未被同步覆盖、正确新版本生效、备份恢复后能再次使用 | 待执行 |
-| 用户 / 开发者独立演练 | 用户按手册使用和排障；开发者定位问题、小修改、测试与恢复 | 待执行 |
-
-### 10.3 尚不能标为完成的事项
-
-目前文档无法代填交付电脑实际配置、SDK / 系统版本、指定 USB 口照片、真实数据单位、完整停车 / 网络故障实测或备份恢复结果。原实习生已结束实习且无法访问设备，现场资料与验收由接手人员 / 现场使用者补齐；Hybrid API 授权信息向 Lucas 核实，不能要求原实习生在原电脑查询。同型号双设备仍是下一阶段开发任务，按[第 7.5 节](#75-首要开发任务同型号双-gtec-集成)另行开发与验收。
-
-文档入口与整理状态见开头的[交接索引](#交接索引)。中文版确认后再统一同步法语版；实际交付记录在本节填写。文档齐全、单元测试通过与项目完全验收是三件不同的事。
+5. 重新核对网络、端口转发和防火墙允许范围，按[通用恢复步骤](#92-恢复步骤)从网页、Keyboard、单 EEG、混合双 EEG到停止 / 断流逐层验证；同型号双设备须先完成[第 7.5 节开发与验证](#75-首要开发任务同型号双-gtec-集成)，不能直接作为当前恢复基线。

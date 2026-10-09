@@ -1,5 +1,7 @@
 # GLOSSAIRE — 术语表
 
+> 已归档：保留旧指南、设计或验证历史，不作为当前操作、开发或需求依据。现行说明见[中文 README](../../README_cn.md)、[技术档案](../DOSSIER_TECHNIQUE_cn.md)与[开发手册](../GUIDE_DEVELOPPEUR_cn.md)。
+
 > 全套正式文档(MANUEL_OPERATEUR / GUIDE_INSTALLATION / PROTOCOLE_EXPERIMENTAL / ARCHITECTURE_TECHNIQUE / GUIDE_DEVELOPPEUR / DONNEES_EXPERIMENTALES)的统一「中文术语 ↔ 技术标识符」映射。正文出现任何术语必须与下表一致;技术标识符一律原样保留(大小写、下划线、路径后缀)。
 
 | 中文术语 | 技术标识符 | 一句话说明 |

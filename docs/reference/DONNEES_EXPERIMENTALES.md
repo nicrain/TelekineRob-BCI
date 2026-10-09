@@ -1,7 +1,8 @@
 # DONNEES_EXPERIMENTALES
 
-> 实验数据 — 中文源文(将翻译为法语)。规矩:中文叙述只翻技术标识符之外的部分;内部三方注解(CTO/programmer/reviewer)禁止入正文。术语与 docs/GLOSSAIRE.md 保持一致。
-> 列名一律以 `web_gui/backend/app/experiment.py`(E1)与 `experiment_export.py`(E5)的列常量为准。
+> 专题参考资料：仅说明开发验证的数据格式与历史流程，不属于日常操作手册；实际字段以代码为准。项目入口见[中文 README](../../README_cn.md)，系统边界见[技术档案](../DOSSIER_TECHNIQUE_cn.md)。
+
+> 列名与保存行为以[数据收集代码](../../web_gui/backend/app/experiment.py)及[导出代码](../../web_gui/backend/app/experiment_export.py)为准，以下保留字段说明与旧验证流程，不保证旧研究假设和分析表述适用于当前使用场景。
 
 > 当前状态：历史 `experiment_data/` 已按项目负责人要求从当前工作区移除，整个目录已加入 `.gitignore`。本文保留数据格式和旧验证流程供开发参考，不表示仓库仍附带旧 session / archive 数据；网页第 4 部分的收集功能尚未禁用或删除。
 
@@ -68,6 +69,6 @@
 ## 6. 分析与可复现
 
 - **E5 确定性**:纯 stdlib、同输入同输出,`python -m app.experiment_export --out <dir>` 或面板 **Export analysis** 均可重跑。
-- **可重跑脚本**:`thymio_control/scripts/verify_blink_clamp.py`(回放 P47 上冲基线钳制验证)等,配合 `experiment_data/archive/` 使用。
+- **旧回放脚本**:`thymio_control/scripts/verify_blink_clamp.py`曾配合 `experiment_data/archive/` 验证眨眼参考下限；所需归档数据已移除，当前不是可直接运行的回放功能。
 - **latency**:每帧 `latency_ms` 已记;汇总取各状态均值(`mean_latency_attention` / `mean_latency_rest`)。
 - **分析注意**:按 `run` 隔离,不跨 run 混算;无输出帧的试次跳过而非判失败;rest 自然眨眼不当作误触发。

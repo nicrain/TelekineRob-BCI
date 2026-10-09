@@ -2,7 +2,7 @@
 
 `TelekineRob-BCI` 工作区的 Web 界面 + Python 后端。
 
-本文是模块专项参考，面向开发者。[返回中文项目总览](../README_cn.md)；完整安装、调试与维护见[中文版开发者交接手册](../docs/GUIDE_DEVELOPPEUR_cn.md)，日常使用见[中文操作手册](../docs/MANUEL_OPERATEUR_cn.md)。下列命令不代表真机验收通过。
+本文是模块专项参考，面向开发者。[返回中文项目总览](../README_cn.md)；完整安装、调试与维护见[中文版开发手册](../docs/GUIDE_DEVELOPPEUR_cn.md)，日常使用见[中文操作手册](../docs/MANUEL_OPERATEUR_cn.md)。下列命令不代表真机验收通过。
 
 ## 目标
 
@@ -94,7 +94,7 @@ frontend ←WebSocket→ backend ←rclpy→ ROS2 topics
 
 ## 开发者数据记录（研究验证）
 
-`ExperimentPanel.jsx` 用于开发者收集带真值标签的数据以验证系统，不属于非技术用户的正常使用流程。字段参考研究资料 `docs/EXPERIMENT_PLAN.md`；实际列名以代码为准。每个 session写入 `<EXPERIMENT_DATA_DIR>/<session_id>/`：
+`ExperimentPanel.jsx` 用于开发者收集带真值标签的数据以验证系统，不属于非技术用户的正常使用流程。字段说明见[数据格式专题参考](../docs/reference/DONNEES_EXPERIMENTALES.md)，实际列名以代码为准。每个 session写入 `<EXPERIMENT_DATA_DIR>/<session_id>/`：
 
 - `session.json` — 手填 `meta`(§2 #7:subject/role/session/electrode/date)+ **实际运行 `system` 配置**(metric / device_mode / roles / devices)——由前端从其实时 01 状态提供、后端校验(P20/P21:从不手填;has_hybrid 覆盖单设备 hybrid)+ 打乱协议(可复现)
 - `labels.csv` — **E4 标签流**:每试次在 prompt 入口写一行,`wall_ts` 与样本 `row_ts` 同一墙上时钟(EEG 对齐)
@@ -105,7 +105,7 @@ frontend ←WebSocket→ backend ←rclpy→ ROS2 topics
 
 ## 开发测试
 
-从 `web_gui/backend` 使用仓库根虚拟环境执行 `../../.venv/bin/python -m pytest app -v`。仓库根直接 `pytest` 默认不发现该目录，完整套件入口见[开发者交接手册](../docs/GUIDE_DEVELOPPEUR_cn.md#71-现有测试入口)。
+从 `web_gui/backend` 使用仓库根虚拟环境执行 `../../.venv/bin/python -m pytest app -v`。仓库根直接 `pytest` 默认不发现该目录，完整套件入口见[开发手册](../docs/GUIDE_DEVELOPPEUR_cn.md#71-现有测试入口)。
 
 ## 进程生命周期
 

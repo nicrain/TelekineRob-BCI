@@ -1,7 +1,9 @@
 # GUIDE_INSTALLATION
 
-> 旧安装指南（中文版，保留作参考）。安装与交接的统一入口已整合到[中文版开发者交接手册](GUIDE_DEVELOPPEUR_cn.md#3-环境安装与重建)，后续以该手册为准。本文件尚未在全新 Windows + WSL 电脑上完整复现，不作为新的正式部署入口。
-> 日常使用见[用户操作手册（中文）](MANUEL_OPERATEUR_cn.md)，常见问题见[排障手册（中文）](GUIDE_DEBUG_cn.md)。Headband 仍需在 VS Code 手动运行 / 中断脚本，不是完全无终端的操作流程。
+> 已归档：保留旧指南、设计或验证历史，不作为当前操作、开发或需求依据。现行说明见[中文 README](../../README_cn.md)、[技术档案](../DOSSIER_TECHNIQUE_cn.md)与[开发手册](../GUIDE_DEVELOPPEUR_cn.md)。
+
+> 旧安装指南（中文版，保留作参考）。完整安装说明已整合到[中文版开发手册](../GUIDE_DEVELOPPEUR_cn.md#3-环境安装与重建)，后续以该手册为准。本文件尚未在全新 Windows + WSL 电脑上完整复现，不作为新的正式部署入口。
+> 日常使用见[用户操作手册（中文）](../MANUEL_OPERATEUR_cn.md)，常见问题见[排障手册（中文）](../GUIDE_DEBUG_cn.md)。Headband 仍需在 VS Code 手动运行 / 中断脚本，不是完全无终端的操作流程。
 
 ## 1. 概览与前置要求
 
@@ -45,8 +47,8 @@ WSL2 / Ubuntu 24.04:
    - `devices.thymio.attach_cmd` / `detach_cmd`：当前默认 BUSID 为 `1-1`，attach 的发行版名也须与 `wsl.distro` 一致。
    - `wsl.distro`(发行版名)、`wsl.repo_path`(WSL 内仓库路径)
    - `sync.dst_root`(同步目标目录)、`web.backend_cmd` / `frontend_cmd`(可调)
-   - 字段含义见[launcher 的首次部署说明](../windows_launcher/README.md#首次部署部署者在真机做一次)。Windows 的 `devices.*.python_cmd` 必须能运行相应桥 / LSL 探针；Headband 在 VS Code 选择相应环境。
-6. **安装并检查 usbipd-win**：这是 Windows 上额外安装的工具，不是 WSL / Windows 内置命令。当前新 Dongle 的共享及 `1-1` 检查见[排障手册第 4 节](GUIDE_DEBUG_cn.md#4-第-7-项怎么做检查并共享新的-thymio-dongle)。现有设备通常已共享，System Control 的 Thymio Connect负责 attach到 WSL。
+   - 字段含义见[launcher 的首次部署说明](../../windows_launcher/README.md#首次部署部署者在真机做一次)。Windows 的 `devices.*.python_cmd` 必须能运行相应桥 / LSL 探针；Headband 在 VS Code 选择相应环境。
+6. **安装并检查 usbipd-win**：这是 Windows 上额外安装的工具，不是 WSL / Windows 内置命令。当前新 Dongle 的共享及 `1-1` 检查见[排障手册第 4 节](../GUIDE_DEBUG_cn.md#4-第-7-项怎么做检查并共享新的-thymio-dongle)。现有设备通常已共享，System Control 的 Thymio Connect负责 attach到 WSL。
 
 ## 3. WSL2 环境
 
@@ -143,7 +145,7 @@ python -m app.main
 - [ ] 双击 `launcher.bat` → 总控页 **System Control** 打开,设备按钮全灰、不可点
 - [ ] 点 **Start System** → 状态变 **Running**,web GUI 出现在主区
 - [ ] 设备桥出 LSL 流:Windows 起桥(Headband 在 VS Code 里 Run;Hybrid Black 由 launcher spawn),侧边栏对应设备变 **Connected**(绿 = 流有数据)
-- [ ] eeg 节点连上：按[操作手册](MANUEL_OPERATEUR_cn.md#3-连接设备与校准)选择设备、角色和输出；校准或网页顶部 Start 后，**03 — Real-time Signals** 有数据。仅在不用网页控制的开发调试中，才手动运行 ROS launch。
+- [ ] eeg 节点连上：按[操作手册](../MANUEL_OPERATEUR_cn.md#3-连接设备与校准)选择设备、角色和输出；校准或网页顶部 Start 后，**03 — Real-time Signals** 有数据。仅在不用网页控制的开发调试中，才手动运行 ROS launch。
 - [ ] 校准可跑:点 **Calibrate** → 30 秒倒计时 → p5/p50 写入参数文件
 - [ ] Thymio 响应:侧边栏 Connect Thymio(绿 = ttyACM0),遥控/实验指令让小车动
 - [ ] 导出可跑:实验后 **Export analysis** → `master_trials.csv` + `condition_summary.csv`

@@ -3,7 +3,7 @@
 Pure module (stdlib only) so it is unit-testable on any machine — the
 launcher runs on Windows but is developed on macOS.
 
-Design (§5 of docs/O2_LAUNCHER.md): the operator is non-IT and the
+Historical design (§5 of docs/archived/O2_LAUNCHER.md): the operator is non-IT and the
 programmer cannot see the real Windows/WSL2 environment, so every
 environment-specific value lives in ``config.json`` as a placeholder /
 sensible default.  Strings may reference other config values with

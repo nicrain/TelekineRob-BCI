@@ -1,7 +1,7 @@
 """Experiment mode (P16): per-trial ground-truth-labelled logging (E1/E4)
 + protocol-driven trial state machine + prompt/rest UI state (E3).
 
-Schema contract: docs/EXPERIMENT_PLAN.md §2 — every session writes into
+Data-format reference: docs/reference/DONNEES_EXPERIMENTALES.md — every session writes into
 ``<data_dir>/<session_id>/``:
 
     session.json          # metadata + shuffled protocol (reproducibility)
