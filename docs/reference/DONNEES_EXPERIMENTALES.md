@@ -1,6 +1,6 @@
 # DONNEES_EXPERIMENTALES
 
-> 专题参考资料：仅说明开发验证的数据格式与历史流程，不属于日常操作手册；实际字段以代码为准。项目入口见[中文 README](../../README_cn.md)，系统边界见[技术档案](../DOSSIER_TECHNIQUE_cn.md)。
+> 专题参考资料：仅说明开发验证的数据格式与历史流程，不属于日常操作手册；实际字段以代码为准。项目入口见[中文 README](../zh/README_cn.md)，系统边界见[技术档案](../zh/DOSSIER_TECHNIQUE_cn.md)。
 
 > 列名与保存行为以[数据收集代码](../../web_gui/backend/app/experiment.py)及[导出代码](../../web_gui/backend/app/experiment_export.py)为准，以下保留字段说明与旧验证流程，不保证旧研究假设和分析表述适用于当前使用场景。
 

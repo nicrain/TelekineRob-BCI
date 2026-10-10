@@ -1,6 +1,6 @@
 # TelekineRob-BCI 技术档案（中文版）
 
-[返回中文项目总览](../README_cn.md) · [法语版](DOSSIER_TECHNIQUE.md)
+[返回中文项目总览](README_cn.md) · [法语版](../DOSSIER_TECHNIQUE.md)
 
 产品说明 · 技术需求 · 系统设计
 
@@ -230,7 +230,7 @@ WSL / Ubuntu
   前端通过Vite代理访问/api与/ws，不需直接暴露后端8010
 ```
 
-图中的端口、发行版、路径和BUSID是仓库配置基线，可由机器本地配置改变。当前配置详见 [windows_launcher/config.json](../windows_launcher/config.json)。
+图中的端口、发行版、路径和BUSID是仓库配置基线，可由机器本地配置改变。当前配置详见 [windows_launcher/config.json](../../windows_launcher/config.json)。
 
 单一WSL仓库作为launcher与桥代码的同步来源，是为了避免维护两套代码；不是自动获取远程更新。Windows机器配置保留在本地，配置边界见[开发手册](GUIDE_DEVELOPPEUR_cn.md#22-路径与配置模板)。
 
@@ -238,18 +238,18 @@ WSL / Ubuntu
 
 | 模块 | 职责与入口 | 设计理由 / 边界 |
 |---|---|---|
-| Windows总控 | [launcher_server.py](../windows_launcher/launcher_server.py) | 浏览器不能直接执行wsl、usbipd、Python；本地控制服务负责执行与状态管理 |
-| Headband桥 | [gpype_lsl_bridge.py](../gtec_bridge/gpype_lsl_bridge.py) | SDK运行在Windows；当前由IDE启动，重建数据管线以恢复部分断流 |
-| Hybrid桥 | [unicornpy_lsl_bridge.py](../gtec_bridge/unicornpy_lsl_bridge.py) | 用UnicornPy采集并发布LSL；launcher托管进程，采集异常后重连 |
-| 数据适配器 | [lsl_raw.py](../thymio_control/thymio_control/adapters/lsl_raw.py) | 统一read_frame接口，读取StreamInfo；不能据此宣称支持所有LSL设备 |
-| 信号处理 | [band_power.py](../thymio_control/thymio_control/processors/band_power.py)、[enrich.py](../thymio_control/thymio_control/processors/enrich.py) | 流式PSD、单位转换和特征计算与ROS解耦，便于测试 |
-| 控制策略 | [pipeline.py](../thymio_control/thymio_control/pipeline.py)、policies | 用注册表选择Alpha / TBR / EI，保留各路校准及平滑状态 |
-| EEG节点 | [eeg_control_node.py](../thymio_control/scripts/eeg_control_node.py) | 组合数据、校准、策略、眨眼、速度映射、分析发布和看门狗 |
-| 双路融合 | [cmd_vel_fuser.py](../thymio_control/scripts/cmd_vel_fuser.py) | 避免两节点争写最终速度；按角色融合，任一路陈旧则零命令 |
-| ROS编排 | [experiment_core.launch.py](../thymio_control/launch/experiment_core.launch.py) | 统一真机 / 仿真拓扑，第二节点重命名，使用角色后缀topics |
-| 后端 | [main.py](../web_gui/backend/app/main.py)、[config_store.py](../web_gui/backend/app/config_store.py)、[command_runner.py](../web_gui/backend/app/command_runner.py) | 分离API、配置和进程操作；实际命令不由前端直接执行 |
-| ROS网页桥 | [signal_subscriber.py](../web_gui/backend/app/signal_subscriber.py) | 在一个rclpy线程内订阅分析、处理遥控队列，避免多执行器争用 |
-| 前端 | [App.jsx](../web_gui/frontend/src/App.jsx)、[api.js](../web_gui/frontend/src/api.js) | 展示按角色分路数据、逐路校准和控制；不是信号计算核心 |
+| Windows总控 | [launcher_server.py](../../windows_launcher/launcher_server.py) | 浏览器不能直接执行wsl、usbipd、Python；本地控制服务负责执行与状态管理 |
+| Headband桥 | [gpype_lsl_bridge.py](../../gtec_bridge/gpype_lsl_bridge.py) | SDK运行在Windows；当前由IDE启动，重建数据管线以恢复部分断流 |
+| Hybrid桥 | [unicornpy_lsl_bridge.py](../../gtec_bridge/unicornpy_lsl_bridge.py) | 用UnicornPy采集并发布LSL；launcher托管进程，采集异常后重连 |
+| 数据适配器 | [lsl_raw.py](../../thymio_control/thymio_control/adapters/lsl_raw.py) | 统一read_frame接口，读取StreamInfo；不能据此宣称支持所有LSL设备 |
+| 信号处理 | [band_power.py](../../thymio_control/thymio_control/processors/band_power.py)、[enrich.py](../../thymio_control/thymio_control/processors/enrich.py) | 流式PSD、单位转换和特征计算与ROS解耦，便于测试 |
+| 控制策略 | [pipeline.py](../../thymio_control/thymio_control/pipeline.py)、policies | 用注册表选择Alpha / TBR / EI，保留各路校准及平滑状态 |
+| EEG节点 | [eeg_control_node.py](../../thymio_control/scripts/eeg_control_node.py) | 组合数据、校准、策略、眨眼、速度映射、分析发布和看门狗 |
+| 双路融合 | [cmd_vel_fuser.py](../../thymio_control/scripts/cmd_vel_fuser.py) | 避免两节点争写最终速度；按角色融合，任一路陈旧则零命令 |
+| ROS编排 | [experiment_core.launch.py](../../thymio_control/launch/experiment_core.launch.py) | 统一真机 / 仿真拓扑，第二节点重命名，使用角色后缀topics |
+| 后端 | [main.py](../../web_gui/backend/app/main.py)、[config_store.py](../../web_gui/backend/app/config_store.py)、[command_runner.py](../../web_gui/backend/app/command_runner.py) | 分离API、配置和进程操作；实际命令不由前端直接执行 |
+| ROS网页桥 | [signal_subscriber.py](../../web_gui/backend/app/signal_subscriber.py) | 在一个rclpy线程内订阅分析、处理遥控队列，避免多执行器争用 |
+| 前端 | [App.jsx](../../web_gui/frontend/src/App.jsx)、[api.js](../../web_gui/frontend/src/api.js) | 展示按角色分路数据、逐路校准和控制；不是信号计算核心 |
 
 策略和适配器分离便于单测与扩展；策略注册表、配置模型和界面选项共同约束可用策略，扩展入口见[开发手册](GUIDE_DEVELOPPEUR_cn.md#73-扩展时不能漏掉的层)。
 
@@ -257,7 +257,7 @@ WSL / Ubuntu
 
 ### 3.3 启动与状态设计
 
-System Control的主要状态为Stopped、Starting、Running、Stopping、Error；设备独立为Disconnected、Connecting、Connected、Disconnecting、Error。状态规则见 [state.py](../windows_launcher/state.py)。
+System Control的主要状态为Stopped、Starting、Running、Stopping、Error；设备独立为Disconnected、Connecting、Connected、Disconnecting、Error。状态规则见 [state.py](../../windows_launcher/state.py)。
 
 Start System主链路：
 
@@ -333,7 +333,7 @@ Alpha使用平均alpha频带功率
 
 适配器先返回含频带功率的 `EegFrame(ts, source, metrics)`，EEG节点再调用 `enrich_features()`得到上述派生特征。`source="lsl_raw"`表示适配器类型，不是设备source_id或物理序列号；不能靠该字段区分两台设备。当前适配器的ts是产生分析帧时的墙上时钟，不保留采集端每个原始LSL样本的时间戳，不能据此承诺原始采集到电机的精确端到端延迟。
 
-开发合成流也不是两种真实处理链的等价替代：[dummy_dual_streams.py](../thymio_control/lsl_test/dummy_dual_streams.py)中的Hybrid流名为 `hybrid_black_EEG`，不会触发上面按名称启用的Hybrid补滤波。相关数值测试与完整仿真的边界见[验证口径](#41-验证口径)。
+开发合成流也不是两种真实处理链的等价替代：[dummy_dual_streams.py](../../thymio_control/lsl_test/dummy_dual_streams.py)中的Hybrid流名为 `hybrid_black_EEG`，不会触发上面按名称启用的Hybrid补滤波。相关数值测试与完整仿真的边界见[验证口径](#41-验证口径)。
 
 ### 3.6 策略与运动映射设计
 
@@ -596,9 +596,9 @@ API名称中的system并不意味着它与Windows的start-system是一套作用�
 | RF-01～04、RF-14、RF-16 | windows_launcher的config、server、state、commands、lsl_probe | windows_launcher/tests；目标Windows验收 |
 | RF-05、RF-08、RF-15 | models、config_store、App、ROS launch | 后端models / config_store测试；双路真机 |
 | RF-06、RF-10 | policies、enrich、blink_metric、EEG节点 | test_policy、test_blink_metric、test_eeg_control_node；真实EEG验证 |
-| RF-07 | calibration、EEG节点、前端useCalibration | [test_calibration.py](../thymio_control/test/test_calibration.py)；网页 / 节点校准完整流程 |
-| RF-09、RF-11、RN-01 | fuser、watchdog、launch | [test_cmd_vel_fuser.py](../thymio_control/test/test_cmd_vel_fuser.py)、[test_watchdog.py](../thymio_control/test/test_watchdog.py)；停车及故障恢复实测 |
-| 信号处理与开发合成流 | RawLslAdapter、StreamingPreFilter、dummy_dual_streams | [预滤波测试](../thymio_control/test/test_pre_filter.py)、[合成信号测试](../thymio_control/lsl_test/test_dummy_dual_streams.py)；LSL传输 / ROS / 仿真另行集成验证 |
+| RF-07 | calibration、EEG节点、前端useCalibration | [test_calibration.py](../../thymio_control/test/test_calibration.py)；网页 / 节点校准完整流程 |
+| RF-09、RF-11、RN-01 | fuser、watchdog、launch | [test_cmd_vel_fuser.py](../../thymio_control/test/test_cmd_vel_fuser.py)、[test_watchdog.py](../../thymio_control/test/test_watchdog.py)；停车及故障恢复实测 |
+| 信号处理与开发合成流 | RawLslAdapter、StreamingPreFilter、dummy_dual_streams | [预滤波测试](../../thymio_control/test/test_pre_filter.py)、[合成信号测试](../../thymio_control/lsl_test/test_dummy_dual_streams.py)；LSL传输 / ROS / 仿真另行集成验证 |
 | RF-12、RF-13 | signal_subscriber、main、App | 后端subscriber测试、launcher的UI相关测试；网页和机器人验证 |
 | RN-05、RN-07、RN-08 | 依赖声明、Vite代理、后端授权、同步与实际部署 | 目标环境重建、网络权限与恢复演练 |
 

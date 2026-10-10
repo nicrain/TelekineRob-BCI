@@ -1,6 +1,6 @@
 # TelekineRob-BCI — Guide de dépannage
 
-[Retour à la présentation du projet](../README.md) · [Version chinoise](GUIDE_DEBUG_cn.md)
+[Retour à la présentation du projet](../README.md)
 
 > Liste simple d’opérations et de dépannage. Vérifier d’abord l’ordinateur et les appareils, puis utiliser System Control et l’interface de contrôle. System Control est la page ouverte par `launcher.bat` ; elle gère le démarrage, les connexions et le redémarrage des services web.
 > Pour un ordinateur déjà installé. Les boutons restent en anglais. Le dépannage courant ne nécessite ni installation, ni modification du programme, ni création d’un nouvel environnement Python.
@@ -206,3 +206,7 @@ Garder le contrôle arrêté et conserver ces quelques informations pour reprodu
 - Pour un nouveau dongle, état de `1-1` dans `usbipd list` ou erreur de commande.
 
 Ne pas modifier le code, supprimer des fichiers, recréer le venv ou changer manuellement de numéro USB pour faire disparaître un message. Si le système n’est plus utilisé, suivre l’[arrêt complet](MANUEL_OPERATEUR.md#7-arrêter-le-système), sans seulement fermer le navigateur.
+
+---
+
+[Version chinoise](zh/GUIDE_DEBUG_cn.md)

@@ -1,8 +1,8 @@
 # ARCHITECTURE_TECHNIQUE
 
-> 已归档：保留旧指南、设计或验证历史，不作为当前操作、开发或需求依据。现行说明见[中文 README](../../README_cn.md)、[技术档案](../DOSSIER_TECHNIQUE_cn.md)与[开发手册](../GUIDE_DEVELOPPEUR_cn.md)。
+> 已归档：保留旧指南、设计或验证历史，不作为当前操作、开发或需求依据。现行说明见[中文 README](../zh/README_cn.md)、[技术档案](../zh/DOSSIER_TECHNIQUE_cn.md)与[开发手册](../zh/GUIDE_DEVELOPPEUR_cn.md)。
 
-> 旧技术架构（中文版）。现行架构、算法与接口说明已整合到[技术档案](../DOSSIER_TECHNIQUE_cn.md#3-系统设计)，本文件仅作历史参考。
+> 旧技术架构（中文版）。现行架构、算法与接口说明已整合到[技术档案](../zh/DOSSIER_TECHNIQUE_cn.md#3-系统设计)，本文件仅作历史参考。
 
 ## 1. 全栈数据流
 

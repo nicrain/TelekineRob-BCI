@@ -1,9 +1,9 @@
 # O2 — Windows 总控台（非 IT 操作者）
 
-> 已归档：保留旧指南、设计或验证历史，不作为当前操作、开发或需求依据。现行说明见[中文 README](../../README_cn.md)、[技术档案](../DOSSIER_TECHNIQUE_cn.md)与[开发手册](../GUIDE_DEVELOPPEUR_cn.md)。
+> 已归档：保留旧指南、设计或验证历史，不作为当前操作、开发或需求依据。现行说明见[中文 README](../zh/README_cn.md)、[技术档案](../zh/DOSSIER_TECHNIQUE_cn.md)与[开发手册](../zh/GUIDE_DEVELOPPEUR_cn.md)。
 
 > **历史设计及迭代记录**：初稿日期2026-08-07，随后已实现并多次修改。“O2”是旧内部任务编号，不是用户界面的名称；现行名称为System Control。
-> 下文保留初版目标、流程和批次历史，其中“全程不见终端”等目标不代表当前实现。2026-10-08 核对后的部署说明见[launcher README](../../windows_launcher/README.md)，实际使用见[中文操作手册](../MANUEL_OPERATEUR_cn.md)。历史验收记录不代替交付电脑的新验收。
+> 下文保留初版目标、流程和批次历史，其中“全程不见终端”等目标不代表当前实现。2026-10-08 核对后的部署说明见[launcher README](../../windows_launcher/README.md)，实际使用见[中文操作手册](../zh/MANUEL_OPERATEUR_cn.md)。历史验收记录不代替交付电脑的新验收。
 
 ---
 

@@ -2,7 +2,7 @@
 
 本文覆盖 `thymio_control/` 包的架构和数据流，帮助你理解系统如何运作。
 
-> 本文是模块导读；完整开发、测试和排障入口见[开发手册](../../docs/GUIDE_DEVELOPPEUR_cn.md)，算法与接口见[技术档案](../../docs/DOSSIER_TECHNIQUE_cn.md)。
+> 本文是模块导读；完整开发、测试和排障入口见[开发手册](../../docs/zh/GUIDE_DEVELOPPEUR_cn.md)，算法与接口见[技术档案](../../docs/zh/DOSSIER_TECHNIQUE_cn.md)。
 
 ---
 
@@ -76,7 +76,7 @@ EEG 主控制节点。`_tick` 流程：
 5. 每 tick 更新圆圈 LED（显示转向方向）
 6. 看门狗：超时发布零速 Twist
 
-**Blink 检测（metric-only）**：`MetricBlinkDetector` 相对短期滚动中位基线检测瞬态上冲（TBR/Alpha）或下降（EI），连续 `blink_confirm_frames` 帧确认后切换方向，再进入冷却。上冲基线的参考下限来自节点创建时读取的 `calib_offset + calib_scale`，不统一等于p50；准确规则见[技术档案眨眼检测说明](../../docs/DOSSIER_TECHNIQUE_cn.md#36-策略与运动映射设计)。
+**Blink 检测（metric-only）**：`MetricBlinkDetector` 相对短期滚动中位基线检测瞬态上冲（TBR/Alpha）或下降（EI），连续 `blink_confirm_frames` 帧确认后切换方向，再进入冷却。上冲基线的参考下限来自节点创建时读取的 `calib_offset + calib_scale`，不统一等于p50；准确规则见[技术档案眨眼检测说明](../../docs/zh/DOSSIER_TECHNIQUE_cn.md#36-策略与运动映射设计)。
 
 **Role 映射**：`speed` → `linear.x = max_forward_speed × speed_intent`、`angular.z = 0`；`steering` → `linear.x = 0`、`angular.z = -steer_direction × turn_angular_speed × |steer_intent-0.5|`。
 
@@ -143,7 +143,7 @@ pytest thymio_control/test/test_*.py -v
 
 ## 7. 易踩坑
 
-1. **LSL 连接挂起（无波形 / 校准卡 Preparing）**：先检查 Windows 桥的数据和 source_id；跨系统网络检查见[开发手册网络说明](../../docs/GUIDE_DEVELOPPEUR_cn.md#36-网络与访问范围)，不将某台电脑的 IPv6 处理办法作为通用修复。
+1. **LSL 连接挂起（无波形 / 校准卡 Preparing）**：先检查 Windows 桥的数据和 source_id；跨系统网络检查见[开发手册网络说明](../../docs/zh/GUIDE_DEVELOPPEUR_cn.md#36-网络与访问范围)，不将某台电脑的 IPv6 处理办法作为通用修复。
 2. `use_teleop=true` 时 EEG 节点不启动 → 设 `use_teleop:=false`
 3. 校准后值未更新 → 先停止控制，检查 `CALIB:` 日志和对应参数文件；不需要为校准结果重新编译，不要删除源码目录。
-4. 网页配置未更新 → 查看 `/api/config` 的 `source_files`，确认运行的仓库、参数文件和校准写回路径，见[开发手册配置检查](../../docs/GUIDE_DEVELOPPEUR_cn.md#63-wsl网页与-ros-检查)。
+4. 网页配置未更新 → 查看 `/api/config` 的 `source_files`，确认运行的仓库、参数文件和校准写回路径，见[开发手册配置检查](../../docs/zh/GUIDE_DEVELOPPEUR_cn.md#63-wsl网页与-ros-检查)。

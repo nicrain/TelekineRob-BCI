@@ -2,7 +2,7 @@
 
 `TelekineRob-BCI` 工作区的 Web 界面 + Python 后端。
 
-本文是模块专项参考，面向开发者。[返回中文项目总览](../README_cn.md)；完整安装、调试与维护见[中文版开发手册](../docs/GUIDE_DEVELOPPEUR_cn.md)，日常使用见[中文操作手册](../docs/MANUEL_OPERATEUR_cn.md)。下列命令不代表真机验收通过。
+本文是模块专项参考，面向开发者。[返回中文项目总览](../docs/zh/README_cn.md)；完整安装、调试与维护见[中文版开发手册](../docs/zh/GUIDE_DEVELOPPEUR_cn.md)，日常使用见[中文操作手册](../docs/zh/MANUEL_OPERATEUR_cn.md)。下列命令不代表真机验收通过。
 
 ## 目标
 
@@ -44,7 +44,7 @@ npm run dev
 
 ## 安全与环境变量
 
-真实命令默认开启。后端默认回环绑定、部分接口支持 origin / token 检查，但前端代理仍可能将后端接口暴露给其他客户端，不能当成完整权限体系。`WEB_GUI_ALLOW_REAL_COMMANDS=false` 只限制进程启动 / 清理，不阻断直接 Teleop 发布；无硬件开发仍需隔离真机输出。完整边界见[技术档案](../docs/DOSSIER_TECHNIQUE_cn.md#312-网络命令与数据边界)。
+真实命令默认开启。后端默认回环绑定、部分接口支持 origin / token 检查，但前端代理仍可能将后端接口暴露给其他客户端，不能当成完整权限体系。`WEB_GUI_ALLOW_REAL_COMMANDS=false` 只限制进程启动 / 清理，不阻断直接 Teleop 发布；无硬件开发仍需隔离真机输出。完整边界见[技术档案](../docs/zh/DOSSIER_TECHNIQUE_cn.md#312-网络命令与数据边界)。
 
 | 变量 | 默认 | 说明 |
 |---|---|---|
@@ -105,7 +105,7 @@ frontend ←WebSocket→ backend ←rclpy→ ROS2 topics
 
 ## 开发测试
 
-从 `web_gui/backend` 使用仓库根虚拟环境执行 `../../.venv/bin/python -m pytest app -v`。仓库根直接 `pytest` 默认不发现该目录，完整套件入口见[开发手册](../docs/GUIDE_DEVELOPPEUR_cn.md#71-现有测试入口)。
+从 `web_gui/backend` 使用仓库根虚拟环境执行 `../../.venv/bin/python -m pytest app -v`。仓库根直接 `pytest` 默认不发现该目录，完整套件入口见[开发手册](../docs/zh/GUIDE_DEVELOPPEUR_cn.md#71-现有测试入口)。
 
 ## 进程生命周期
 

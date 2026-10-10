@@ -1,6 +1,6 @@
 # TelekineRob-BCI — Guide développeur
 
-[Retour à la présentation du projet](../README.md) · [Version chinoise](GUIDE_DEVELOPPEUR_cn.md)
+[Retour à la présentation du projet](../README.md)
 
 > Pour les développeurs du projet : installation, localisation du code, diagnostic, modifications et tests, mises à jour, sauvegarde et restauration.
 
@@ -813,3 +813,7 @@ Depuis le dépôt réel importé, effectuer les [contrôles 2.1](#21-référence
 3. Redéployer launcher Windows, sauvegarder / adapter JSON : `wsl.distro`, chemin du dépôt, `sync.src_wsl_root`, cible Windows, Python, `open_cmd`, et toutes les distributions / chemins inclus dans attach, verify et services. `wsl.distro` seul ne suffit pas ; le modèle contient `Ubuntu` en plusieurs endroits.
 4. Vérifier BUSID réel. La convention actuelle reste `1-1` : brancher au port prévu, rebrancher et vérifier. Si ce numéro ne peut être conservé, le développeur vérifie / actualise ensemble attach, detach et manuels ; l’opérateur ne choisit pas un autre périphérique au hasard. Premier partage : [dépannage](GUIDE_DEBUG.md#4-vérification-7--contrôler-et-partager-un-nouveau-dongle-thymio).
 5. Vérifier réseau, redirection, pare-feu et suivre la [restauration générale](#92-restauration) : web, Keyboard, un EEG, combinaison mixte, arrêt / perte de données. Deux appareils du même modèle exigent d’abord le [développement et la validation 7.5](#75-priorité--intégrer-deux-gtec-du-même-modèle) et ne sont pas la base actuelle de restauration.
+
+---
+
+[Version chinoise](zh/GUIDE_DEVELOPPEUR_cn.md)

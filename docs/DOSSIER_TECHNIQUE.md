@@ -1,6 +1,6 @@
 # TelekineRob-BCI — Dossier technique
 
-[Retour à la présentation du projet](../README.md) · [Version chinoise](DOSSIER_TECHNIQUE_cn.md)
+[Retour à la présentation du projet](../README.md)
 
 Présentation du produit · Exigences techniques · Conception du système
 
@@ -623,3 +623,7 @@ Les tests réellement exécutés sont uniquement ceux de la [section 4.1](#41-p�
 | Pas de cycle uniforme données / logs | Fuite, suppression ou éléments manquants à la restauration | Définir accès, conservation et sauvegardes |
 
 Les inconnues quantitatives sont en [section 2.4](#24-indicateurs-quantitatifs-non-fixés), les scénarios cibles en [section 4.2](#42-scénarios-de-recette-sur-lordinateur-cible). Les étapes de déploiement, licence et migration sont maintenues dans le [guide développeur](GUIDE_DEVELOPPEUR.md).
+
+---
+
+[Version chinoise](zh/DOSSIER_TECHNIQUE_cn.md)

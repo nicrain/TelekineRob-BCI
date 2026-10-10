@@ -1,6 +1,6 @@
 # TelekineRob-BCI — Manuel opérateur
 
-[Retour à la présentation du projet](../README.md) · [Version chinoise](MANUEL_OPERATEUR_cn.md)
+[Retour à la présentation du projet](../README.md)
 
 > Manuel d’utilisation : vérifications préalables, connexion, calibration, commande EEG, dépannage courant et arrêt. Les noms des boutons restent en anglais pour correspondre à l’interface.
 > Destiné à l’ordinateur déjà installé. L’installation, les modifications du code et la restauration de l’environnement ne font pas partie des opérations quotidiennes décrites ici.
@@ -180,3 +180,7 @@ Les étapes détaillées sont dans le [guide de dépannage](GUIDE_DEBUG.md). Ava
 5. **Ranger les appareils :** les éteindre, nettoyer et ranger les électrodes selon leurs notices, ranger les casques et le dongle, puis les charger si nécessaire.
 
 Fermer un onglet n’arrête pas le système. Stop System ferme aussi par défaut l’environnement Linux utilisé ; sauvegarder d’abord les autres travaux qui pourraient y être ouverts.
+
+---
+
+[Version chinoise](zh/MANUEL_OPERATEUR_cn.md)

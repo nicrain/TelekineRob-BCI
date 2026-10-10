@@ -1,9 +1,9 @@
 # Windows 总控页面（System Control）
 
-[返回中文项目总览](../README_cn.md)。本文是模块专项参考；完整安装、更新与恢复入口见[中文版开发手册](../docs/GUIDE_DEVELOPPEUR_cn.md)。
+[返回中文项目总览](../docs/zh/README_cn.md)。本文是模块专项参考；完整安装、更新与恢复入口见[中文版开发手册](../docs/zh/GUIDE_DEVELOPPEUR_cn.md)。
 
 Windows 侧总控台：**双击图标 → 网页 → 点按钮起系统/连设备/看状态**，
-Headband 例外：Connect打开 VS Code，由操作者选对 venv、点右上角三角形运行按钮，断开时按 Ctrl+C。日常操作以[中文操作手册](../docs/MANUEL_OPERATEUR_cn.md)和[中文排障手册](../docs/GUIDE_DEBUG_cn.md)为准；本页面向部署和维护。
+Headband 例外：Connect打开 VS Code，由操作者选对 venv、点右上角三角形运行按钮，断开时按 Ctrl+C。日常操作以[中文操作手册](../docs/zh/MANUEL_OPERATEUR_cn.md)和[中文排障手册](../docs/zh/GUIDE_DEBUG_cn.md)为准；本页面向部署和维护。
 
 ## 目录
 
@@ -98,7 +98,7 @@ windows_launcher/
 |---|---|
 | 双击 bat 报"未找到 Python" | 装 Python 并勾选 Add to PATH |
 | 启动系统报"WSL 未就绪" | `wsl -l` 确认发行版名与 config 一致 |
-| 连 Thymio 报 usbipd 失败 | 当前配置固定使用 `1-1`；按[共享检查步骤](../docs/GUIDE_DEBUG_cn.md#4-第-7-项怎么做检查并共享新的-thymio-dongle)区分 Shared、Attached和Not shared。无 `1-1` 时重插指定USB口。 |
+| 连 Thymio 报 usbipd 失败 | 当前配置固定使用 `1-1`；按[共享检查步骤](../docs/zh/GUIDE_DEBUG_cn.md#4-第-7-项怎么做检查并共享新的-thymio-dongle)区分 Shared、Attached和Not shared。无 `1-1` 时重插指定USB口。 |
 | 连桥报"桥进程已退出" | 设备是否开机、是否被别的程序占用、桥依赖是否装齐 |
 | 网页服务连不上 | WSL 内手动 `npm run dev` 试；config `web.url` 端口是否对；前后端日志在 WSL `/tmp/launcher_backend.log` / `/tmp/launcher_frontend.log` |
 | 总控页打不开 | 看 `launcher_server.log`（控制服务日志，同目录）；`last_url.txt` 是否生成 |

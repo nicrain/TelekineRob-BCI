@@ -1,7 +1,5 @@
 # TelekineRob-BCI
 
-[Français](README.md) · [中文](README_cn.md)
-
 [Manuel opérateur](docs/MANUEL_OPERATEUR.md) · [Guide de dépannage](docs/GUIDE_DEBUG.md) · [Dossier technique](docs/DOSSIER_TECHNIQUE.md) · [Guide développeur](docs/GUIDE_DEVELOPPEUR.md)
 
 TelekineRob-BCI est une plateforme de commande du robot Thymio à partir de l’EEG (électroencéphalogramme). Les données acquises par les appareils g.tec sont transmises à ROS2 (framework logiciel de robotique) via LSL (Lab Streaming Layer, bibliothèque de transmission de flux). Le système calcule les puissances des bandes de fréquences et les indicateurs de contrôle, puis produit les commandes de mouvement. L’interface web permet de connecter les appareils, de les calibrer, d’observer les analyses en temps réel et de commander le robot.
@@ -264,3 +262,7 @@ Voir aussi les notices [Windows launcher](windows_launcher/README.md) et [Web GU
 Le dépôt contient des sources tierces ROS Thymio / Aseba. Leurs licences et mentions sont conservées dans leurs répertoires, par exemple la [LICENSE de ros-thymio](src/ros-thymio/LICENSE). Les SDK g.tec se préparent séparément et ne sont pas fournis par la liste pip. Les autorisations des composants ne doivent pas être présentées comme une licence unique pour tout le projet.
 
 Les licences SDK se préparent séparément. Les conditions, l’état et la migration de la licence de l’API Hybrid Black sont décrits dans le [guide développeur](docs/GUIDE_DEVELOPPEUR.md#licence-de-lapi-hybrid-black). Ne pas enregistrer les clés complètes dans le dépôt.
+
+---
+
+[Version chinoise](docs/zh/README_cn.md)

@@ -1,6 +1,6 @@
 # TelekineRob-BCI 项目架构说明书
 
-> ⚠️ **outdated（已归档）**：本文档为 gtec-only 时代的旧架构说明书（分支 `feature/gtec-only`）。现行产品、需求和架构见[技术档案](../DOSSIER_TECHNIQUE_cn.md)，部署与维护见[开发手册](../GUIDE_DEVELOPPEUR_cn.md)。
+> ⚠️ **outdated（已归档）**：本文档为 gtec-only 时代的旧架构说明书（分支 `feature/gtec-only`）。现行产品、需求和架构见[技术档案](../zh/DOSSIER_TECHNIQUE_cn.md)，部署与维护见[开发手册](../zh/GUIDE_DEVELOPPEUR_cn.md)。
 
 ## 1. 文档信息
 - 项目: g.tec EEG 驱动的 Thymio 机器人控制平台

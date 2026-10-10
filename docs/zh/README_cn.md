@@ -1,14 +1,14 @@
 # TelekineRob-BCI
 
-[中文](README_cn.md) · [Français](README.md)
+[中文](README_cn.md) · [Français](../../README.md)
 
-[操作手册](docs/MANUEL_OPERATEUR_cn.md) · [排障手册](docs/GUIDE_DEBUG_cn.md) · [技术档案](docs/DOSSIER_TECHNIQUE_cn.md) · [开发手册](docs/GUIDE_DEVELOPPEUR_cn.md)
+[操作手册](MANUEL_OPERATEUR_cn.md) · [排障手册](GUIDE_DEBUG_cn.md) · [技术档案](DOSSIER_TECHNIQUE_cn.md) · [开发手册](GUIDE_DEVELOPPEUR_cn.md)
 
 TelekineRob-BCI 是一个基于 EEG（脑电）的 Thymio 机器人控制平台。系统将 g.tec 设备采集的数据通过 LSL（Lab Streaming Layer，数据流传输库）传入 ROS2（机器人软件框架），计算频带功率与控制指标，再生成机器人运动命令；网页提供设备连接、校准、实时分析和控制界面。
 
 项目面向 EEG 与机器人交互研究，支持单人单设备控制，以及两人分别负责速度和转向的协同控制。真实设备在 Windows 上连接，信号处理、ROS2 和网页服务运行于 WSL2。仓库还提供合成 EEG 工具及 Gazebo 仿真接入代码，用于无真实设备条件下的开发测试。
 
-在**已安装的项目电脑上日常使用**，直接看[操作手册](docs/MANUEL_OPERATEUR_cn.md)，遇到问题看[排障手册](docs/GUIDE_DEBUG_cn.md)，无需重新安装。开发者首次部署从下面的[环境要求](#环境要求)与[快速开始](#快速开始)进入；换电脑优先评估[整套 WSL 迁移](docs/GUIDE_DEVELOPPEUR_cn.md#93-推荐迁移方式导出与导入整套-wsl)，Windows 设备环境仍需单独配置。
+在**已安装的项目电脑上日常使用**，直接看[操作手册](MANUEL_OPERATEUR_cn.md)，遇到问题看[排障手册](GUIDE_DEBUG_cn.md)，无需重新安装。开发者首次部署从下面的[环境要求](#环境要求)与[快速开始](#快速开始)进入；换电脑优先评估[整套 WSL 迁移](GUIDE_DEVELOPPEUR_cn.md#93-推荐迁移方式导出与导入整套-wsl)，Windows 设备环境仍需单独配置。
 
 ## 主要功能
 
@@ -32,11 +32,11 @@ TelekineRob-BCI 是一个基于 EEG（脑电）的 Thymio 机器人控制平台�
 | 无线 Thymio 与 USB Dongle | usbipd-win 将 Dongle 接入 WSL，再由 ROS 驱动控制 | 真机输出 |
 | Gazebo 中的 Thymio | ROS / Gazebo 桥 | 仿真输出，无需真实 Dongle |
 
-Headband 和 Hybrid Black 在本项目中均使用电脑自带的集成蓝牙。Hybrid Black 虽附带 USB 蓝牙适配器，但在原项目电脑上使用时经常断连，改用集成蓝牙后更稳定，因此默认不使用附带适配器。更换电脑后需重新验证连接稳定性，详见[开发手册第 3.8 节](docs/GUIDE_DEVELOPPEUR_cn.md#38-sdk-使用边界与连接方式)。Thymio 的 USB Dongle 与该蓝牙适配器不同，真机控制仍需要插入。
+Headband 和 Hybrid Black 在本项目中均使用电脑自带的集成蓝牙。Hybrid Black 虽附带 USB 蓝牙适配器，但在原项目电脑上使用时经常断连，改用集成蓝牙后更稳定，因此默认不使用附带适配器。更换电脑后需重新验证连接稳定性，详见[开发手册第 3.8 节](GUIDE_DEVELOPPEUR_cn.md#38-sdk-使用边界与连接方式)。Thymio 的 USB Dongle 与该蓝牙适配器不同，真机控制仍需要插入。
 
 当前桥使用每种型号固定的 source_id，不支持把任意两台同型号 EEG 直接作为两路独立设备。
 
-下一阶段主要需求是支持**两台同型号 g.tec EEG**，分别承担 Speed 与 Steering，并保留现有单设备和混合型号模式。这是尚未实现、尚未完成真机验证的开发目标，见[需求与验收条件](docs/DOSSIER_TECHNIQUE_cn.md#25-下一阶段主要需求同型号双-gtec)和[开发实施路线](docs/GUIDE_DEVELOPPEUR_cn.md#75-首要开发任务同型号双-gtec-集成)。
+下一阶段主要需求是支持**两台同型号 g.tec EEG**，分别承担 Speed 与 Steering，并保留现有单设备和混合型号模式。这是尚未实现、尚未完成真机验证的开发目标，见[需求与验收条件](DOSSIER_TECHNIQUE_cn.md#25-下一阶段主要需求同型号双-gtec)和[开发实施路线](GUIDE_DEVELOPPEUR_cn.md#75-首要开发任务同型号双-gtec-集成)。
 
 ## 系统架构
 
@@ -58,9 +58,9 @@ WSL2 / Ubuntu
 
 真机最终话题为 `/cmd_vel`，仿真为 `/model/thymio/cmd_vel`。双路部分命令发布至 `/eeg_cmd_vel/speed`、`/eeg_cmd_vel/steering`；分析话题为 `/eeg_analysis` 或对应角色后缀话题。
 
-更详细的算法、运动映射、配置和接口见[技术档案](docs/DOSSIER_TECHNIQUE_cn.md#3-系统设计)。
+更详细的算法、运动映射、配置和接口见[技术档案](DOSSIER_TECHNIQUE_cn.md#3-系统设计)。
 
-Headband 在 Windows 桥中调用 gpype 滤波；Hybrid Black 的这一步在 WSL 适配器中完成，两路随后进入频带功率计算。具体处理位置与限制见[滤波实现](docs/GUIDE_DEVELOPPEUR_cn.md#54-两类-eeg-的预滤波实现)。
+Headband 在 Windows 桥中调用 gpype 滤波；Hybrid Black 的这一步在 WSL 适配器中完成，两路随后进入频带功率计算。具体处理位置与限制见[滤波实现](GUIDE_DEVELOPPEUR_cn.md#54-两类-eeg-的预滤波实现)。
 
 ## 环境要求
 
@@ -68,21 +68,21 @@ Headband 在 Windows 桥中调用 gpype 滤波；Hybrid Black 的这一步在 WS
 |---|---|
 | 操作系统 | Windows + WSL2，Ubuntu 24.04 |
 | ROS2 | Kilted；使用与系统 ROS 兼容的 Python，项目基线为 Python 3.12 |
-| WSL Python 依赖 | 仓库根 `.venv` 与 [requirements.txt](requirements.txt) |
-| 前端 | 支持仓库 Vite 5 的 Node.js / npm；依赖版本由 [package-lock.json](web_gui/frontend/package-lock.json)管理 |
+| WSL Python 依赖 | 仓库根 `.venv` 与 [requirements.txt](../../requirements.txt) |
+| 前端 | 支持仓库 Vite 5 的 Node.js / npm；依赖版本由 [package-lock.json](../../web_gui/frontend/package-lock.json)管理 |
 | Windows 设备环境 | gpype / UnicornPy、pylsl 及对应 SDK / 驱动；Python 版本和位数需与 SDK 匹配 |
 | Windows 工具 | Python、VS Code、usbipd-win（Windows USB 共享工具，命令为 `usbipd`） |
 | ROS 工作区依赖 | 仓库中的 Thymio / Aseba 包；仿真还需 ROS Gazebo 相关包 |
 
-g.tec SDK 不包含在根 pip 依赖清单中。完整系统依赖、SDK 准备、WSL 网络与首次 Windows 部署见[环境安装说明](docs/GUIDE_DEVELOPPEUR_cn.md#3-环境安装与重建)，厂商和依赖资料见[官方链接](docs/GUIDE_DEVELOPPEUR_cn.md#37-官方资料与依赖来源)。上述是项目环境基线；部署或迁移时须按[环境检查](docs/GUIDE_DEVELOPPEUR_cn.md#21-环境基线与检查)核对实际版本、路径与 SDK 兼容性。
+g.tec SDK 不包含在根 pip 依赖清单中。完整系统依赖、SDK 准备、WSL 网络与首次 Windows 部署见[环境安装说明](GUIDE_DEVELOPPEUR_cn.md#3-环境安装与重建)，厂商和依赖资料见[官方链接](GUIDE_DEVELOPPEUR_cn.md#37-官方资料与依赖来源)。上述是项目环境基线；部署或迁移时须按[环境检查](GUIDE_DEVELOPPEUR_cn.md#21-环境基线与检查)核对实际版本、路径与 SDK 兼容性。
 
 ## 快速开始
 
-以下介绍首次部署和开发测试的基本流程。第 3 节是合成 EEG 与仿真的开发验证入口，第 4 节是真实设备的使用方式，两者不是连续步骤。已安装项目电脑的日常使用，请直接参阅[操作手册](docs/MANUEL_OPERATEUR_cn.md)。
+以下介绍首次部署和开发测试的基本流程。第 3 节是合成 EEG 与仿真的开发验证入口，第 4 节是真实设备的使用方式，两者不是连续步骤。已安装项目电脑的日常使用，请直接参阅[操作手册](MANUEL_OPERATEUR_cn.md)。
 
 ### 1. 获取源码并准备 WSL 工作区
 
-以下命令在 **WSL Bash** 执行。先按[安装说明](docs/GUIDE_DEVELOPPEUR_cn.md#32-wsl-与-ros-前置条件)准备 ROS2、colcon 和工作区系统依赖；在选定父目录 clone，不覆盖已有仓库。
+以下命令在 **WSL Bash** 执行。先按[安装说明](GUIDE_DEVELOPPEUR_cn.md#32-wsl-与-ros-前置条件)准备 ROS2、colcon 和工作区系统依赖；在选定父目录 clone，不覆盖已有仓库。
 
 已有 `.venv` 或可运行系统时先核对环境，不重复创建；下面是新建工作区的流程。首次 ROS 构建包含 `src/` 内依赖包，不能仅构建 EEG 控制包。
 
@@ -115,7 +115,7 @@ source .venv/bin/activate
 python -c "import sys; print(sys.executable); import rclpy, pylsl, numpy, scipy, fastapi, yaml; print('WSL imports OK')"
 ```
 
-导入失败先按[环境检查](docs/GUIDE_DEVELOPPEUR_cn.md#34-wsl-python-与前端环境)处理，不把 pip 安装成功当作 ROS / LSL 已可用。
+导入失败先按[环境检查](GUIDE_DEVELOPPEUR_cn.md#34-wsl-python-与前端环境)处理，不把 pip 安装成功当作 ROS / LSL 已可用。
 
 ### 2. 启动网页
 
@@ -123,7 +123,7 @@ python -c "import sys; print(sys.executable); import rclpy, pylsl, numpy, scipy,
 
 #### 方式一：通过 System Control 自动启动
 
-适用于已完成[Windows launcher 首次部署](docs/GUIDE_DEVELOPPEUR_cn.md#35-windows-launcher-首次部署)的电脑。双击 Windows 本地的 `windows_launcher/launcher.bat` 打开总控页面：系统为 **Stopped** 时点击 **Start System**，等待 **Running**；已经 Running 时直接继续，不点 **Restart System**。总控会自动启动 WSL 中的后端和前端，并在主区域显示控制网页，无需手动在终端使用命令启动网页服务。
+适用于已完成[Windows launcher 首次部署](GUIDE_DEVELOPPEUR_cn.md#35-windows-launcher-首次部署)的电脑。双击 Windows 本地的 `windows_launcher/launcher.bat` 打开总控页面：系统为 **Stopped** 时点击 **Start System**，等待 **Running**；已经 Running 时直接继续，不点 **Restart System**。总控会自动启动 WSL 中的后端和前端，并在主区域显示控制网页，无需手动在终端使用命令启动网页服务。
 
 #### 方式二：用两个 WSL 终端手动启动
 
@@ -156,7 +156,7 @@ System Control 的 **Start System / Stop System** 管理网页服务与设备环
 
 ### 3. 开发测试工具：合成 EEG 与仿真
 
-仓库包含[双路合成 EEG 脚本](thymio_control/lsl_test/dummy_dual_streams.py)和[ROS / Gazebo 仿真启动代码](thymio_control/launch/experiment_core.launch.py)，但完整“合成 LSL → ROS2 控制 → 网页显示 / Gazebo 机器人”链路尚未完成验证。执行前须准备 ROS2、Gazebo 及工作区依赖并完成构建；详细验证方法见[开发手册离线验证说明](docs/GUIDE_DEVELOPPEUR_cn.md#43-无设备离线验证)，已有测试范围见[技术档案验证记录](docs/DOSSIER_TECHNIQUE_cn.md#41-验证口径)。
+仓库包含[双路合成 EEG 脚本](../../thymio_control/lsl_test/dummy_dual_streams.py)和[ROS / Gazebo 仿真启动代码](../../thymio_control/launch/experiment_core.launch.py)，但完整“合成 LSL → ROS2 控制 → 网页显示 / Gazebo 机器人”链路尚未完成验证。执行前须准备 ROS2、Gazebo 及工作区依赖并完成构建；详细验证方法见[开发手册离线验证说明](GUIDE_DEVELOPPEUR_cn.md#43-无设备离线验证)，已有测试范围见[技术档案验证记录](DOSSIER_TECHNIQUE_cn.md#41-验证口径)。
 
 先停止真实 EEG 桥，不连接真机输出。另外打开一个 WSL 终端，先进入项目根目录，再运行模拟脑电数据生成脚本：
 
@@ -175,7 +175,7 @@ python thymio_control/lsl_test/dummy_dual_streams.py --blink
 
 - **Headband**：Connect 打开桥脚本；在 VS Code 选择现有 venv，点右上角 **▶** 运行。断开时需在脚本终端 **Ctrl+C**。
 - **Hybrid Black**：总控页面直接 Connect / Disconnect，桥使用 UnicornPy。
-- **Thymio**：Dongle 插入指定 USB 口，确认当前 BUSID `1-1` 已 "Shared"，再点 Connect 将该 USB 设备接入 WSL，状态变为 "Attached"。"Shared" 是 Windows 允许将设备共享给 Linux，"Attached" 表示已经接入；新 Dongle 的命令与检查步骤见[共享检查](docs/GUIDE_DEBUG_cn.md#4-第-7-项怎么做检查并共享新的-thymio-dongle)。
+- **Thymio**：Dongle 插入指定 USB 口，确认当前 BUSID `1-1` 已 "Shared"，再点 Connect 将该 USB 设备接入 WSL，状态变为 "Attached"。"Shared" 是 Windows 允许将设备共享给 Linux，"Attached" 表示已经接入；新 Dongle 的命令与检查步骤见[共享检查](GUIDE_DEBUG_cn.md#4-第-7-项怎么做检查并共享新的-thymio-dongle)。
 
 设备充好电，电脑连接充电器，以降低蓝牙省电相关断连风险。网页选择对应品牌和角色，输出 **Thymio**，逐台校准。
 
@@ -183,18 +183,18 @@ python thymio_control/lsl_test/dummy_dual_streams.py --blink
 
 除自动校准外，也可在控制停止时，手动调整各设备的 min／max 控制映射参考值，修改后点击 Start 使用新值。这些值不是原始脑电信号的最小值和最大值。通常先自动校准，需要微调时再手动调整。
 
-校准结束到停止完成之间可能短暂输出运动命令。校准前应将 Thymio 放在平坦、安全的位置，周围不要放置障碍物，并远离桌边或台阶。详细操作与停止顺序见[操作手册](docs/MANUEL_OPERATEUR_cn.md)，常见问题见[排障手册](docs/GUIDE_DEBUG_cn.md)。
+校准结束到停止完成之间可能短暂输出运动命令。校准前应将 Thymio 放在平坦、安全的位置，周围不要放置障碍物，并远离桌边或台阶。详细操作与停止顺序见[操作手册](MANUEL_OPERATEUR_cn.md)，常见问题见[排障手册](GUIDE_DEBUG_cn.md)。
 
 ## 配置
 
 | 文件 | 用途 |
 |---|---|
 | Windows 本地 `windows_launcher/config.json` | WSL 名称 / 路径、同步目标、解释器、服务与 USB 命令；同步时不覆盖此文件 |
-| [launch_args.yaml](thymio_control/config/launch_args.yaml) | 真机 / 仿真、节点启用和驱动入口等启动设置 |
-| [eeg_control_node.params.yaml](thymio_control/config/eeg_control_node.params.yaml) | 第一条 EEG 配置的指标、source_id、校准及运动参数 |
-| [eeg_control_node.eeg2.params.yaml](thymio_control/config/eeg_control_node.eeg2.params.yaml) | 第二条 EEG 配置的独立参数，不固定对应某个品牌 |
+| [launch_args.yaml](../../thymio_control/config/launch_args.yaml) | 真机 / 仿真、节点启用和驱动入口等启动设置 |
+| [eeg_control_node.params.yaml](../../thymio_control/config/eeg_control_node.params.yaml) | 第一条 EEG 配置的指标、source_id、校准及运动参数 |
+| [eeg_control_node.eeg2.params.yaml](../../thymio_control/config/eeg_control_node.eeg2.params.yaml) | 第二条 EEG 配置的独立参数，不固定对应某个品牌 |
 
-日常通过网页配置。源码 YAML 由网页保存，ROS launch 默认读取安装目录配置；两者的一致性和校准写回见[配置说明](docs/GUIDE_DEVELOPPEUR_cn.md#53-三套配置边界)。仓库保存值可能来自某次运行，不应当作所有人的统一默认配置。
+日常通过网页配置。源码 YAML 由网页保存，ROS launch 默认读取安装目录配置；两者的一致性和校准写回见[配置说明](GUIDE_DEVELOPPEUR_cn.md#53-三套配置边界)。仓库保存值可能来自某次运行，不应当作所有人的统一默认配置。
 
 ## 目录结构
 
@@ -235,7 +235,7 @@ cd web_gui/backend
 ../../.venv/bin/python -m pytest app -v
 ```
 
-前端构建从 `web_gui/frontend` 执行 `npm run build`。根目录默认 pytest 不包含后端；launcher 测试使用 fake executor，不要求真实 Windows 命令；缺少可选依赖或样本时的 skip 不等于通过。测试范围和设备验证入口见[开发手册](docs/GUIDE_DEVELOPPEUR_cn.md#7-修改与测试)。
+前端构建从 `web_gui/frontend` 执行 `npm run build`。根目录默认 pytest 不包含后端；launcher 测试使用 fake executor，不要求真实 Windows 命令；缺少可选依赖或样本时的 skip 不等于通过。测试范围和设备验证入口见[开发手册](GUIDE_DEVELOPPEUR_cn.md#7-修改与测试)。
 
 ## 使用注意
 
@@ -252,15 +252,15 @@ cd web_gui/backend
 | 文档 | 用途 |
 |---|---|
 | 本 README | 项目简介、架构、安装运行和开发入口 |
-| [操作手册](docs/MANUEL_OPERATEUR_cn.md) | 已安装电脑上的日常使用 |
-| [排障手册](docs/GUIDE_DEBUG_cn.md) | EEG、机器人、网页及 USB 的常见问题 |
-| [技术档案](docs/DOSSIER_TECHNIQUE_cn.md) | 产品定义、需求、算法、接口与设计 |
-| [开发手册](docs/GUIDE_DEVELOPPEUR_cn.md#项目文档导航) | 环境搭建、代码导读、调试、测试、更新、备份与恢复 |
+| [操作手册](MANUEL_OPERATEUR_cn.md) | 已安装电脑上的日常使用 |
+| [排障手册](GUIDE_DEBUG_cn.md) | EEG、机器人、网页及 USB 的常见问题 |
+| [技术档案](DOSSIER_TECHNIQUE_cn.md) | 产品定义、需求、算法、接口与设计 |
+| [开发手册](GUIDE_DEVELOPPEUR_cn.md#项目文档导航) | 环境搭建、代码导读、调试、测试、更新、备份与恢复 |
 
-模块专项说明见 [Windows launcher](windows_launcher/README.md) 与 [Web GUI](web_gui/README.md)，数据格式说明见[专题参考资料](docs/reference/DONNEES_EXPERIMENTALES.md)。旧指南、设计历史和研究计划统一保留在 [docs/archived/](docs/archived/)，不作为当前运行入口、需求依据或另一套正式安装指南。
+模块专项说明见 [Windows launcher](../../windows_launcher/README.md) 与 [Web GUI](../../web_gui/README.md)，数据格式说明见[专题参考资料](../reference/DONNEES_EXPERIMENTALES.md)。旧指南、设计历史和研究计划统一保留在 [docs/archived/](../archived/)，不作为当前运行入口、需求依据或另一套正式安装指南。
 
 ## 第三方组件
 
-仓库包含 ROS Thymio / Aseba 等第三方源码，其许可证与声明保留在对应目录，例如 [ros-thymio 的 LICENSE](src/ros-thymio/LICENSE)。g.tec SDK 需单独准备，不随仓库 pip 清单提供；各组件的授权信息不应混作整个项目的一份统一许可。
+仓库包含 ROS Thymio / Aseba 等第三方源码，其许可证与声明保留在对应目录，例如 [ros-thymio 的 LICENSE](../../src/ros-thymio/LICENSE)。g.tec SDK 需单独准备，不随仓库 pip 清单提供；各组件的授权信息不应混作整个项目的一份统一许可。
 
-SDK 许可需单独准备；Hybrid Black API 的授权条件、状态和迁移方式见[开发手册授权说明](docs/GUIDE_DEVELOPPEUR_cn.md#hybrid-black-api-授权)。完整授权密钥不写入仓库。
+SDK 许可需单独准备；Hybrid Black API 的授权条件、状态和迁移方式见[开发手册授权说明](GUIDE_DEVELOPPEUR_cn.md#hybrid-black-api-授权)。完整授权密钥不写入仓库。

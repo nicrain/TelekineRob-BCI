@@ -1,6 +1,6 @@
 # TelekineRob-BCI 开发手册（中文版）
 
-[返回中文项目总览](../README_cn.md) · [法语版](GUIDE_DEVELOPPEUR.md)
+[返回中文项目总览](README_cn.md) · [法语版](../GUIDE_DEVELOPPEUR.md)
 
 > 面向项目开发人员，说明环境搭建、代码定位、开发调试、修改与测试，以及更新、备份和恢复。
 
@@ -12,7 +12,7 @@
 
 | 文档 | 开发时的参考用途 |
 |---|---|
-| [项目 README（中文版）](../README_cn.md) | 项目概览、环境要求与快速开始 |
+| [项目 README（中文版）](README_cn.md) | 项目概览、环境要求与快速开始 |
 | [技术档案（中文版）](DOSSIER_TECHNIQUE_cn.md) | 产品定义、需求、设计、算法、接口与验收依据 |
 | [操作手册（中文版）](MANUEL_OPERATEUR_cn.md) | 复现现有用户操作流程，检查修改是否影响日常使用 |
 | [排障手册（中文版）](GUIDE_DEBUG_cn.md) | 排除常见硬件与连接问题，再进入代码诊断 |
@@ -20,14 +20,14 @@
 
 ### 建议阅读顺序
 
-- **开发人员**：先读[项目 README](../README_cn.md)了解系统，再按[开发上手路线](#1-开发上手路线)运行现有系统；结合[技术档案](DOSSIER_TECHNIQUE_cn.md)与本手册理解和修改代码。
+- **开发人员**：先读[项目 README](README_cn.md)了解系统，再按[开发上手路线](#1-开发上手路线)运行现有系统；结合[技术档案](DOSSIER_TECHNIQUE_cn.md)与本手册理解和修改代码。
 - **下一阶段主要开发任务**：[同型号双 g.tec 集成](#75-首要开发任务同型号双-gtec-集成)。该节说明当前代码限制、实施步骤和回归场景，不是已实现功能。
 - **授权资料入口**：[Hybrid Black API 授权](#hybrid-black-api-授权)。
 - **部署与维护入口**：[官方资料](#37-官方资料与依赖来源) · [SDK 使用边界](#38-sdk-使用边界与连接方式) · [滤波实现](#54-两类-eeg-的预滤波实现) · [第三方源码修改](#55-第三方源码与本项目修改) · [整套 WSL 迁移](#93-推荐迁移方式导出与导入整套-wsl)。
 
 系统验证范围与验收要求见[技术档案第 4 章](DOSSIER_TECHNIQUE_cn.md#4-验收与验证状态)，已知限制见[第 5.1 节](DOSSIER_TECHNIQUE_cn.md#51-当前限制及优先验证事项)。
 
-开发验证的数据格式说明另见[专题参考资料](reference/DONNEES_EXPERIMENTALES.md)，实际字段以代码为准。[归档目录](archived/)保留旧指南、设计历史及研究计划，不作为现行开发步骤或需求清单。
+开发验证的数据格式说明另见[专题参考资料](../reference/DONNEES_EXPERIMENTALES.md)，实际字段以代码为准。[归档目录](../archived/)保留旧指南、设计历史及研究计划，不作为现行开发步骤或需求清单。
 
 ## 阅读导航
 
@@ -120,7 +120,7 @@ Windows 的 `python --version` 仅代表当前终端默认解释器；还要用�
 | ROS 运行参数 | `thymio_control/config/` 中三个 YAML | 已确认角色、设备、指标、速度与校准值 |
 | 服务端口 | launcher 8020；后端 8010；前端 5173 | 占用情况、实际 URL 与防火墙规则 |
 
-`config.json` 的字段和占位符解析见[launcher 配置说明](../windows_launcher/README.md)。手改 JSON 时注意 Windows 路径中的反斜杠需要转义。该文件包含可执行命令，只允许可信维护者修改。
+`config.json` 的字段和占位符解析见[launcher 配置说明](../../windows_launcher/README.md)。手改 JSON 时注意 Windows 路径中的反斜杠需要转义。该文件包含可执行命令，只允许可信维护者修改。
 
 ### 2.3 硬件部署约定
 
@@ -149,7 +149,7 @@ python -c "import pylsl; import gpype; print('Headband imports OK')"
 python -c "import pylsl; import numpy; import UnicornPy; print('Hybrid imports OK')"
 ```
 
-两个设备可以使用不同环境，导入检查也应分别执行。路径含空格时，PowerShell 使用 `& "C:\实际路径\python.exe" ...`；不要把这个 PowerShell 写法直接填入 launcher 的 `python_cmd`，其执行规则见[配置实现](../windows_launcher/config.py)与[命令实现](../windows_launcher/commands.py)。
+两个设备可以使用不同环境，导入检查也应分别执行。路径含空格时，PowerShell 使用 `& "C:\实际路径\python.exe" ...`；不要把这个 PowerShell 写法直接填入 launcher 的 `python_cmd`，其执行规则见[配置实现](../../windows_launcher/config.py)与[命令实现](../../windows_launcher/commands.py)。
 
 在 Headband 桥实际使用的 Python 环境中，查询已安装的 g.Pype 版本（Windows PowerShell）：
 
@@ -385,15 +385,15 @@ ros2 launch thymio_control experiment_core.launch.py use_sim:=true run_eeg:=true
 
 | 功能 / 排查目标 | 主要代码入口 |
 |---|---|
-| 总控启动、设备连接和状态显示 | [launcher_server.py](../windows_launcher/launcher_server.py)、[commands.py](../windows_launcher/commands.py)、[state.py](../windows_launcher/state.py)、[lsl_probe.py](../windows_launcher/lsl_probe.py) |
-| EEG 采集与重连 | [gpype_lsl_bridge.py](../gtec_bridge/gpype_lsl_bridge.py)、[unicornpy_lsl_bridge.py](../gtec_bridge/unicornpy_lsl_bridge.py) |
-| 滤波、频带功率和派生指标 | [lsl_raw.py](../thymio_control/thymio_control/adapters/lsl_raw.py)、[band_power.py](../thymio_control/thymio_control/processors/band_power.py)、[enrich.py](../thymio_control/thymio_control/processors/enrich.py) |
-| 控制策略与速度／转向映射 | [policies/](../thymio_control/thymio_control/policies/)、[pipeline.py](../thymio_control/thymio_control/pipeline.py)、[eeg_control_node.py](../thymio_control/scripts/eeg_control_node.py) |
-| 校准与眨眼检测 | [eeg_control_node.py](../thymio_control/scripts/eeg_control_node.py)、[calibration.py](../thymio_control/thymio_control/calibration.py)、[blink_metric.py](../thymio_control/thymio_control/processors/blink_metric.py)；涉及界面时再看[App.jsx](../web_gui/frontend/src/App.jsx) |
-| 双设备融合与断流保护 | [cmd_vel_fuser.py](../thymio_control/scripts/cmd_vel_fuser.py)、[watchdog.py](../thymio_control/thymio_control/watchdog.py)、[eeg_control_node.py](../thymio_control/scripts/eeg_control_node.py) |
-| 网页界面与参数保存 | [App.jsx](../web_gui/frontend/src/App.jsx)、[models.py](../web_gui/backend/app/models.py)、[config_store.py](../web_gui/backend/app/config_store.py) |
-| ROS 数据显示与网页遥控 | [signal_subscriber.py](../web_gui/backend/app/signal_subscriber.py)、[main.py](../web_gui/backend/app/main.py) |
-| 控制管线启动、真机／仿真切换 | [command_runner.py](../web_gui/backend/app/command_runner.py)、[experiment_core.launch.py](../thymio_control/launch/experiment_core.launch.py) |
+| 总控启动、设备连接和状态显示 | [launcher_server.py](../../windows_launcher/launcher_server.py)、[commands.py](../../windows_launcher/commands.py)、[state.py](../../windows_launcher/state.py)、[lsl_probe.py](../../windows_launcher/lsl_probe.py) |
+| EEG 采集与重连 | [gpype_lsl_bridge.py](../../gtec_bridge/gpype_lsl_bridge.py)、[unicornpy_lsl_bridge.py](../../gtec_bridge/unicornpy_lsl_bridge.py) |
+| 滤波、频带功率和派生指标 | [lsl_raw.py](../../thymio_control/thymio_control/adapters/lsl_raw.py)、[band_power.py](../../thymio_control/thymio_control/processors/band_power.py)、[enrich.py](../../thymio_control/thymio_control/processors/enrich.py) |
+| 控制策略与速度／转向映射 | [policies/](../../thymio_control/thymio_control/policies/)、[pipeline.py](../../thymio_control/thymio_control/pipeline.py)、[eeg_control_node.py](../../thymio_control/scripts/eeg_control_node.py) |
+| 校准与眨眼检测 | [eeg_control_node.py](../../thymio_control/scripts/eeg_control_node.py)、[calibration.py](../../thymio_control/thymio_control/calibration.py)、[blink_metric.py](../../thymio_control/thymio_control/processors/blink_metric.py)；涉及界面时再看[App.jsx](../../web_gui/frontend/src/App.jsx) |
+| 双设备融合与断流保护 | [cmd_vel_fuser.py](../../thymio_control/scripts/cmd_vel_fuser.py)、[watchdog.py](../../thymio_control/thymio_control/watchdog.py)、[eeg_control_node.py](../../thymio_control/scripts/eeg_control_node.py) |
+| 网页界面与参数保存 | [App.jsx](../../web_gui/frontend/src/App.jsx)、[models.py](../../web_gui/backend/app/models.py)、[config_store.py](../../web_gui/backend/app/config_store.py) |
+| ROS 数据显示与网页遥控 | [signal_subscriber.py](../../web_gui/backend/app/signal_subscriber.py)、[main.py](../../web_gui/backend/app/main.py) |
+| 控制管线启动、真机／仿真切换 | [command_runner.py](../../web_gui/backend/app/command_runner.py)、[experiment_core.launch.py](../../thymio_control/launch/experiment_core.launch.py) |
 
 当前指标眨眼检测使用 `blink_metric.py`，不要与旧 `blink.py` 路径混淆。模块职责、算法和接口定义见[技术档案的系统设计](DOSSIER_TECHNIQUE_cn.md#3-系统设计)；第三方驱动维护见[第 5.5 节](#55-第三方源码与本项目修改)。
 
@@ -421,12 +421,12 @@ ros2 launch thymio_control experiment_core.launch.py use_sim:=true run_eeg:=true
 
 滤波位置、截止频率、API 能力及两种实现的差异，见[技术档案第 3.5 节](DOSSIER_TECHNIQUE_cn.md#35-eeg信号处理设计)。本节保留代码维护与验证入口。
 
-- **代码入口**：Headband 的 SDK 滤波节点在[桥的 `GpypeBridge.build()`](../gtec_bridge/gpype_lsl_bridge.py)中连接；Linux 补滤波的启用逻辑在[适配器 `lsl_raw.py`](../thymio_control/thymio_control/adapters/lsl_raw.py)，实现为[`band_power.py` 中的 `StreamingPreFilter`](../thymio_control/thymio_control/processors/band_power.py)。
+- **代码入口**：Headband 的 SDK 滤波节点在[桥的 `GpypeBridge.build()`](../../gtec_bridge/gpype_lsl_bridge.py)中连接；Linux 补滤波的启用逻辑在[适配器 `lsl_raw.py`](../../thymio_control/thymio_control/adapters/lsl_raw.py)，实现为[`band_power.py` 中的 `StreamingPreFilter`](../../thymio_control/thymio_control/processors/band_power.py)。
 - **设备标识变更**：当前 Hybrid 补滤波按流名称 `gtec_hybrid_black` 启用，不是按 `source_id`。改名称、换桥或增加同型号设备时，要检查是否漏滤波或重复滤波。
 - **流式状态**：保留各通道在连续数据块之间的滤波状态，不能每个数据块都重新初始化滤波器。
-- **单位检查**：[Hybrid 桥](../gtec_bridge/unicornpy_lsl_bridge.py)目前未写入 `source_unit`；适配器默认使用 µV 不代表单位已确认，须核实 SDK 输出与流元数据，不能按曲线外观猜测。
+- **单位检查**：[Hybrid 桥](../../gtec_bridge/unicornpy_lsl_bridge.py)目前未写入 `source_unit`；适配器默认使用 µV 不代表单位已确认，须核实 SDK 输出与流元数据，不能按曲线外观猜测。
 
-修改后可用[预滤波测试](../thymio_control/test/test_pre_filter.py)核对直流抑制、50 Hz 抑制、10 Hz 保留、流式连续性、多通道和 reset；[频带功率测试](../thymio_control/test/test_band_power.py)核对后续计算。这些是软件数值测试，不能验证 Windows SDK 的实际滤波响应或蓝牙连接稳定性。
+修改后可用[预滤波测试](../../thymio_control/test/test_pre_filter.py)核对直流抑制、50 Hz 抑制、10 Hz 保留、流式连续性、多通道和 reset；[频带功率测试](../../thymio_control/test/test_band_power.py)核对后续计算。这些是软件数值测试，不能验证 Windows SDK 的实际滤波响应或蓝牙连接稳定性。
 
 ### 5.5 第三方源码与本项目修改
 
@@ -443,16 +443,16 @@ ros2 launch thymio_control experiment_core.launch.py use_sim:=true run_eeg:=true
 
 | 实际不同的文件 | 已确认的差异及维护含义 |
 |---|---|
-| [Aseba `TargetDescription.h`](../src/ros-aseba/asebaros/aseba/aseba/common/msg/TargetDescription.h) | 增加 `#include <cstdint>`；该头声明使用 `uint16_t`。这是显式提供整数类型声明的编译兼容性修正，不是采集性能优化。换上游后核对是否仍需保留，并在目标编译器构建 |
-| [Aseba `DashelTarget.cpp`](../src/ros-aseba/asebaros/aseba/aseba/clients/studio/DashelTarget.cpp)、[`challenge.cpp`](../src/ros-aseba/asebaros/aseba/aseba/targets/challenge/challenge.cpp) | 中文语言选项标签由“汉语”改为“Chinois”，语言代码仍为 `zh`；只是界面文字，不是 ROS 通信修复 |
-| [Thymio `base.urdf.xacro`](../src/ros-thymio/thymio_description/urdf/base.urdf.xacro) | 旧 Gazebo ROS 差速 / joint-state 插件替换为 GZ Sim DiffDrive，删除旧 ground-truth 插件块；属于仿真适配，不能承诺旧传感器 / ground-truth 功能全部保留 |
-| [Thymio `imu.urdf.xacro`](../src/ros-thymio/thymio_description/urdf/imu.urdf.xacro)、[`proximity_sensor.urdf.xacro`](../src/ros-thymio/thymio_description/urdf/proximity_sensor.urdf.xacro) | 移除对应旧 `gazebo_ros` 传感器插件块，不能据此称现代 GZ 已发布这些 ROS 传感器话题 |
-| [Thymio `wheel.urdf.xacro`](../src/ros-thymio/thymio_description/urdf/wheel.urdf.xacro) | 轮关节 effort 限制由 0 改为 10；是仿真模型参数，不是实际电机命令的统一上限 |
-| [Thymio `model.launch.py`](../src/ros-thymio/thymio_description/launch/model.launch.py) | 输出由 screen 改为 log，增加 `use_sim_time` 参数声明；但传给节点的值仍硬编码 `True`，声明值未实际用于节点。保留为待核验限制，不写成参数传递已修好；项目提交 `d377c77` 可定位这次修改 |
+| [Aseba `TargetDescription.h`](../../src/ros-aseba/asebaros/aseba/aseba/common/msg/TargetDescription.h) | 增加 `#include <cstdint>`；该头声明使用 `uint16_t`。这是显式提供整数类型声明的编译兼容性修正，不是采集性能优化。换上游后核对是否仍需保留，并在目标编译器构建 |
+| [Aseba `DashelTarget.cpp`](../../src/ros-aseba/asebaros/aseba/aseba/clients/studio/DashelTarget.cpp)、[`challenge.cpp`](../../src/ros-aseba/asebaros/aseba/aseba/targets/challenge/challenge.cpp) | 中文语言选项标签由“汉语”改为“Chinois”，语言代码仍为 `zh`；只是界面文字，不是 ROS 通信修复 |
+| [Thymio `base.urdf.xacro`](../../src/ros-thymio/thymio_description/urdf/base.urdf.xacro) | 旧 Gazebo ROS 差速 / joint-state 插件替换为 GZ Sim DiffDrive，删除旧 ground-truth 插件块；属于仿真适配，不能承诺旧传感器 / ground-truth 功能全部保留 |
+| [Thymio `imu.urdf.xacro`](../../src/ros-thymio/thymio_description/urdf/imu.urdf.xacro)、[`proximity_sensor.urdf.xacro`](../../src/ros-thymio/thymio_description/urdf/proximity_sensor.urdf.xacro) | 移除对应旧 `gazebo_ros` 传感器插件块，不能据此称现代 GZ 已发布这些 ROS 传感器话题 |
+| [Thymio `wheel.urdf.xacro`](../../src/ros-thymio/thymio_description/urdf/wheel.urdf.xacro) | 轮关节 effort 限制由 0 改为 10；是仿真模型参数，不是实际电机命令的统一上限 |
+| [Thymio `model.launch.py`](../../src/ros-thymio/thymio_description/launch/model.launch.py) | 输出由 screen 改为 log，增加 `use_sim_time` 参数声明；但传给节点的值仍硬编码 `True`，声明值未实际用于节点。保留为待核验限制，不写成参数传递已修好；项目提交 `d377c77` 可定位这次修改 |
 
 维护时区分 Aseba 编译兼容性修正、界面文字调整和 Thymio 仿真适配，不将这些改动统一视为性能优化。旧 `master` / 教程包含 ROS1 内容，更新依赖时须核对 ROS2 与 GZ 兼容性。
 
-迁移时优先保留本项目整个 `src/`，不要直接用上游最新分支覆盖。确需更新时，先独立比较版本、保留或重做必要补丁，再构建并验证 Thymio 真机、仿真、话题与时钟行为；保留 [ROS-Aseba LICENCE](../src/ros-aseba/LICENCE)、[ROS-Thymio LICENSE](../src/ros-thymio/LICENSE)、[Aseba 许可](../src/ros-aseba/asebaros/aseba/license.txt)和[Dashel 许可](../src/ros-aseba/asebaros/dashel/license)，不将不同组件合并声明为同一许可。
+迁移时优先保留本项目整个 `src/`，不要直接用上游最新分支覆盖。确需更新时，先独立比较版本、保留或重做必要补丁，再构建并验证 Thymio 真机、仿真、话题与时钟行为；保留 [ROS-Aseba LICENCE](../../src/ros-aseba/LICENCE)、[ROS-Thymio LICENSE](../../src/ros-thymio/LICENSE)、[Aseba 许可](../../src/ros-aseba/asebaros/aseba/license.txt)和[Dashel 许可](../../src/ros-aseba/asebaros/dashel/license)，不将不同组件合并声明为同一许可。
 
 ## 6. 分层排障与日志
 
@@ -587,7 +587,7 @@ cd web_gui/backend
 python -m pytest thymio_control/test/test_watchdog.py thymio_control/test/test_cmd_vel_fuser.py thymio_control/test/test_calibration.py thymio_control/test/test_blink_metric.py -q
 ```
 
-历史数据已移除，[test_verify_blink_clamp.py](../thymio_control/test/test_verify_blink_clamp.py)依赖的归档数据缺失时会跳过，不是当前可用的回放功能。系统实际验证范围与结果见[技术档案的验证口径](DOSSIER_TECHNIQUE_cn.md#41-验证口径)；每次代码修改后仍需重新执行相关测试。
+历史数据已移除，[test_verify_blink_clamp.py](../../thymio_control/test/test_verify_blink_clamp.py)依赖的归档数据缺失时会跳过，不是当前可用的回放功能。系统实际验证范围与结果见[技术档案的验证口径](DOSSIER_TECHNIQUE_cn.md#41-验证口径)；每次代码修改后仍需重新执行相关测试。
 
 ### 7.2 小修改的标准流程
 
@@ -637,13 +637,13 @@ python -m pytest thymio_control/test/test_watchdog.py thymio_control/test/test_c
 
 | 层 / 代码入口 | 已核对的现状 | 本任务需处理的内容 |
 |---|---|---|
-| [Hybrid 桥](../gtec_bridge/unicornpy_lsl_bridge.py) | `_connect_unicorn()` 取 `GetAvailableDevices(True)` 的第一台；重连再次调用；`source_id` 固定 | 明确选择序列号；首次连接与重连都固定原设备；每台流身份唯一，指定设备不可用时不得换另一台 |
-| [Headband 桥](../gtec_bridge/gpype_lsl_bridge.py) | `BCICore8(channel_count=4)` 未显式选择设备；`LSLSender` 固定名称；自检探针按名称扫描新鲜样本 | 核对已安装 SDK 的设备选择和 LSL 身份设置接口；桥重建保留指定设备，探针只查本实例；保留 IDE 手动运行方式 |
-| [launcher 配置](../windows_launcher/config.json)、[命令](../windows_launcher/commands.py)、[server](../windows_launcher/launcher_server.py)、[探针](../windows_launcher/lsl_probe.py) | 配置只有一个 Headband 和一个 Hybrid 入口；进程字典按入口名管理；脚本启动未传入实例参数，探针选首个匹配流 | 复用按入口名管理的结构，为两台设备配置独立入口 / 参数 / 日志 / 探针；只停止指定实例，不把另一实例误显示为已连接 |
-| [前端 App](../web_gui/frontend/src/App.jsx) | 第二路同型号选项禁用，effect 自动切到另一型号；`buildPatch()` 按品牌生成固定 ID，加载也按 ID 反推品牌 | 解除型号互斥而保留角色互斥；增加具体设备选择；保存 / 加载真实身份，不能再用品牌覆盖唯一 ID |
-| [后端模型](../web_gui/backend/app/models.py)、[配置写回](../web_gui/backend/app/config_store.py)与[两路 YAML](../thymio_control/config/) | 已保存 `lsl_source_id`，但没有持久化型号 / 序列号；模型只校验角色不同 | 扩充最小身份字段和校验；双路拒绝同一物理设备 / 重复 ID，不能只依赖 UI；写回并验证重载、校准时也不丢身份 |
-| [RawLslAdapter](../thymio_control/thymio_control/adapters/lsl_raw.py) | 有 ID 时按 ID 找流，否则按 type；均使用 `streams[0]`；Hybrid 预滤波按 `info.name()` 判断 | 双路必须明确匹配；对冲突的有效流明确报错 / 阻止启动；将型号处理与唯一身份分开，保留单位、通道和滤波验证 |
-| [ROS launch](../thymio_control/launch/experiment_core.launch.py)、[EEG 节点](../thymio_control/scripts/eeg_control_node.py)、[融合器](../thymio_control/scripts/cmd_vel_fuser.py)、[RosBridge](../web_gui/backend/app/signal_subscriber.py) | 双路节点、独立校准文件与 role 话题已经存在 | 核对新身份确实传到各节点；保留角色路由、融合及断流逻辑，避免无关重构 |
+| [Hybrid 桥](../../gtec_bridge/unicornpy_lsl_bridge.py) | `_connect_unicorn()` 取 `GetAvailableDevices(True)` 的第一台；重连再次调用；`source_id` 固定 | 明确选择序列号；首次连接与重连都固定原设备；每台流身份唯一，指定设备不可用时不得换另一台 |
+| [Headband 桥](../../gtec_bridge/gpype_lsl_bridge.py) | `BCICore8(channel_count=4)` 未显式选择设备；`LSLSender` 固定名称；自检探针按名称扫描新鲜样本 | 核对已安装 SDK 的设备选择和 LSL 身份设置接口；桥重建保留指定设备，探针只查本实例；保留 IDE 手动运行方式 |
+| [launcher 配置](../../windows_launcher/config.json)、[命令](../../windows_launcher/commands.py)、[server](../../windows_launcher/launcher_server.py)、[探针](../../windows_launcher/lsl_probe.py) | 配置只有一个 Headband 和一个 Hybrid 入口；进程字典按入口名管理；脚本启动未传入实例参数，探针选首个匹配流 | 复用按入口名管理的结构，为两台设备配置独立入口 / 参数 / 日志 / 探针；只停止指定实例，不把另一实例误显示为已连接 |
+| [前端 App](../../web_gui/frontend/src/App.jsx) | 第二路同型号选项禁用，effect 自动切到另一型号；`buildPatch()` 按品牌生成固定 ID，加载也按 ID 反推品牌 | 解除型号互斥而保留角色互斥；增加具体设备选择；保存 / 加载真实身份，不能再用品牌覆盖唯一 ID |
+| [后端模型](../../web_gui/backend/app/models.py)、[配置写回](../../web_gui/backend/app/config_store.py)与[两路 YAML](../../thymio_control/config/) | 已保存 `lsl_source_id`，但没有持久化型号 / 序列号；模型只校验角色不同 | 扩充最小身份字段和校验；双路拒绝同一物理设备 / 重复 ID，不能只依赖 UI；写回并验证重载、校准时也不丢身份 |
+| [RawLslAdapter](../../thymio_control/thymio_control/adapters/lsl_raw.py) | 有 ID 时按 ID 找流，否则按 type；均使用 `streams[0]`；Hybrid 预滤波按 `info.name()` 判断 | 双路必须明确匹配；对冲突的有效流明确报错 / 阻止启动；将型号处理与唯一身份分开，保留单位、通道和滤波验证 |
+| [ROS launch](../../thymio_control/launch/experiment_core.launch.py)、[EEG 节点](../../thymio_control/scripts/eeg_control_node.py)、[融合器](../../thymio_control/scripts/cmd_vel_fuser.py)、[RosBridge](../../web_gui/backend/app/signal_subscriber.py) | 双路节点、独立校准文件与 role 话题已经存在 | 核对新身份确实传到各节点；保留角色路由、融合及断流逻辑，避免无关重构 |
 
 #### 7.5.3 最小身份设计
 
@@ -669,7 +669,7 @@ LSL 流名称与 source_id 是两个字段：保持型号名称而使用唯一 s
 3. **实现按实例配置的桥。** 提供设备选择和唯一流身份，固定重连目标，保证各自资源释放、自检和日志；先验证两路 LSL，不依赖 ROS。Hybrid 可优先复用按入口托管独立进程的方式，前提是并发验证通过；Headband 的实例配置 / IDE 启动方式要清晰，不能要求操作者每次手改代码常量，也不默认改成后台自动启动。
 4. **贯通配置与 Linux。** 增加必要型号 / 序列号字段、重复身份校验及 YAML 写回；适配器、launcher 探针按明确身份匹配。处理重连残留流的过期 / 新鲜判断，若仍有多个冲突的有效流则明确报错，不能随便取第一条。核对每路滤波、采样率、通道和单位。
 5. **更新两个页面。** EEG 控制页面允许相同型号的不同设备，正确保存、重新加载、交换角色与逐台校准；System Control 提供对应实例入口和独立状态。断开一路只影响该路采集，机器人则按现有双路断流保护停车。
-6. **离线回归，再真实设备验证。** 扩展[双路合成流工具](../thymio_control/lsl_test/dummy_dual_streams.py)，产生同型号元数据、不同 ID 和可区分数值；补桥选择 / 重连、配置、探针、滤波和界面测试。再做真实双设备、ROS 与 Thymio 验证，记录结果，更新操作 / 排障手册和迁移说明后才部署。
+6. **离线回归，再真实设备验证。** 扩展[双路合成流工具](../../thymio_control/lsl_test/dummy_dual_streams.py)，产生同型号元数据、不同 ID 和可区分数值；补桥选择 / 重连、配置、探针、滤波和界面测试。再做真实双设备、ROS 与 Thymio 验证，记录结果，更新操作 / 排障手册和迁移说明后才部署。
 
 前两阶段决定厂商环境是否可行，后四阶段解决本项目的集成。没有设备时可以实现并验证配置和模拟流路径，但不能把 Windows SDK 并发、蓝牙稳定性或真机停车标为已通过。
 
@@ -746,7 +746,7 @@ git rev-parse HEAD
 
 可读取并保存 `python -m pip freeze`、`npm ls --depth=0` 及必要 ROS / 系统包版本。它们记录当前环境，不保证每个包都能从公开源恢复，也不能替代 SDK 安装来源与授权说明。
 
-分析数据默认写入仓库下 `experiment_data/`，可由后端环境变量 `EXPERIMENT_DATA_DIR` 指定其他位置；备份时以实际配置为准。历史数据已从当前工作区移除，但数据收集代码仍可生成新文件，功能范围见[README 使用注意](../README_cn.md#使用注意)。默认目录已加入 `.gitignore`，忽略规则不清除已有 Git 历史，也不覆盖自定义输出路径；自定义目录须单独检查权限和忽略规则。
+分析数据默认写入仓库下 `experiment_data/`，可由后端环境变量 `EXPERIMENT_DATA_DIR` 指定其他位置；备份时以实际配置为准。历史数据已从当前工作区移除，但数据收集代码仍可生成新文件，功能范围见[README 使用注意](README_cn.md#使用注意)。默认目录已加入 `.gitignore`，忽略规则不清除已有 Git 历史，也不覆盖自定义输出路径；自定义目录须单独检查权限和忽略规则。
 
 ### 9.2 恢复步骤
 

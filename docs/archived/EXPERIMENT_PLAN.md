@@ -1,8 +1,8 @@
 # M2 实验计划 — TelekineRob-BCI（双人协同脑控 Thymio）
 
-> 已归档：保留旧指南、设计或验证历史，不作为当前操作、开发或需求依据。现行说明见[中文 README](../../README_cn.md)、[技术档案](../DOSSIER_TECHNIQUE_cn.md)与[开发手册](../GUIDE_DEVELOPPEUR_cn.md)。
+> 已归档：保留旧指南、设计或验证历史，不作为当前操作、开发或需求依据。现行说明见[中文 README](../zh/README_cn.md)、[技术档案](../zh/DOSSIER_TECHNIQUE_cn.md)与[开发手册](../zh/GUIDE_DEVELOPPEUR_cn.md)。
 
-> **资料用途**：本文是研究验证计划和历史记录，不是用户操作手册，也不是当前软件需求基线。文内“待补”“未记录”及统计目标需重新核实，不能当成当前缺口或已取得的研究结果。用户流程见[中文操作手册](../MANUEL_OPERATEUR_cn.md)，代码现状见[技术档案](../DOSSIER_TECHNIQUE_cn.md)。
+> **资料用途**：本文是研究验证计划和历史记录，不是用户操作手册，也不是当前软件需求基线。文内“待补”“未记录”及统计目标需重新核实，不能当成当前缺口或已取得的研究结果。用户流程见[中文操作手册](../zh/MANUEL_OPERATEUR_cn.md)，代码现状见[技术档案](../zh/DOSSIER_TECHNIQUE_cn.md)。
 
 > **状态**：规划稿 v3（2026-08-12，锁定 M2 技术验证范围）。技术系统（核心管线 + O2 总控）已基本就绪；正式实验待启动。
 > **三方同步**：CTO 维护 / programmer 补系统缺口（§4）/ reviewer 验证。
